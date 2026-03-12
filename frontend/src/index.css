@@ -994,6 +994,18 @@ select {
   border: 1px solid rgba(125, 216, 255, 0.14);
 }
 
+.strategy-candidate-list {
+  display: grid;
+  gap: 12px;
+}
+
+.strategy-candidate-card {
+  padding: 14px 16px;
+  border-radius: 18px;
+  background: rgba(7, 18, 33, 0.7);
+  border: 1px solid rgba(88, 163, 255, 0.1);
+}
+
 @media (max-width: 1080px) {
   .hero,
   .dashboard-grid {

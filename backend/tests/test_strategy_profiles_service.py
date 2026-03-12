@@ -3,6 +3,7 @@ from __future__ import annotations
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import AsyncMock, patch
 
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
@@ -118,28 +119,48 @@ class StrategyProfilesServiceTests(unittest.IsolatedAsyncioTestCase):
             self.assertTrue(updated_item["is_active"])
 
     async def test_preview_strategy_summarizes_capital_and_limits(self) -> None:
-        preview = await strategy_profiles_service.preview_strategy(
-            StrategyPreviewRequest(
-                normalized_strategy="聚焦科技股回撤买入。",
-                parameters=StrategyExecutionParameters(
-                    universe_symbols=["NVDA", "MSFT", "AAPL"],
-                    preferred_sectors=["technology"],
-                    excluded_symbols=["AAPL"],
-                    entry_drop_percent=3.0,
-                    add_on_drop_percent=2.0,
-                    initial_buy_notional=1500.0,
-                    add_on_buy_notional=200.0,
-                    max_daily_entries=2,
-                    max_add_ons=2,
-                    take_profit_target=120.0,
-                    stop_loss_percent=9.0,
-                    max_hold_days=20,
-                ),
+        with patch(
+            "app.services.strategy_profiles_service.monitoring_service.fetch_trend_snapshots",
+            AsyncMock(
+                return_value={
+                    "NVDA": {
+                        "day_change_percent": -3.5,
+                        "week_change_percent": -5.0,
+                        "month_change_percent": 2.0,
+                    },
+                    "MSFT": {
+                        "day_change_percent": -1.2,
+                        "week_change_percent": -2.0,
+                        "month_change_percent": 4.0,
+                    },
+                }
+            ),
+        ):
+            preview = await strategy_profiles_service.preview_strategy(
+                StrategyPreviewRequest(
+                    normalized_strategy="聚焦科技股回撤买入。",
+                    parameters=StrategyExecutionParameters(
+                        universe_symbols=["NVDA", "MSFT", "AAPL"],
+                        preferred_sectors=["technology"],
+                        excluded_symbols=["AAPL"],
+                        entry_drop_percent=3.0,
+                        add_on_drop_percent=2.0,
+                        initial_buy_notional=1500.0,
+                        add_on_buy_notional=200.0,
+                        max_daily_entries=2,
+                        max_add_ons=2,
+                        take_profit_target=120.0,
+                        stop_loss_percent=9.0,
+                        max_hold_days=20,
+                    ),
+                )
             )
-        )
 
         self.assertEqual(preview["universe_size"], 2)
         self.assertEqual(preview["sample_symbols"], ["NVDA", "MSFT"])
+        self.assertEqual(preview["likely_trade_symbols"][0], "NVDA")
+        self.assertEqual(preview["likely_trade_candidates"][0]["symbol"], "NVDA")
+        self.assertIn("达到入场阈值", preview["likely_trade_candidates"][0]["note"])
         self.assertEqual(preview["max_new_positions_per_day"], 2)
         self.assertEqual(preview["max_capital_per_symbol"], 1900.0)
         self.assertEqual(preview["max_new_capital_per_day"], 3000.0)

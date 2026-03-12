@@ -16,7 +16,7 @@ from app.models import (
     StrategyPreviewRequest,
     StrategySaveRequest,
 )
-from app.services import openai_service
+from app.services import monitoring_service, openai_service
 from app import runtime_settings
 
 MAX_SAVED_STRATEGIES = 5
@@ -355,6 +355,7 @@ def _serialize_strategy(item: StrategyProfile) -> dict:
 def _build_preview_payload(
     normalized_strategy: str,
     parameters: StrategyExecutionParameters,
+    likely_trade_candidates: list[dict],
 ) -> dict:
     scaled_capital_per_symbol = (
         parameters.initial_buy_notional
@@ -364,6 +365,8 @@ def _build_preview_payload(
     return {
         "universe_size": len(parameters.universe_symbols),
         "sample_symbols": parameters.universe_symbols[:8],
+        "likely_trade_symbols": [item["symbol"] for item in likely_trade_candidates],
+        "likely_trade_candidates": likely_trade_candidates,
         "preferred_sectors": parameters.preferred_sectors,
         "excluded_symbols": parameters.excluded_symbols,
         "max_new_positions_per_day": parameters.max_daily_entries,
@@ -389,6 +392,74 @@ def _build_preview_payload(
         "restart_required": True,
         "normalized_strategy": normalized_strategy.strip(),
     }
+
+
+def _format_percent(value: float | int | None) -> str:
+    if not isinstance(value, (int, float)):
+        return "暂无"
+    return f"{float(value):.2f}%"
+
+
+def _build_likely_trade_candidates(
+    parameters: StrategyExecutionParameters,
+    trend_map: dict[str, dict],
+) -> list[dict]:
+    ranked_items: list[dict] = []
+    entry_threshold = max(parameters.entry_drop_percent, 0.1)
+
+    for index, symbol in enumerate(parameters.universe_symbols):
+        trend = trend_map.get(symbol, {})
+        day_change = trend.get("day_change_percent")
+        week_change = trend.get("week_change_percent")
+        month_change = trend.get("month_change_percent")
+
+        day_drop = abs(day_change) if isinstance(day_change, (int, float)) and day_change < 0 else 0.0
+        week_drop = abs(week_change) if isinstance(week_change, (int, float)) and week_change < 0 else 0.0
+        month_drop = abs(month_change) if isinstance(month_change, (int, float)) and month_change < 0 else 0.0
+
+        if day_drop > 0:
+            score = (day_drop / entry_threshold) * 10 + (week_drop * 0.6) + (month_drop * 0.3)
+        else:
+            score = (week_drop * 0.5) + (month_drop * 0.25) - (index * 0.01)
+
+        if isinstance(day_change, (int, float)) and day_change <= -entry_threshold:
+            note = (
+                f"今日相对前收盘下跌 {_format_percent(abs(day_change))}，"
+                f"已经达到入场阈值 {parameters.entry_drop_percent:.1f}%。"
+            )
+        elif isinstance(day_change, (int, float)) and day_change < 0:
+            distance = max(parameters.entry_drop_percent - abs(day_change), 0.0)
+            note = (
+                f"今日下跌 {_format_percent(abs(day_change))}，"
+                f"距离入场阈值还差 {distance:.2f}%。"
+            )
+        elif isinstance(week_change, (int, float)) and week_change < 0:
+            note = (
+                f"近一周回撤 {_format_percent(abs(week_change))}，"
+                "如果日内继续走弱，会更接近触发条件。"
+            )
+        else:
+            note = "当前更像观察对象，尚未接近日内回撤入场阈值。"
+
+        ranked_items.append(
+            {
+                "symbol": symbol,
+                "score": round(score, 2),
+                "note": note,
+                "day_change_percent": round(float(day_change), 2) if isinstance(day_change, (int, float)) else None,
+                "week_change_percent": round(float(week_change), 2) if isinstance(week_change, (int, float)) else None,
+                "month_change_percent": round(float(month_change), 2) if isinstance(month_change, (int, float)) else None,
+            }
+        )
+
+    ranked_items.sort(
+        key=lambda item: (
+            float(item["score"]),
+            item["day_change_percent"] if isinstance(item["day_change_percent"], (int, float)) else -999.0,
+        ),
+        reverse=True,
+    )
+    return ranked_items[:5]
 
 
 async def analyze_strategy(description: str) -> StrategyAnalysisDraft:
@@ -536,7 +607,30 @@ async def preview_strategy(request: StrategyPreviewRequest) -> dict:
     """Summarize the effective execution footprint before saving a strategy."""
 
     normalized_parameters = _normalize_parameters(request.parameters)
-    return _build_preview_payload(request.normalized_strategy, normalized_parameters)
+    try:
+        trend_map = await monitoring_service.fetch_trend_snapshots(normalized_parameters.universe_symbols)
+    except Exception:
+        trend_map = {}
+
+    likely_trade_candidates = _build_likely_trade_candidates(normalized_parameters, trend_map)
+    if not likely_trade_candidates:
+        likely_trade_candidates = [
+            {
+                "symbol": symbol,
+                "score": round(5.0 - index, 2),
+                "note": "暂无实时趋势数据，先按策略股票池顺序作为优先观察对象。",
+                "day_change_percent": None,
+                "week_change_percent": None,
+                "month_change_percent": None,
+            }
+            for index, symbol in enumerate(normalized_parameters.universe_symbols[:5])
+        ]
+
+    return _build_preview_payload(
+        request.normalized_strategy,
+        normalized_parameters,
+        likely_trade_candidates,
+    )
 
 
 async def get_active_strategy_name() -> str:

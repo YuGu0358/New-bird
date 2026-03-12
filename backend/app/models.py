@@ -284,9 +284,20 @@ class StrategyPreviewRequest(BaseModel):
     parameters: StrategyExecutionParameters
 
 
+class StrategyPreviewCandidate(BaseModel):
+    symbol: str
+    score: float
+    note: str
+    day_change_percent: Optional[float] = None
+    week_change_percent: Optional[float] = None
+    month_change_percent: Optional[float] = None
+
+
 class StrategyPreviewResponse(BaseModel):
     universe_size: int
     sample_symbols: list[str]
+    likely_trade_symbols: list[str]
+    likely_trade_candidates: list[StrategyPreviewCandidate]
     preferred_sectors: list[str]
     excluded_symbols: list[str]
     max_new_positions_per_day: int

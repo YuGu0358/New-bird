@@ -227,6 +227,25 @@ export default function StrategyStudioPanel({ apiBaseUrl, botStatus }) {
     setMessage("已载入现有策略。你可以直接预览并覆盖保存，也可以先修改描述后重新让 GPT 规范。");
   };
 
+  const duplicateStrategy = (item) => {
+    setEditingStrategyId(null);
+    setDescription(item.original_description || "");
+    setDraft({
+      suggested_name: `${item.name} 副本`,
+      original_description: item.original_description,
+      normalized_strategy: item.normalized_strategy,
+      improvement_points: item.improvement_points || [],
+      risk_warnings: item.risk_warnings || [],
+      execution_notes: item.execution_notes || [],
+      parameters: item.parameters,
+      used_openai: false,
+    });
+    setDraftName(`${item.name} 副本`);
+    setPreview(null);
+    setError("");
+    setMessage("已复制为新草稿。保存后会占用新的策略槽位。");
+  };
+
   const handleDescriptionChange = (event) => {
     const nextDescription = event.target.value;
     setDescription(nextDescription);
@@ -449,6 +468,14 @@ export default function StrategyStudioPanel({ apiBaseUrl, botStatus }) {
                   <button
                     type="button"
                     className="action-button action-button--neutral"
+                    onClick={() => duplicateStrategy(item)}
+                    disabled={actionBusy !== ""}
+                  >
+                    复制另存为
+                  </button>
+                  <button
+                    type="button"
+                    className="action-button action-button--neutral"
                     onClick={() => activateStrategy(item.id)}
                     disabled={item.is_active || actionBusy !== ""}
                   >
@@ -490,12 +517,32 @@ function PreviewCard({ preview }) {
       <div className="strategy-parameter-grid">
         <ParameterCard label="股票池规模" value={`${preview.universe_size} 只`} />
         <ParameterCard label="预览样本" value={preview.sample_symbols.join(", ") || "无"} />
+        <ParameterCard label="更可能交易" value={preview.likely_trade_symbols.join(", ") || "无"} />
         <ParameterCard label="偏好板块" value={formatList(preview.preferred_sectors)} />
         <ParameterCard label="排除股票" value={formatList(preview.excluded_symbols, false)} />
         <ParameterCard label="单日最多新仓" value={`${preview.max_new_positions_per_day} 只`} />
         <ParameterCard label="单股满额资金" value={formatUsd(preview.max_capital_per_symbol)} />
         <ParameterCard label="单日新开仓上限" value={formatUsd(preview.max_new_capital_per_day)} />
         <ParameterCard label="单日满额风险敞口" value={formatUsd(preview.max_total_capital_if_fully_scaled)} />
+      </div>
+
+      <div className="strategy-candidate-list">
+        {preview.likely_trade_candidates?.map((item) => (
+          <article className="strategy-candidate-card" key={item.symbol}>
+            <div className="strategy-card-header">
+              <div>
+                <h3>{item.symbol}</h3>
+                <p>{item.note}</p>
+              </div>
+              <span className="status-chip status-chip--running">Score {item.score.toFixed(1)}</span>
+            </div>
+            <div className="strategy-mini-grid">
+              <span>日内 {formatPercent(item.day_change_percent)}</span>
+              <span>周度 {formatPercent(item.week_change_percent)}</span>
+              <span>月度 {formatPercent(item.month_change_percent)}</span>
+            </div>
+          </article>
+        ))}
       </div>
 
       <StrategyBulletGroup
@@ -554,6 +601,13 @@ function formatUsd(value) {
     currency: "USD",
     maximumFractionDigits: 2,
   }).format(value);
+}
+
+function formatPercent(value) {
+  if (typeof value !== "number" || Number.isNaN(value)) {
+    return "暂无";
+  }
+  return `${value >= 0 ? "+" : ""}${value.toFixed(2)}%`;
 }
 
 function formatList(items, useSectorLabels = true) {
