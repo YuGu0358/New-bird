@@ -1,0 +1,16 @@
+.DS_Store
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+backend/.env
+backend/.env.backup-readme
+backend/trading_platform.db
+frontend/node_modules/
+frontend/dist/
+logs/
+.run/
+backend/data/
+agent-harness/build/
+agent-harness/*.egg-info/
+docs/assets/settings.png

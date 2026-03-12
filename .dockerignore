@@ -1,0 +1,17 @@
+.DS_Store
+.git
+.gitignore
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+backend/.env
+backend/trading_platform.db
+backend/data/
+frontend/node_modules/
+frontend/dist/
+logs/
+.run/
+Trading Platform.app/
+Stop Trading Platform.app/
+Trading CLI.app/

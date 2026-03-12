@@ -1,0 +1,16 @@
+services:
+  trading-platform:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      PORT: 8000
+      DATA_DIR: /app/data
+      SETTINGS_ADMIN_TOKEN: change-me-before-public-use
+    volumes:
+      - trading-platform-data:/app/data
+
+volumes:
+  trading-platform-data:

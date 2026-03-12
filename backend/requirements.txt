@@ -1,0 +1,13 @@
+fastapi
+uvicorn
+alpaca-trade-api
+polygon-api-client
+tavily-python
+python-dotenv
+sqlalchemy
+greenlet
+aiofiles
+aiosqlite
+httpx
+yfinance
+openai
