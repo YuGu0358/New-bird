@@ -26,6 +26,10 @@ from app.models import (
     SocialProviderStatus,
     SocialSearchResponse,
     StockResearchReport,
+    StrategyAnalysisDraft,
+    StrategyAnalysisRequest,
+    StrategyLibraryResponse,
+    StrategySaveRequest,
     TradeRecord,
     WatchlistUpdateRequest,
 )
@@ -36,6 +40,7 @@ from app.services import (
     market_research_service,
     monitoring_service,
     social_intelligence_service,
+    strategy_profiles_service,
     tavily_service,
 )
 
@@ -230,6 +235,65 @@ async def refresh_monitoring(session: SessionDep) -> MonitoringOverview:
 async def get_social_providers() -> list[SocialProviderStatus]:
     payload = social_intelligence_service.list_social_providers()
     return [SocialProviderStatus(**item) for item in payload]
+
+
+@app.get("/api/strategies", response_model=StrategyLibraryResponse)
+async def get_strategy_library(session: SessionDep) -> StrategyLibraryResponse:
+    payload = await strategy_profiles_service.list_strategies(session)
+    return StrategyLibraryResponse(**payload)
+
+
+@app.post("/api/strategies/analyze", response_model=StrategyAnalysisDraft)
+async def analyze_strategy(request: StrategyAnalysisRequest) -> StrategyAnalysisDraft:
+    try:
+        payload = await strategy_profiles_service.analyze_strategy(request.description)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise _service_error(exc) from exc
+    return StrategyAnalysisDraft(**payload.model_dump())
+
+
+@app.post("/api/strategies", response_model=StrategyLibraryResponse)
+async def save_strategy(
+    request: StrategySaveRequest,
+    session: SessionDep,
+) -> StrategyLibraryResponse:
+    try:
+        payload = await strategy_profiles_service.save_strategy(session, request)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise _service_error(exc) from exc
+    return StrategyLibraryResponse(**payload)
+
+
+@app.post("/api/strategies/{strategy_id}/activate", response_model=StrategyLibraryResponse)
+async def activate_strategy(
+    strategy_id: int,
+    session: SessionDep,
+) -> StrategyLibraryResponse:
+    try:
+        payload = await strategy_profiles_service.activate_strategy(session, strategy_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except Exception as exc:
+        raise _service_error(exc) from exc
+    return StrategyLibraryResponse(**payload)
+
+
+@app.delete("/api/strategies/{strategy_id}", response_model=StrategyLibraryResponse)
+async def delete_strategy(
+    strategy_id: int,
+    session: SessionDep,
+) -> StrategyLibraryResponse:
+    try:
+        payload = await strategy_profiles_service.delete_strategy(session, strategy_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except Exception as exc:
+        raise _service_error(exc) from exc
+    return StrategyLibraryResponse(**payload)
 
 
 @app.get("/api/settings/status", response_model=RuntimeSettingsStatus)

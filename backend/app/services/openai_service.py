@@ -22,7 +22,7 @@ def is_configured() -> bool:
     return bool(runtime_settings.get_setting("OPENAI_API_KEY", ""))
 
 
-def _create_client():
+def create_client():
     try:
         from openai import OpenAI
     except ImportError as exc:
@@ -61,7 +61,7 @@ def _build_candidate_prompt(candidates: list[dict[str, Any]]) -> str:
 
 
 def _rank_candidates_sync(candidates: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    client = _create_client()
+    client = create_client()
     model_name = (
         runtime_settings.get_setting("OPENAI_CANDIDATE_MODEL", "gpt-4o-2024-08-06")
         or "gpt-4o-2024-08-06"

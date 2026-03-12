@@ -4,6 +4,7 @@ import asyncio
 from datetime import datetime, timezone
 from typing import Any
 
+from app.services import strategy_profiles_service
 from strategy import runner
 
 _runner_task: asyncio.Task[None] | None = None
@@ -33,15 +34,22 @@ def _on_task_done(task: asyncio.Task[None]) -> None:
 async def get_status() -> dict[str, Any]:
     running = _is_running()
     uptime_seconds = None
+    active_strategy_name = None
 
     if running and _started_at is not None:
         uptime_seconds = int((datetime.now(timezone.utc) - _started_at).total_seconds())
+
+    try:
+        active_strategy_name = await strategy_profiles_service.get_active_strategy_name()
+    except Exception:
+        active_strategy_name = "系统默认 Strategy B"
 
     return {
         "is_running": running,
         "started_at": _started_at,
         "uptime_seconds": uptime_seconds,
         "last_error": _last_error,
+        "active_strategy_name": active_strategy_name,
     }
 
 

@@ -12,6 +12,7 @@ import CandidatePoolPanel from "./CandidatePoolPanel";
 import NewsPanel from "./NewsPanel";
 import PortfolioTable from "./PortfolioTable";
 import ResearchPanel from "./ResearchPanel";
+import StrategyStudioPanel from "./StrategyStudioPanel";
 import TrendMonitorPanel from "./TrendMonitorPanel";
 import UniverseExplorer from "./UniverseExplorer";
 
@@ -252,6 +253,10 @@ export default function Dashboard({
 
           <dl className="control-meta">
             <div>
+              <dt>当前策略</dt>
+              <dd>{botStatus?.active_strategy_name || "系统默认 Strategy B"}</dd>
+            </div>
+            <div>
               <dt>运行时长</dt>
               <dd>{formatUptime(botStatus?.uptime_seconds)}</dd>
             </div>
@@ -293,6 +298,7 @@ export default function Dashboard({
           actionBusy={actionBusy}
         />
 
+        <StrategyStudioPanel apiBaseUrl={apiBaseUrl} botStatus={botStatus} />
         <NewsPanel symbol={selectedSymbol} apiBaseUrl={apiBaseUrl} />
         <ResearchPanel symbol={selectedSymbol} apiBaseUrl={apiBaseUrl} />
 

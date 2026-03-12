@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import AsyncIterator
 
 from dotenv import load_dotenv
-from sqlalchemy import DateTime, Float, Integer, String, Text
+from sqlalchemy import Boolean, DateTime, Float, Integer, String, Text
 from sqlalchemy.ext.asyncio import AsyncAttrs, AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
@@ -102,6 +102,31 @@ class SocialSearchCache(Base):
         default=lambda: datetime.now(timezone.utc),
     )
     payload_json: Mapped[str] = mapped_column(Text, nullable=False)
+
+
+class StrategyProfile(Base):
+    __tablename__ = "strategy_profiles"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    name: Mapped[str] = mapped_column(String(96), nullable=False)
+    raw_description: Mapped[str] = mapped_column(Text, nullable=False)
+    normalized_strategy: Mapped[str] = mapped_column(Text, nullable=False)
+    parameters_json: Mapped[str] = mapped_column(Text, nullable=False)
+    improvement_points_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
+    risk_warnings_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
+    execution_notes_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+    )
 
 
 async def get_session() -> AsyncIterator[AsyncSession]:

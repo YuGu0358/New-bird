@@ -5,8 +5,8 @@ import logging
 from datetime import date, datetime, timezone
 
 from app.database import init_database
-from app.services import polygon_service
-from strategy.strategy_b import StrategyBEngine, UNIVERSE
+from app.services import polygon_service, strategy_profiles_service
+from strategy.strategy_b import StrategyBEngine, StrategyExecutionConfig
 
 logging.basicConfig(
     level=logging.INFO,
@@ -18,10 +18,26 @@ BROKER_SYNC_INTERVAL_SECONDS = 10
 QUOTE_POLL_INTERVAL_SECONDS = 5
 
 
+async def _load_execution_config() -> StrategyExecutionConfig:
+    strategy_name, parameters = await strategy_profiles_service.get_active_strategy_execution_profile()
+    return StrategyExecutionConfig(
+        universe=parameters.universe_symbols,
+        entry_drop_threshold=parameters.entry_drop_percent / 100,
+        add_on_drop_threshold=parameters.add_on_drop_percent / 100,
+        initial_buy_notional=parameters.initial_buy_notional,
+        add_on_buy_notional=parameters.add_on_buy_notional,
+        max_add_ons=parameters.max_add_ons,
+        take_profit_target=parameters.take_profit_target,
+        stop_loss_threshold=parameters.stop_loss_percent / 100,
+        max_hold_days=parameters.max_hold_days,
+        strategy_name=strategy_name,
+    )
+
+
 async def main() -> None:
     await init_database()
 
-    engine = StrategyBEngine()
+    engine = StrategyBEngine(await _load_execution_config())
     await engine.sync_from_broker()
     await engine.evaluate_broker_positions()
 
@@ -78,7 +94,7 @@ async def main() -> None:
     while True:
         try:
             await polygon_service.stream_quotes(
-                UNIVERSE,
+                engine.config.universe,
                 handle_msg,
                 poll_seconds=QUOTE_POLL_INTERVAL_SECONDS,
             )

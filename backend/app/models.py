@@ -65,6 +65,7 @@ class BotStatus(BaseModel):
     started_at: Optional[datetime] = None
     uptime_seconds: Optional[int] = None
     last_error: Optional[str] = None
+    active_strategy_name: Optional[str] = None
 
 
 class ControlResponse(BaseModel):
@@ -235,3 +236,61 @@ class RuntimeSettingsStatus(BaseModel):
 class SettingsUpdateRequest(BaseModel):
     admin_token: Optional[str] = None
     settings: dict[str, Any]
+
+
+class StrategyExecutionParameters(BaseModel):
+    universe_symbols: list[str]
+    entry_drop_percent: float
+    add_on_drop_percent: float
+    initial_buy_notional: float
+    add_on_buy_notional: float
+    max_add_ons: int
+    take_profit_target: float
+    stop_loss_percent: float
+    max_hold_days: int
+
+
+class StrategyAnalysisRequest(BaseModel):
+    description: str
+
+
+class StrategyAnalysisDraft(BaseModel):
+    suggested_name: str
+    original_description: str
+    normalized_strategy: str
+    improvement_points: list[str]
+    risk_warnings: list[str]
+    execution_notes: list[str]
+    parameters: StrategyExecutionParameters
+    used_openai: bool = False
+
+
+class StrategySaveRequest(BaseModel):
+    name: str
+    original_description: str
+    normalized_strategy: str
+    improvement_points: list[str]
+    risk_warnings: list[str]
+    execution_notes: list[str]
+    parameters: StrategyExecutionParameters
+    activate: bool = True
+
+
+class StoredStrategy(BaseModel):
+    id: int
+    name: str
+    original_description: str
+    normalized_strategy: str
+    improvement_points: list[str]
+    risk_warnings: list[str]
+    execution_notes: list[str]
+    parameters: StrategyExecutionParameters
+    is_active: bool
+    created_at: datetime
+    updated_at: datetime
+
+
+class StrategyLibraryResponse(BaseModel):
+    max_slots: int
+    items: list[StoredStrategy]
+    active_strategy_id: Optional[int] = None

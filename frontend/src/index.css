@@ -811,6 +811,137 @@ select {
   margin: 0;
 }
 
+.strategy-summary-grid,
+.strategy-parameter-grid,
+.strategy-mini-grid {
+  display: grid;
+  gap: 12px;
+}
+
+.strategy-summary-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-top: 18px;
+}
+
+.strategy-summary-grid div,
+.strategy-parameter-card,
+.strategy-card,
+.strategy-builder,
+.strategy-draft {
+  padding: 16px 18px;
+  border-radius: 20px;
+  background: rgba(7, 16, 31, 0.58);
+  border: 1px solid rgba(88, 163, 255, 0.1);
+}
+
+.strategy-builder,
+.strategy-draft,
+.strategy-library {
+  display: grid;
+  gap: 16px;
+  margin-top: 18px;
+}
+
+.strategy-field {
+  display: grid;
+  gap: 8px;
+}
+
+.strategy-field span {
+  font-size: 0.92rem;
+}
+
+.strategy-field input,
+.strategy-field textarea {
+  width: 100%;
+  padding: 12px 14px;
+  border-radius: 16px;
+  border: 1px solid rgba(88, 163, 255, 0.12);
+  background: rgba(12, 24, 45, 0.82);
+  color: var(--text-main);
+  resize: vertical;
+}
+
+.strategy-field input::placeholder,
+.strategy-field textarea::placeholder {
+  color: rgba(139, 155, 184, 0.7);
+}
+
+.strategy-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.strategy-draft-header,
+.strategy-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.strategy-draft-header h3,
+.strategy-card-header h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.strategy-card-header p {
+  margin: 6px 0 0;
+  color: var(--text-soft);
+  font-size: 0.84rem;
+}
+
+.strategy-copy {
+  margin: 0;
+  color: #dfe8f8;
+  white-space: pre-wrap;
+}
+
+.strategy-copy--compact {
+  font-size: 0.9rem;
+  color: #d6e4ff;
+}
+
+.strategy-parameter-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.strategy-parameter-card span {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--text-soft);
+  font-size: 0.76rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.strategy-parameter-card strong {
+  font-size: 0.94rem;
+}
+
+.strategy-bullet-group {
+  display: grid;
+  gap: 8px;
+}
+
+.strategy-bullet-group h3 {
+  margin: 0;
+  font-size: 0.96rem;
+}
+
+.strategy-library-list {
+  display: grid;
+  gap: 14px;
+}
+
+.strategy-mini-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  color: var(--text-soft);
+  font-size: 0.84rem;
+}
+
 @media (max-width: 1080px) {
   .hero,
   .dashboard-grid {
@@ -847,12 +978,17 @@ select {
   }
 
   .settings-summary-grid,
-  .settings-grid {
+  .settings-grid,
+  .strategy-summary-grid,
+  .strategy-parameter-grid,
+  .strategy-mini-grid {
     grid-template-columns: 1fr;
   }
 
   .candidate-actions,
-  .universe-row {
+  .universe-row,
+  .strategy-draft-header,
+  .strategy-card-header {
     flex-direction: column;
     align-items: stretch;
   }
