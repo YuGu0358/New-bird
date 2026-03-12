@@ -390,8 +390,15 @@ export default function App() {
     <div className="app-shell">
       <header className="hero">
         <div className="hero-copy">
-          <p className="eyebrow">策略 B 执行台</p>
-          <h1>个人自动交易平台</h1>
+          <div className="hero-brand">
+            <div className="hero-logo-shell">
+              <img className="hero-logo" src="/brand-logo.svg" alt="交易乌鸦 logo" />
+            </div>
+            <div className="hero-brand-copy">
+              <p className="eyebrow">策略 B 执行台</p>
+              <h1>个人自动交易平台</h1>
+            </div>
+          </div>
           <p className="hero-text">
             在一个交易面板中查看账户状态、跟踪持仓，并按股票读取 AI 整理的最新资讯。
           </p>
