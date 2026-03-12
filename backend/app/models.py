@@ -279,6 +279,27 @@ class StrategySaveRequest(BaseModel):
     activate: bool = True
 
 
+class StrategyPreviewRequest(BaseModel):
+    normalized_strategy: str = ""
+    parameters: StrategyExecutionParameters
+
+
+class StrategyPreviewResponse(BaseModel):
+    universe_size: int
+    sample_symbols: list[str]
+    preferred_sectors: list[str]
+    excluded_symbols: list[str]
+    max_new_positions_per_day: int
+    max_capital_per_symbol: float
+    max_new_capital_per_day: float
+    max_total_capital_if_fully_scaled: float
+    entry_trigger_summary: str
+    add_on_summary: str
+    exit_summary: str
+    restart_required: bool = True
+    normalized_strategy: str = ""
+
+
 class StoredStrategy(BaseModel):
     id: int
     name: str

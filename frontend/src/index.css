@@ -916,6 +916,12 @@ select {
   font-size: 1rem;
 }
 
+.strategy-caption {
+  margin: 6px 0 0;
+  color: var(--text-soft);
+  font-size: 0.84rem;
+}
+
 .strategy-card-header p {
   margin: 6px 0 0;
   color: var(--text-soft);
@@ -965,10 +971,27 @@ select {
   gap: 14px;
 }
 
+.strategy-card-badges {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
 .strategy-mini-grid {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   color: var(--text-soft);
   font-size: 0.84rem;
+}
+
+.strategy-preview-card {
+  display: grid;
+  gap: 16px;
+  margin-top: 6px;
+  padding: 16px 18px;
+  border-radius: 20px;
+  background: rgba(10, 23, 41, 0.82);
+  border: 1px solid rgba(125, 216, 255, 0.14);
 }
 
 @media (max-width: 1080px) {

@@ -10,7 +10,12 @@ from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import AsyncSessionLocal, StrategyProfile
-from app.models import StrategyAnalysisDraft, StrategyExecutionParameters, StrategySaveRequest
+from app.models import (
+    StrategyAnalysisDraft,
+    StrategyExecutionParameters,
+    StrategyPreviewRequest,
+    StrategySaveRequest,
+)
 from app.services import openai_service
 from app import runtime_settings
 
@@ -347,6 +352,45 @@ def _serialize_strategy(item: StrategyProfile) -> dict:
     }
 
 
+def _build_preview_payload(
+    normalized_strategy: str,
+    parameters: StrategyExecutionParameters,
+) -> dict:
+    scaled_capital_per_symbol = (
+        parameters.initial_buy_notional
+        + parameters.add_on_buy_notional * parameters.max_add_ons
+    )
+    max_new_capital_per_day = parameters.initial_buy_notional * parameters.max_daily_entries
+    return {
+        "universe_size": len(parameters.universe_symbols),
+        "sample_symbols": parameters.universe_symbols[:8],
+        "preferred_sectors": parameters.preferred_sectors,
+        "excluded_symbols": parameters.excluded_symbols,
+        "max_new_positions_per_day": parameters.max_daily_entries,
+        "max_capital_per_symbol": round(scaled_capital_per_symbol, 2),
+        "max_new_capital_per_day": round(max_new_capital_per_day, 2),
+        "max_total_capital_if_fully_scaled": round(
+            scaled_capital_per_symbol * parameters.max_daily_entries,
+            2,
+        ),
+        "entry_trigger_summary": (
+            f"当股价相对前收盘回撤达到 {parameters.entry_drop_percent:.1f}% 时，"
+            f"允许开新仓；单日最多新开 {parameters.max_daily_entries} 只股票。"
+        ),
+        "add_on_summary": (
+            f"已有持仓继续回撤 {parameters.add_on_drop_percent:.1f}% 时允许加仓，"
+            f"最多加仓 {parameters.max_add_ons} 次，每次 {parameters.add_on_buy_notional:.2f} 美元。"
+        ),
+        "exit_summary": (
+            f"单只股票浮盈达到 {parameters.take_profit_target:.2f} 美元止盈，"
+            f"回撤达到 {parameters.stop_loss_percent:.1f}% 止损，"
+            f"最长持有 {parameters.max_hold_days} 天。"
+        ),
+        "restart_required": True,
+        "normalized_strategy": normalized_strategy.strip(),
+    }
+
+
 async def analyze_strategy(description: str) -> StrategyAnalysisDraft:
     """Normalize a free-form strategy description into supported execution parameters."""
 
@@ -420,6 +464,44 @@ async def save_strategy(session: AsyncSession, request: StrategySaveRequest) -> 
     return await list_strategies(session)
 
 
+async def update_strategy(
+    session: AsyncSession,
+    strategy_id: int,
+    request: StrategySaveRequest,
+) -> dict:
+    """Update an existing saved strategy without consuming a new slot."""
+
+    name = str(request.name or "").strip()
+    if not name:
+        raise ValueError("保存前请先确认策略名称。")
+
+    result = await session.execute(select(StrategyProfile).where(StrategyProfile.id == strategy_id))
+    strategy = result.scalars().first()
+    if strategy is None:
+        raise ValueError("没有找到要编辑的策略。")
+
+    existing_items = (await session.execute(select(StrategyProfile))).scalars().all()
+    now = datetime.now(timezone.utc)
+    if request.activate:
+        for item in existing_items:
+            item.is_active = item.id == strategy_id
+            item.updated_at = now
+
+    normalized_parameters = _normalize_parameters(request.parameters)
+    strategy.name = name
+    strategy.raw_description = request.original_description.strip()
+    strategy.normalized_strategy = request.normalized_strategy.strip()
+    strategy.parameters_json = json.dumps(normalized_parameters.model_dump(), ensure_ascii=False)
+    strategy.improvement_points_json = json.dumps(request.improvement_points, ensure_ascii=False)
+    strategy.risk_warnings_json = json.dumps(request.risk_warnings, ensure_ascii=False)
+    strategy.execution_notes_json = json.dumps(request.execution_notes, ensure_ascii=False)
+    strategy.is_active = request.activate if request.activate else strategy.is_active
+    strategy.updated_at = now
+
+    await session.commit()
+    return await list_strategies(session)
+
+
 async def activate_strategy(session: AsyncSession, strategy_id: int) -> dict:
     """Mark one saved strategy as the active execution profile."""
 
@@ -448,6 +530,13 @@ async def delete_strategy(session: AsyncSession, strategy_id: int) -> dict:
     await session.delete(strategy)
     await session.commit()
     return await list_strategies(session)
+
+
+async def preview_strategy(request: StrategyPreviewRequest) -> dict:
+    """Summarize the effective execution footprint before saving a strategy."""
+
+    normalized_parameters = _normalize_parameters(request.parameters)
+    return _build_preview_payload(request.normalized_strategy, normalized_parameters)
 
 
 async def get_active_strategy_name() -> str:

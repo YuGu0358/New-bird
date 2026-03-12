@@ -29,6 +29,8 @@ from app.models import (
     StrategyAnalysisDraft,
     StrategyAnalysisRequest,
     StrategyLibraryResponse,
+    StrategyPreviewRequest,
+    StrategyPreviewResponse,
     StrategySaveRequest,
     TradeRecord,
     WatchlistUpdateRequest,
@@ -266,6 +268,34 @@ async def save_strategy(
     except Exception as exc:
         raise _service_error(exc) from exc
     return StrategyLibraryResponse(**payload)
+
+
+@app.put("/api/strategies/{strategy_id}", response_model=StrategyLibraryResponse)
+async def update_strategy(
+    strategy_id: int,
+    request: StrategySaveRequest,
+    session: SessionDep,
+) -> StrategyLibraryResponse:
+    try:
+        payload = await strategy_profiles_service.update_strategy(session, strategy_id, request)
+    except ValueError as exc:
+        message = str(exc)
+        status_code = 404 if "没有找到" in message else 400
+        raise HTTPException(status_code=status_code, detail=message) from exc
+    except Exception as exc:
+        raise _service_error(exc) from exc
+    return StrategyLibraryResponse(**payload)
+
+
+@app.post("/api/strategies/preview", response_model=StrategyPreviewResponse)
+async def preview_strategy(request: StrategyPreviewRequest) -> StrategyPreviewResponse:
+    try:
+        payload = await strategy_profiles_service.preview_strategy(request)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise _service_error(exc) from exc
+    return StrategyPreviewResponse(**payload)
 
 
 @app.post("/api/strategies/{strategy_id}/activate", response_model=StrategyLibraryResponse)

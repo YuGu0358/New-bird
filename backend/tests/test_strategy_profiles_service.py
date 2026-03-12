@@ -7,7 +7,7 @@ from pathlib import Path
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.database import Base
-from app.models import StrategyExecutionParameters, StrategySaveRequest
+from app.models import StrategyExecutionParameters, StrategyPreviewRequest, StrategySaveRequest
 from app.services import strategy_profiles_service
 
 
@@ -96,6 +96,55 @@ class StrategyProfilesServiceTests(unittest.IsolatedAsyncioTestCase):
             inactive_item = next(item for item in updated["items"] if item["id"] == first_id)
             self.assertTrue(active_item["is_active"])
             self.assertFalse(inactive_item["is_active"])
+
+    async def test_update_strategy_rewrites_existing_profile(self) -> None:
+        async with self.session_factory() as session:
+            saved = await strategy_profiles_service.save_strategy(
+                session,
+                self._build_request(name="成长回撤策略", activate=True),
+            )
+            strategy_id = saved["active_strategy_id"]
+
+            updated_library = await strategy_profiles_service.update_strategy(
+                session,
+                strategy_id,
+                self._build_request(name="新版成长策略", activate=True),
+            )
+
+            self.assertEqual(len(updated_library["items"]), 1)
+            updated_item = updated_library["items"][0]
+            self.assertEqual(updated_item["name"], "新版成长策略")
+            self.assertEqual(updated_item["id"], strategy_id)
+            self.assertTrue(updated_item["is_active"])
+
+    async def test_preview_strategy_summarizes_capital_and_limits(self) -> None:
+        preview = await strategy_profiles_service.preview_strategy(
+            StrategyPreviewRequest(
+                normalized_strategy="聚焦科技股回撤买入。",
+                parameters=StrategyExecutionParameters(
+                    universe_symbols=["NVDA", "MSFT", "AAPL"],
+                    preferred_sectors=["technology"],
+                    excluded_symbols=["AAPL"],
+                    entry_drop_percent=3.0,
+                    add_on_drop_percent=2.0,
+                    initial_buy_notional=1500.0,
+                    add_on_buy_notional=200.0,
+                    max_daily_entries=2,
+                    max_add_ons=2,
+                    take_profit_target=120.0,
+                    stop_loss_percent=9.0,
+                    max_hold_days=20,
+                ),
+            )
+        )
+
+        self.assertEqual(preview["universe_size"], 2)
+        self.assertEqual(preview["sample_symbols"], ["NVDA", "MSFT"])
+        self.assertEqual(preview["max_new_positions_per_day"], 2)
+        self.assertEqual(preview["max_capital_per_symbol"], 1900.0)
+        self.assertEqual(preview["max_new_capital_per_day"], 3000.0)
+        self.assertEqual(preview["max_total_capital_if_fully_scaled"], 3800.0)
+        self.assertIn("3.0%", preview["entry_trigger_summary"])
 
     def _build_request(self, *, name: str, activate: bool) -> StrategySaveRequest:
         return StrategySaveRequest(
