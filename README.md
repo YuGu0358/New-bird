@@ -4,16 +4,6 @@ FastAPI + React trading workspace for paper-trading execution, AI-assisted monit
 
 > Paper trading only. The monitoring, candidate-pool, universe-search, and social-intelligence layers are read-only. The strategy runner is designed for Alpaca paper accounts and should not be pointed at a live brokerage account without additional risk controls.
 
-## Screenshots
-
-### Dashboard
-
-![Dashboard](docs/assets/dashboard.png)
-
-### Runtime Settings
-
-![Runtime Settings](docs/assets/settings-panel.png)
-
 ## Highlights
 
 - GitHub-ready deployment with `Dockerfile`, `docker-compose.yml`, GitHub Actions CI, and browser-based runtime configuration.
@@ -41,7 +31,6 @@ trading_platform/
 │   ├── public/
 │   └── package.json
 ├── agent-harness/
-├── docs/assets/
 ├── launcher/
 ├── Dockerfile
 ├── docker-compose.yml
