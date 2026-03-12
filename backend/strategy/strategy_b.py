@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
 from app.database import AsyncSessionLocal, Trade
@@ -41,6 +41,7 @@ class StrategyExecutionConfig:
     add_on_drop_threshold: float
     initial_buy_notional: float
     add_on_buy_notional: float
+    max_daily_entries: int
     max_add_ons: int
     take_profit_target: float
     stop_loss_threshold: float
@@ -81,6 +82,7 @@ def build_default_strategy_config() -> StrategyExecutionConfig:
         add_on_drop_threshold=0.02,
         initial_buy_notional=1000.0,
         add_on_buy_notional=100.0,
+        max_daily_entries=3,
         max_add_ons=3,
         take_profit_target=80.0,
         stop_loss_threshold=0.12,
@@ -97,6 +99,7 @@ class StrategyBEngine:
         self.pending_buy_symbols: set[str] = set()
         self.pending_sell_symbols: set[str] = set()
         self.pending_exit_states: dict[str, PendingExitState] = {}
+        self.daily_entry_symbols: dict[date, set[str]] = {}
 
     def apply_config(self, config: StrategyExecutionConfig) -> None:
         """Swap the active execution profile used for new signals."""
@@ -124,11 +127,10 @@ class StrategyBEngine:
             open_orders = []
 
         all_orders: list[dict[str, Any]] = []
-        if self.pending_exit_states:
-            try:
-                all_orders = await alpaca_service.list_orders(status="all", limit=200)
-            except Exception as exc:
-                logger.warning("Skipping exit-order reconciliation because orders could not be loaded: %s", exc)
+        try:
+            all_orders = await alpaca_service.list_orders(status="all", limit=200)
+        except Exception as exc:
+            logger.warning("Skipping order-history sync because orders could not be loaded: %s", exc)
 
         previous_positions = self.positions
         current_positions: dict[str, PositionState] = {}
@@ -182,6 +184,7 @@ class StrategyBEngine:
             )
 
         self.positions = current_positions
+        self._hydrate_daily_entry_symbols(all_orders, now.date())
         await self._finalize_pending_exits(all_orders)
 
     async def evaluate_broker_positions(self, event_time: datetime | None = None) -> None:
@@ -221,7 +224,10 @@ class StrategyBEngine:
         position = self.positions.get(normalized_symbol)
         if position is None:
             daily_drop = (previous_close - current_price) / previous_close
-            if daily_drop >= self.config.entry_drop_threshold:
+            if daily_drop >= self.config.entry_drop_threshold and self._can_open_new_position(
+                normalized_symbol,
+                event_time.date(),
+            ):
                 await self._open_initial_position(normalized_symbol, current_price, event_time)
             return
 
@@ -250,6 +256,7 @@ class StrategyBEngine:
             side="buy",
             notional=self.config.initial_buy_notional,
         )
+        self._record_daily_entry(symbol, event_time.date())
         self.pending_buy_symbols.add(symbol)
         logger.info(
             "Submitted initial %s buy order for %s at %.2f",
@@ -421,6 +428,35 @@ class StrategyBEngine:
         if price <= 0:
             return 0.0
         return round(notional / price, 6)
+
+    def _can_open_new_position(self, symbol: str, current_day: date) -> bool:
+        self._prune_daily_entry_cache(current_day)
+        tracked_symbols = self.daily_entry_symbols.setdefault(current_day, set())
+        if symbol in tracked_symbols:
+            return True
+        return len(tracked_symbols) < self.config.max_daily_entries
+
+    def _record_daily_entry(self, symbol: str, current_day: date) -> None:
+        self._prune_daily_entry_cache(current_day)
+        self.daily_entry_symbols.setdefault(current_day, set()).add(symbol)
+
+    def _hydrate_daily_entry_symbols(self, orders: list[dict[str, Any]], current_day: date) -> None:
+        tracked_symbols = {
+            str(order.get("symbol", "")).upper()
+            for order in orders
+            if str(order.get("side", "")).lower() == "buy"
+            and isinstance(order.get("created_at"), datetime)
+            and order["created_at"].date() == current_day
+            and str(order.get("symbol", "")).upper() in self.config.universe
+        }
+        self.daily_entry_symbols = {current_day: tracked_symbols}
+
+    def _prune_daily_entry_cache(self, current_day: date) -> None:
+        self.daily_entry_symbols = {
+            day: symbols
+            for day, symbols in self.daily_entry_symbols.items()
+            if day == current_day
+        }
 
     @staticmethod
     def _coerce_timestamp(value: datetime | str | None) -> datetime:

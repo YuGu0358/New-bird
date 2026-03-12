@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Optional
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class Account(BaseModel):
@@ -240,10 +240,13 @@ class SettingsUpdateRequest(BaseModel):
 
 class StrategyExecutionParameters(BaseModel):
     universe_symbols: list[str]
+    preferred_sectors: list[str] = Field(default_factory=list)
+    excluded_symbols: list[str] = Field(default_factory=list)
     entry_drop_percent: float
     add_on_drop_percent: float
     initial_buy_notional: float
     add_on_buy_notional: float
+    max_daily_entries: int = 3
     max_add_ons: int
     take_profit_target: float
     stop_loss_percent: float

@@ -15,6 +15,26 @@ from app.services import openai_service
 from app import runtime_settings
 
 MAX_SAVED_STRATEGIES = 5
+SECTOR_UNIVERSE_MAP = {
+    "technology": ["AAPL", "MSFT", "GOOGL", "META", "AMZN", "ORCL", "CRM", "ADBE"],
+    "semiconductors": ["NVDA", "AMD", "AVGO", "QCOM", "MU", "TSM", "AMAT", "LRCX"],
+    "software": ["MSFT", "CRM", "NOW", "INTU", "ADBE", "SNOW", "MDB", "PLTR"],
+    "cloud": ["AMZN", "MSFT", "GOOGL", "ORCL", "CRM", "SNOW", "MDB", "NOW"],
+    "cybersecurity": ["CRWD", "PANW", "ZS", "FTNT", "OKTA", "CYBR"],
+    "fintech": ["V", "MA", "PYPL", "SQ", "INTU", "COIN"],
+    "mega_cap": ["AAPL", "MSFT", "AMZN", "GOOGL", "META", "NVDA", "TSLA"],
+    "etf": ["QQQ", "SPY", "VOO", "XLK", "VGT", "SMH"],
+}
+SECTOR_KEYWORDS = {
+    "technology": ("科技", "technology", "tech"),
+    "semiconductors": ("半导体", "芯片", "semiconductor", "chip"),
+    "software": ("软件", "software", "saas"),
+    "cloud": ("云", "cloud"),
+    "cybersecurity": ("网络安全", "cybersecurity", "security"),
+    "fintech": ("金融科技", "fintech", "支付"),
+    "mega_cap": ("大盘科技", "mega cap", "megacap"),
+    "etf": ("etf", "指数基金"),
+}
 DEFAULT_UNIVERSE = [
     "AAPL",
     "MSFT",
@@ -39,10 +59,13 @@ DEFAULT_UNIVERSE = [
 ]
 DEFAULT_PARAMETERS = StrategyExecutionParameters(
     universe_symbols=DEFAULT_UNIVERSE,
+    preferred_sectors=["technology", "mega_cap"],
+    excluded_symbols=[],
     entry_drop_percent=2.0,
     add_on_drop_percent=2.0,
     initial_buy_notional=1000.0,
     add_on_buy_notional=100.0,
+    max_daily_entries=3,
     max_add_ons=3,
     take_profit_target=80.0,
     stop_loss_percent=12.0,
@@ -90,12 +113,22 @@ def _clamp_int(value: float | int | None, *, default: int, low: int, high: int) 
 
 
 def _normalize_parameters(parameters: StrategyExecutionParameters) -> StrategyExecutionParameters:
+    preferred_sectors = _normalize_sector_names(parameters.preferred_sectors)
+    excluded_symbols = _dedupe_symbols(parameters.excluded_symbols)
     symbols = _dedupe_symbols(parameters.universe_symbols)
+    if not symbols and preferred_sectors:
+        symbols = _build_universe_from_sectors(preferred_sectors)
     if not symbols:
         symbols = list(DEFAULT_PARAMETERS.universe_symbols)
+    if excluded_symbols:
+        symbols = [symbol for symbol in symbols if symbol not in set(excluded_symbols)]
+    if not symbols:
+        symbols = [symbol for symbol in DEFAULT_PARAMETERS.universe_symbols if symbol not in set(excluded_symbols)]
 
     return StrategyExecutionParameters(
         universe_symbols=symbols[:20],
+        preferred_sectors=preferred_sectors,
+        excluded_symbols=excluded_symbols[:20],
         entry_drop_percent=_clamp_float(
             parameters.entry_drop_percent,
             default=DEFAULT_PARAMETERS.entry_drop_percent,
@@ -119,6 +152,12 @@ def _normalize_parameters(parameters: StrategyExecutionParameters) -> StrategyEx
             default=DEFAULT_PARAMETERS.add_on_buy_notional,
             low=10.0,
             high=50000.0,
+        ),
+        max_daily_entries=_clamp_int(
+            parameters.max_daily_entries,
+            default=DEFAULT_PARAMETERS.max_daily_entries,
+            low=1,
+            high=20,
         ),
         max_add_ons=_clamp_int(
             parameters.max_add_ons,
@@ -151,8 +190,51 @@ def _extract_candidate_symbols(description: str) -> list[str]:
     return _dedupe_symbols(_SYMBOL_PATTERN.findall(description.upper()))
 
 
+def _normalize_sector_names(values: list[str]) -> list[str]:
+    normalized: list[str] = []
+    seen: set[str] = set()
+    for item in values or []:
+        raw_value = str(item or "").strip().lower()
+        if not raw_value:
+            continue
+        canonical = raw_value.replace("-", "_").replace(" ", "_")
+        if canonical not in SECTOR_UNIVERSE_MAP:
+            continue
+        if canonical in seen:
+            continue
+        seen.add(canonical)
+        normalized.append(canonical)
+    return normalized
+
+
+def _build_universe_from_sectors(sectors: list[str]) -> list[str]:
+    symbols: list[str] = []
+    seen: set[str] = set()
+    for sector in sectors:
+        for symbol in SECTOR_UNIVERSE_MAP.get(sector, []):
+            if symbol in seen:
+                continue
+            seen.add(symbol)
+            symbols.append(symbol)
+    return symbols
+
+
+def _extract_candidate_sectors(description: str) -> list[str]:
+    lowered = description.lower()
+    sectors: list[str] = []
+    for sector, keywords in SECTOR_KEYWORDS.items():
+        if any(keyword in lowered for keyword in keywords):
+            sectors.append(sector)
+    return sectors
+
+
 def _fallback_strategy_analysis(description: str) -> StrategyAnalysisDraft:
-    symbols = _extract_candidate_symbols(description) or list(DEFAULT_PARAMETERS.universe_symbols[:8])
+    preferred_sectors = _extract_candidate_sectors(description) or list(DEFAULT_PARAMETERS.preferred_sectors)
+    symbols = _extract_candidate_symbols(description)
+    if not symbols:
+        symbols = _build_universe_from_sectors(preferred_sectors)[:8]
+    if not symbols:
+        symbols = list(DEFAULT_PARAMETERS.universe_symbols[:8])
     normalized_strategy = (
         f"以 {', '.join(symbols[:8])} 作为主要观察股票池。"
         "当价格相对前收盘出现回撤时分批买入，随后按固定止盈、止损和最长持有周期执行退出。"
@@ -173,12 +255,13 @@ def _fallback_strategy_analysis(description: str) -> StrategyAnalysisDraft:
             "如果你的策略依赖指标、做空、期权或多因子筛选，这个执行器目前不能完整表达。",
         ],
         execution_notes=[
-            "当前执行器支持的核心参数是股票池、回撤买入阈值、加仓阈值、仓位金额和退出规则。",
+            "当前执行器支持的核心参数是股票池、板块偏好、排除清单、每日最大开仓数、回撤买入阈值、加仓阈值、仓位金额和退出规则。",
             "确认并激活后，新的策略会在机器人下一次启动时生效。",
         ],
         parameters=StrategyExecutionParameters(
             **{
                 **DEFAULT_PARAMETERS.model_dump(),
+                "preferred_sectors": preferred_sectors,
                 "universe_symbols": symbols[:20],
             }
         ),
@@ -188,8 +271,9 @@ def _fallback_strategy_analysis(description: str) -> StrategyAnalysisDraft:
 
 def _build_strategy_prompt(description: str) -> str:
     supported_fields = (
-        "universe_symbols, entry_drop_percent, add_on_drop_percent, "
-        "initial_buy_notional, add_on_buy_notional, max_add_ons, "
+        "universe_symbols, preferred_sectors, excluded_symbols, "
+        "entry_drop_percent, add_on_drop_percent, initial_buy_notional, "
+        "add_on_buy_notional, max_daily_entries, max_add_ons, "
         "take_profit_target, stop_loss_percent, max_hold_days"
     )
     return (
@@ -201,7 +285,9 @@ def _build_strategy_prompt(description: str) -> str:
         f"{supported_fields}。\n"
         "4. 如果用户描述超出当前执行器能力，请在 risk_warnings 或 execution_notes 中明确说明，并映射到最接近的可执行版本。\n"
         "5. 不要给出高杠杆、无限加仓或去掉风控的建议。\n"
-        "6. universe_symbols 应该是股票代码数组；如果用户没给出明确股票池，可以给出合理默认值。\n\n"
+        "6. preferred_sectors 只允许使用这些值：technology, semiconductors, software, cloud, cybersecurity, fintech, mega_cap, etf。\n"
+        "7. universe_symbols 和 excluded_symbols 应该是股票代码数组；如果用户没给出明确股票池，可以给出合理默认值。\n"
+        "8. max_daily_entries 代表单日最多允许新开仓多少个不同股票。\n\n"
         "用户原始描述：\n"
         f"{description}"
     )

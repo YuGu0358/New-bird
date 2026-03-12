@@ -200,6 +200,14 @@ export default function StrategyStudioPanel({ apiBaseUrl, botStatus }) {
         </div>
       </div>
 
+      <div className="strategy-notice-card">
+        <strong>策略切换规则</strong>
+        <p>
+          GPT 只负责整理和改进你的想法。只有在你确认保存后，策略才会进入库中；只有设为当前策略后，
+          机器人下次启动才会按这套参数执行。
+        </p>
+      </div>
+
       <div className="strategy-builder">
         <label className="strategy-field">
           <span>描述你的交易策略</span>
@@ -250,6 +258,14 @@ export default function StrategyStudioPanel({ apiBaseUrl, botStatus }) {
           <div className="strategy-parameter-grid">
             <ParameterCard label="股票池" value={draft.parameters.universe_symbols.join(", ")} />
             <ParameterCard
+              label="偏好板块"
+              value={formatList(draft.parameters.preferred_sectors)}
+            />
+            <ParameterCard
+              label="排除股票"
+              value={formatList(draft.parameters.excluded_symbols)}
+            />
+            <ParameterCard
               label="入场回撤"
               value={`${draft.parameters.entry_drop_percent.toFixed(1)}%`}
             />
@@ -264,6 +280,10 @@ export default function StrategyStudioPanel({ apiBaseUrl, botStatus }) {
             <ParameterCard
               label="加仓金额"
               value={formatUsd(draft.parameters.add_on_buy_notional)}
+            />
+            <ParameterCard
+              label="每日新开仓"
+              value={`${draft.parameters.max_daily_entries} 只`}
             />
             <ParameterCard label="最多加仓" value={`${draft.parameters.max_add_ons} 次`} />
             <ParameterCard
@@ -323,6 +343,9 @@ export default function StrategyStudioPanel({ apiBaseUrl, botStatus }) {
 
                 <div className="strategy-mini-grid">
                   <span>股票池 {item.parameters.universe_symbols.length} 只</span>
+                  <span>板块 {item.parameters.preferred_sectors?.length || 0} 个</span>
+                  <span>排除 {item.parameters.excluded_symbols?.length || 0} 只</span>
+                  <span>每日新开仓 {item.parameters.max_daily_entries} 只</span>
                   <span>入场 {item.parameters.entry_drop_percent.toFixed(1)}%</span>
                   <span>止损 {item.parameters.stop_loss_percent.toFixed(1)}%</span>
                   <span>最长持有 {item.parameters.max_hold_days} 天</span>
@@ -396,3 +419,21 @@ function formatUsd(value) {
     maximumFractionDigits: 2,
   }).format(value);
 }
+
+function formatList(items) {
+  if (!items?.length) {
+    return "无";
+  }
+  return items.map((item) => SECTOR_LABELS[item] || item).join(", ");
+}
+
+const SECTOR_LABELS = {
+  technology: "科技",
+  semiconductors: "半导体",
+  software: "软件",
+  cloud: "云计算",
+  cybersecurity: "网络安全",
+  fintech: "金融科技",
+  mega_cap: "大盘科技",
+  etf: "ETF",
+};

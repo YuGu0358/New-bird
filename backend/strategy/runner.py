@@ -26,6 +26,7 @@ async def _load_execution_config() -> StrategyExecutionConfig:
         add_on_drop_threshold=parameters.add_on_drop_percent / 100,
         initial_buy_notional=parameters.initial_buy_notional,
         add_on_buy_notional=parameters.add_on_buy_notional,
+        max_daily_entries=parameters.max_daily_entries,
         max_add_ons=parameters.max_add_ons,
         take_profit_target=parameters.take_profit_target,
         stop_loss_threshold=parameters.stop_loss_percent / 100,

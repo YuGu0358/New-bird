@@ -34,6 +34,29 @@ class StrategyProfilesServiceTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(draft.used_openai)
         self.assertIn("回退模式", draft.normalized_strategy)
 
+    def test_normalize_parameters_uses_sectors_and_exclusions(self) -> None:
+        normalized = strategy_profiles_service._normalize_parameters(  # noqa: SLF001
+            StrategyExecutionParameters(
+                universe_symbols=[],
+                preferred_sectors=["technology", "semiconductors"],
+                excluded_symbols=["NVDA", "MSFT"],
+                entry_drop_percent=2.0,
+                add_on_drop_percent=2.0,
+                initial_buy_notional=1000.0,
+                add_on_buy_notional=100.0,
+                max_daily_entries=4,
+                max_add_ons=3,
+                take_profit_target=80.0,
+                stop_loss_percent=12.0,
+                max_hold_days=30,
+            )
+        )
+
+        self.assertIn("AAPL", normalized.universe_symbols)
+        self.assertNotIn("NVDA", normalized.universe_symbols)
+        self.assertNotIn("MSFT", normalized.universe_symbols)
+        self.assertEqual(normalized.max_daily_entries, 4)
+
     async def test_save_strategy_enforces_max_five_profiles(self) -> None:
         async with self.session_factory() as session:
             for index in range(5):
@@ -84,10 +107,13 @@ class StrategyProfilesServiceTests(unittest.IsolatedAsyncioTestCase):
             execution_notes=["新的策略会在机器人下次启动时生效。"],
             parameters=StrategyExecutionParameters(
                 universe_symbols=["NVDA", "MSFT"],
+                preferred_sectors=["technology"],
+                excluded_symbols=[],
                 entry_drop_percent=2.5,
                 add_on_drop_percent=2.0,
                 initial_buy_notional=1200.0,
                 add_on_buy_notional=150.0,
+                max_daily_entries=3,
                 max_add_ons=2,
                 take_profit_target=100.0,
                 stop_loss_percent=10.0,

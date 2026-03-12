@@ -668,6 +668,35 @@ select {
   font-size: 0.92rem;
 }
 
+.strategy-live-card,
+.strategy-notice-card {
+  padding: 16px 18px;
+  border-radius: 20px;
+  border: 1px solid rgba(88, 163, 255, 0.14);
+  background:
+    linear-gradient(145deg, rgba(12, 28, 54, 0.86), rgba(8, 20, 38, 0.76)),
+    rgba(7, 16, 31, 0.58);
+}
+
+.strategy-live-card {
+  display: grid;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.strategy-live-card h3,
+.strategy-notice-card strong {
+  margin: 6px 0 0;
+  font-size: 1rem;
+}
+
+.strategy-live-card p,
+.strategy-notice-card p {
+  margin: 0;
+  color: var(--text-soft);
+  font-size: 0.88rem;
+}
+
 .order-status {
   display: inline-flex;
   align-items: center;

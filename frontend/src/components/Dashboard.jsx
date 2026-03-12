@@ -208,6 +208,17 @@ export default function Dashboard({
             </span>
           </div>
 
+          <div className="strategy-live-card">
+            <div>
+              <p className="panel-kicker">当前策略</p>
+              <h3>{botStatus?.active_strategy_name || "系统默认 Strategy B"}</h3>
+            </div>
+            <p>
+              新策略保存或切换后，不会立刻改动运行中的机器人。
+              {botStatus?.is_running ? "请停止后重新启动机器人以应用新策略。" : "下次启动机器人时会自动应用。"}
+            </p>
+          </div>
+
           <div className="action-grid">
             <button
               type="button"
