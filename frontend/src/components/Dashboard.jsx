@@ -310,8 +310,8 @@ export default function Dashboard({
           actionBusy={actionBusy}
         />
 
-        <StrategyStudioPanel apiBaseUrl={apiBaseUrl} botStatus={botStatus} />
         <PriceChartPanel symbol={selectedSymbol} apiBaseUrl={apiBaseUrl} />
+        <StrategyStudioPanel apiBaseUrl={apiBaseUrl} botStatus={botStatus} />
         <NewsPanel symbol={selectedSymbol} apiBaseUrl={apiBaseUrl} />
         <ResearchPanel symbol={selectedSymbol} apiBaseUrl={apiBaseUrl} />
 

@@ -60,7 +60,7 @@ export default function App() {
   const [monitoring, setMonitoring] = useState(null);
   const [botStatus, setBotStatus] = useState({ is_running: false });
   const [settingsStatus, setSettingsStatus] = useState(null);
-  const [selectedSymbol, setSelectedSymbol] = useState("");
+  const [selectedSymbol, setSelectedSymbol] = useState(DEFAULT_WATCHLIST[0]);
   const [activeView, setActiveView] = useState("dashboard");
   const [isLoading, setIsLoading] = useState(true);
   const [actionBusy, setActionBusy] = useState("");
