@@ -6,6 +6,8 @@ const CATEGORY_LABELS = {
   research: "研究",
   ai: "AI",
   social: "社媒",
+  notifications: "通知",
+  safety: "风控",
 };
 
 export default function SettingsPanel({

@@ -11,6 +11,7 @@ import {
 import CandidatePoolPanel from "./CandidatePoolPanel";
 import NewsPanel from "./NewsPanel";
 import PanelCollapseButton from "./PanelCollapseButton";
+import PriceAlertsPanel from "./PriceAlertsPanel";
 import PortfolioTable from "./PortfolioTable";
 import PriceChartPanel from "./PriceChartPanel";
 import ResearchPanel from "./ResearchPanel";
@@ -358,6 +359,7 @@ export default function Dashboard({
         />
 
         <PriceChartPanel symbol={selectedSymbol} apiBaseUrl={apiBaseUrl} />
+        <PriceAlertsPanel symbol={selectedSymbol} apiBaseUrl={apiBaseUrl} />
         <StrategyStudioPanel apiBaseUrl={apiBaseUrl} botStatus={botStatus} />
         <NewsPanel symbol={selectedSymbol} apiBaseUrl={apiBaseUrl} />
         <ResearchPanel symbol={selectedSymbol} apiBaseUrl={apiBaseUrl} />

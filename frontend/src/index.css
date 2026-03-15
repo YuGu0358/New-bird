@@ -335,7 +335,8 @@ select {
   font-size: 0.92rem;
 }
 
-.settings-field input {
+.settings-field input,
+.settings-field select {
   width: 100%;
   padding: 12px 14px;
   border-radius: 14px;
@@ -987,6 +988,67 @@ select {
   margin: 0;
 }
 
+.alerts-form,
+.alerts-rule-list {
+  display: grid;
+  gap: 16px;
+  margin-top: 18px;
+}
+
+.alerts-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.alerts-rule-card {
+  padding: 16px 18px;
+  border-radius: 20px;
+  background: rgba(7, 16, 31, 0.58);
+  border: 1px solid rgba(88, 163, 255, 0.1);
+}
+
+.alerts-rule-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.alerts-rule-header h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.alerts-rule-header p {
+  margin: 6px 0 0;
+  color: #dfe8f8;
+  font-size: 0.9rem;
+}
+
+.alerts-rule-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.alerts-rule-meta span,
+.alerts-inline-note {
+  display: inline-flex;
+  align-items: center;
+  padding: 8px 12px;
+  border-radius: 14px;
+  background: rgba(13, 32, 60, 0.62);
+  border: 1px solid rgba(88, 163, 255, 0.08);
+  color: var(--text-soft);
+  font-size: 0.82rem;
+}
+
+.alerts-inline-note {
+  margin-top: 12px;
+}
+
 .strategy-summary-grid,
 .strategy-parameter-grid,
 .strategy-mini-grid {
@@ -1190,6 +1252,7 @@ select {
 
   .settings-summary-grid,
   .settings-grid,
+  .alerts-grid,
   .strategy-summary-grid,
   .strategy-parameter-grid,
   .strategy-mini-grid {

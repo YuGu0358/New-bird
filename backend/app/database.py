@@ -72,6 +72,35 @@ class WatchlistSymbol(Base):
     )
 
 
+class PriceAlertRule(Base):
+    __tablename__ = "price_alert_rules"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    symbol: Mapped[str] = mapped_column(String(16), index=True)
+    condition_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    target_value: Mapped[float] = mapped_column(Float, nullable=False)
+    action_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    order_notional_usd: Mapped[float | None] = mapped_column(Float, nullable=True)
+    note: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    triggered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    trigger_price: Mapped[float | None] = mapped_column(Float, nullable=True)
+    trigger_change_percent: Mapped[float | None] = mapped_column(Float, nullable=True)
+    action_result: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    last_error: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+    )
+
+
 class CandidatePoolItem(Base):
     __tablename__ = "candidate_pool_items"
 
