@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import {
   Bar,
   BarChart,
@@ -10,6 +10,7 @@ import {
 } from "recharts";
 import CandidatePoolPanel from "./CandidatePoolPanel";
 import NewsPanel from "./NewsPanel";
+import PanelCollapseButton from "./PanelCollapseButton";
 import PortfolioTable from "./PortfolioTable";
 import PriceChartPanel from "./PriceChartPanel";
 import ResearchPanel from "./ResearchPanel";
@@ -35,8 +36,13 @@ export default function Dashboard({
   onRefresh,
   onRefreshMonitoring,
   onAddWatchlistSymbol,
+  onRemoveWatchlistSymbol,
   actionBusy,
 }) {
+  const [portfolioCollapsed, setPortfolioCollapsed] = useState(false);
+  const [ordersCollapsed, setOrdersCollapsed] = useState(false);
+  const [watchlistCollapsed, setWatchlistCollapsed] = useState(false);
+
   const chartData = trades
     .slice(0, 6)
     .reverse()
@@ -59,17 +65,25 @@ export default function Dashboard({
               <p className="panel-kicker">持仓</p>
               <h2>当前持仓与历史成交</h2>
             </div>
-            <span className="panel-pill">
-              持仓 {positions.length} / 历史 {trades.length}
-            </span>
+            <div className="panel-header-actions">
+              <span className="panel-pill">
+                持仓 {positions.length} / 历史 {trades.length}
+              </span>
+              <PanelCollapseButton
+                collapsed={portfolioCollapsed}
+                onToggle={() => setPortfolioCollapsed((current) => !current)}
+              />
+            </div>
           </div>
 
-          <PortfolioTable
-            positions={positions}
-            trades={trades}
-            selectedSymbol={selectedSymbol}
-            onSelectSymbol={onSelectSymbol}
-          />
+          {!portfolioCollapsed ? (
+            <PortfolioTable
+              positions={positions}
+              trades={trades}
+              selectedSymbol={selectedSymbol}
+              onSelectSymbol={onSelectSymbol}
+            />
+          ) : null}
         </section>
 
         <section className="panel">
@@ -145,51 +159,59 @@ export default function Dashboard({
               <p className="panel-kicker">订单</p>
               <h2>最近订单状态</h2>
             </div>
-            <span className="panel-pill">共 {orders.length} 笔</span>
+            <div className="panel-header-actions">
+              <span className="panel-pill">共 {orders.length} 笔</span>
+              <PanelCollapseButton
+                collapsed={ordersCollapsed}
+                onToggle={() => setOrdersCollapsed((current) => !current)}
+              />
+            </div>
           </div>
 
-          <div className="table-shell">
-            <table className="positions-table">
-              <thead>
-                <tr>
-                  <th>股票</th>
-                  <th>方向</th>
-                  <th>类型</th>
-                  <th>状态</th>
-                  <th>数量/金额</th>
-                  <th>创建时间</th>
-                </tr>
-              </thead>
-              <tbody>
-                {orders.length ? (
-                  orders.slice(0, 8).map((order) => (
-                    <tr key={order.order_id}>
-                      <td>{order.symbol}</td>
-                      <td>{formatSide(order.side)}</td>
-                      <td>{formatOrderType(order.order_type)}</td>
-                      <td>
-                        <span
-                          className={`order-status order-status--${String(
-                            order.status || "unknown"
-                          ).toLowerCase()}`}
-                        >
-                          {formatOrderStatus(order.status)}
-                        </span>
-                      </td>
-                      <td>{formatOrderSize(order)}</td>
-                      <td>{formatDate(order.created_at)}</td>
-                    </tr>
-                  ))
-                ) : (
+          {!ordersCollapsed ? (
+            <div className="table-shell">
+              <table className="positions-table">
+                <thead>
                   <tr>
-                    <td className="empty-row" colSpan="6">
-                      暂时还没有订单记录。
-                    </td>
+                    <th>股票</th>
+                    <th>方向</th>
+                    <th>类型</th>
+                    <th>状态</th>
+                    <th>数量/金额</th>
+                    <th>创建时间</th>
                   </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {orders.length ? (
+                    orders.slice(0, 8).map((order) => (
+                      <tr key={order.order_id}>
+                        <td>{order.symbol}</td>
+                        <td>{formatSide(order.side)}</td>
+                        <td>{formatOrderType(order.order_type)}</td>
+                        <td>
+                          <span
+                            className={`order-status order-status--${String(
+                              order.status || "unknown"
+                            ).toLowerCase()}`}
+                          >
+                            {formatOrderStatus(order.status)}
+                          </span>
+                        </td>
+                        <td>{formatOrderSize(order)}</td>
+                        <td>{formatDate(order.created_at)}</td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td className="empty-row" colSpan="6">
+                        暂时还没有订单记录。
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          ) : null}
         </section>
       </section>
 
@@ -285,21 +307,46 @@ export default function Dashboard({
               <p className="panel-kicker">交互</p>
               <h2>股票速选</h2>
             </div>
-            <span className="panel-pill">{selectedSymbol || "未选择"}</span>
+            <div className="panel-header-actions">
+              <span className="panel-pill">{selectedSymbol || "未选择"}</span>
+              <PanelCollapseButton
+                collapsed={watchlistCollapsed}
+                onToggle={() => setWatchlistCollapsed((current) => !current)}
+              />
+            </div>
           </div>
 
-          <div className="watchlist-grid">
-            {watchlist.map((symbol) => (
-              <button
-                key={symbol}
-                type="button"
-                className={`symbol-button ${selectedSymbol === symbol ? "is-active" : ""}`}
-                onClick={() => onSelectSymbol(symbol)}
-              >
-                {symbol}
-              </button>
-            ))}
-          </div>
+          {!watchlistCollapsed ? (
+            watchlist.length ? (
+              <div className="watchlist-grid">
+                {watchlist.map((symbol) => (
+                  <div
+                    key={symbol}
+                    className={`watchlist-chip ${selectedSymbol === symbol ? "is-active" : ""}`}
+                  >
+                    <button
+                      type="button"
+                      className={`symbol-button ${selectedSymbol === symbol ? "is-active" : ""}`}
+                      onClick={() => onSelectSymbol(symbol)}
+                    >
+                      {symbol}
+                    </button>
+                    <button
+                      type="button"
+                      className="watchlist-remove-button"
+                      onClick={() => onRemoveWatchlistSymbol(symbol)}
+                      disabled={actionBusy !== ""}
+                      aria-label={`删除 ${symbol}`}
+                    >
+                      删除
+                    </button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="empty-state">当前还没有自选股票。</div>
+            )
+          ) : null}
         </section>
 
         <UniverseExplorer

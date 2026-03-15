@@ -316,6 +316,53 @@ export default function App() {
     }
   };
 
+  const removeWatchlistSymbol = async (symbol) => {
+    const normalizedSymbol = String(symbol || "").trim().toUpperCase();
+    if (!normalizedSymbol) {
+      return;
+    }
+
+    setActionBusy("watchlist");
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/watchlist/${normalizedSymbol}`, {
+        method: "DELETE",
+      });
+
+      if (!response.ok) {
+        let detail = `请求失败（状态码 ${response.status}）`;
+        try {
+          const payload = await response.json();
+          if (payload?.detail) {
+            detail = payload.detail;
+          }
+        } catch {
+          // Keep the default error text.
+        }
+        throw new Error(detail);
+      }
+
+      const nextWatchlist = await response.json();
+      setMonitoring((current) =>
+        current ? { ...current, selected_symbols: nextWatchlist } : current
+      );
+      setSelectedSymbol((currentSymbol) => {
+        if (currentSymbol !== normalizedSymbol) {
+          return currentSymbol;
+        }
+        return nextWatchlist[0] || DEFAULT_WATCHLIST[0];
+      });
+      setActionMessage(`${normalizedSymbol} 已从自选列表移除。`);
+      setError("");
+      refreshDashboard();
+    } catch (actionError) {
+      setActionMessage("");
+      setError(actionError.message);
+    } finally {
+      setActionBusy("");
+    }
+  };
+
   const refreshMonitoring = async () => {
     setActionBusy("monitoring");
 
@@ -382,7 +429,7 @@ export default function App() {
     }
   };
 
-  const watchlist = monitoring?.selected_symbols?.length
+  const watchlist = Array.isArray(monitoring?.selected_symbols)
     ? monitoring.selected_symbols
     : DEFAULT_WATCHLIST;
 
@@ -475,6 +522,7 @@ export default function App() {
           onRefresh={refreshDashboard}
           onRefreshMonitoring={refreshMonitoring}
           onAddWatchlistSymbol={addWatchlistSymbol}
+          onRemoveWatchlistSymbol={removeWatchlistSymbol}
           actionBusy={actionBusy}
         />
       )}

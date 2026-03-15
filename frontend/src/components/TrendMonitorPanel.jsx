@@ -1,10 +1,13 @@
-import React from "react";
+import React, { useState } from "react";
+import PanelCollapseButton from "./PanelCollapseButton";
 
 export default function TrendMonitorPanel({
   trackedSymbols,
   selectedSymbol,
   onSelectSymbol,
 }) {
+  const [collapsed, setCollapsed] = useState(false);
+
   return (
     <section className="panel">
       <div className="panel-header">
@@ -12,65 +15,73 @@ export default function TrendMonitorPanel({
           <p className="panel-kicker">趋势</p>
           <h2>自选 / 候选走势对比</h2>
         </div>
-        <span className="panel-pill">日 / 周 / 月</span>
+        <div className="panel-header-actions">
+          <span className="panel-pill">日 / 周 / 月</span>
+          <PanelCollapseButton
+            collapsed={collapsed}
+            onToggle={() => setCollapsed((current) => !current)}
+          />
+        </div>
       </div>
 
-      <div className="table-shell">
-        <table className="positions-table">
-          <thead>
-            <tr>
-              <th>股票</th>
-              <th>标签</th>
-              <th>现价</th>
-              <th>上一天</th>
-              <th>上一周</th>
-              <th>上一月</th>
-            </tr>
-          </thead>
-          <tbody>
-            {trackedSymbols?.length ? (
-              trackedSymbols.map((item) => (
-                <tr key={item.symbol}>
-                  <td>
-                    <button
-                      type="button"
-                      className={`symbol-button ${selectedSymbol === item.symbol ? "is-active" : ""}`}
-                      onClick={() => onSelectSymbol(item.symbol)}
-                    >
-                      {item.symbol}
-                    </button>
-                  </td>
-                  <td>
-                    <div className="tag-list">
-                      {item.tags?.map((tag) => (
-                        <span key={`${item.symbol}-${tag}`} className="mini-tag">
-                          {tag}
-                        </span>
-                      ))}
-                    </div>
-                  </td>
-                  <td>{formatCurrency(item.trend?.current_price)}</td>
-                  <td className={toneClass(item.trend?.day_change_percent)}>
-                    {formatPercent(item.trend?.day_change_percent)}
-                  </td>
-                  <td className={toneClass(item.trend?.week_change_percent)}>
-                    {formatPercent(item.trend?.week_change_percent)}
-                  </td>
-                  <td className={toneClass(item.trend?.month_change_percent)}>
-                    {formatPercent(item.trend?.month_change_percent)}
+      {!collapsed ? (
+        <div className="table-shell">
+          <table className="positions-table">
+            <thead>
+              <tr>
+                <th>股票</th>
+                <th>标签</th>
+                <th>现价</th>
+                <th>上一天</th>
+                <th>上一周</th>
+                <th>上一月</th>
+              </tr>
+            </thead>
+            <tbody>
+              {trackedSymbols?.length ? (
+                trackedSymbols.map((item) => (
+                  <tr key={item.symbol}>
+                    <td>
+                      <button
+                        type="button"
+                        className={`symbol-button ${selectedSymbol === item.symbol ? "is-active" : ""}`}
+                        onClick={() => onSelectSymbol(item.symbol)}
+                      >
+                        {item.symbol}
+                      </button>
+                    </td>
+                    <td>
+                      <div className="tag-list">
+                        {item.tags?.map((tag) => (
+                          <span key={`${item.symbol}-${tag}`} className="mini-tag">
+                            {tag}
+                          </span>
+                        ))}
+                      </div>
+                    </td>
+                    <td>{formatCurrency(item.trend?.current_price)}</td>
+                    <td className={toneClass(item.trend?.day_change_percent)}>
+                      {formatPercent(item.trend?.day_change_percent)}
+                    </td>
+                    <td className={toneClass(item.trend?.week_change_percent)}>
+                      {formatPercent(item.trend?.week_change_percent)}
+                    </td>
+                    <td className={toneClass(item.trend?.month_change_percent)}>
+                      {formatPercent(item.trend?.month_change_percent)}
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td className="empty-row" colSpan="6">
+                    暂时还没有趋势数据。
                   </td>
                 </tr>
-              ))
-            ) : (
-              <tr>
-                <td className="empty-row" colSpan="6">
-                  暂时还没有趋势数据。
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+              )}
+            </tbody>
+          </table>
+        </div>
+      ) : null}
     </section>
   );
 }

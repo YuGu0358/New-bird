@@ -240,6 +240,30 @@ select {
   font-size: 0.82rem;
 }
 
+.panel-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.panel-toggle-button {
+  padding: 8px 12px;
+  border: 1px solid rgba(88, 163, 255, 0.14);
+  border-radius: 999px;
+  background: rgba(8, 20, 38, 0.68);
+  color: var(--text-soft);
+  cursor: pointer;
+  transition:
+    transform 140ms ease,
+    background-color 140ms ease;
+}
+
+.panel-toggle-button:hover {
+  transform: translateY(-1px);
+  background: rgba(13, 32, 60, 0.82);
+}
+
 .settings-panel {
   margin-top: 20px;
 }
@@ -493,6 +517,42 @@ select {
   margin-top: 18px;
 }
 
+.watchlist-chip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px;
+  border-radius: 18px;
+  background: rgba(8, 20, 38, 0.6);
+  border: 1px solid rgba(88, 163, 255, 0.08);
+}
+
+.watchlist-chip .symbol-button {
+  flex: 1;
+}
+
+.watchlist-chip.is-active {
+  border-color: rgba(125, 216, 255, 0.22);
+  background: rgba(13, 32, 60, 0.86);
+}
+
+.watchlist-remove-button {
+  padding: 7px 10px;
+  border: 0;
+  border-radius: 12px;
+  background: rgba(95, 36, 24, 0.78);
+  color: #ffe5df;
+  cursor: pointer;
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+
+.watchlist-remove-button:disabled,
+.panel-toggle-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
 .candidate-grid {
   display: grid;
   gap: 14px;
@@ -701,6 +761,11 @@ select {
   background: rgba(8, 20, 38, 0.68);
   color: var(--text-main);
   border: 1px dashed rgba(125, 216, 255, 0.2);
+}
+
+.action-button--compact {
+  grid-column: auto;
+  padding: 8px 12px;
 }
 
 .status-chip {
@@ -1135,6 +1200,12 @@ select {
   .universe-row,
   .strategy-draft-header,
   .strategy-card-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .watchlist-chip,
+  .panel-header-actions {
     flex-direction: column;
     align-items: stretch;
   }

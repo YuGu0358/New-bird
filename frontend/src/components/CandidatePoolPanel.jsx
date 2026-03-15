@@ -1,4 +1,5 @@
-import React from "react";
+import React, { useState } from "react";
+import PanelCollapseButton from "./PanelCollapseButton";
 
 export default function CandidatePoolPanel({
   candidatePool,
@@ -8,6 +9,8 @@ export default function CandidatePoolPanel({
   onRefreshMonitoring,
   actionBusy,
 }) {
+  const [collapsed, setCollapsed] = useState(false);
+
   return (
     <section className="panel">
       <div className="panel-header">
@@ -15,17 +18,23 @@ export default function CandidatePoolPanel({
           <p className="panel-kicker">候选池</p>
           <h2>AI 每日备选 5 只</h2>
         </div>
-        <button
-          type="button"
-          className="action-button action-button--ghost"
-          onClick={onRefreshMonitoring}
-          disabled={actionBusy !== ""}
-        >
-          {actionBusy === "monitoring" ? "刷新中..." : "刷新候选池"}
-        </button>
+        <div className="panel-header-actions">
+          <PanelCollapseButton
+            collapsed={collapsed}
+            onToggle={() => setCollapsed((current) => !current)}
+          />
+          <button
+            type="button"
+            className="action-button action-button--ghost action-button--compact"
+            onClick={onRefreshMonitoring}
+            disabled={actionBusy !== ""}
+          >
+            {actionBusy === "monitoring" ? "刷新中..." : "刷新候选池"}
+          </button>
+        </div>
       </div>
 
-      {candidatePool?.length ? (
+      {!collapsed && candidatePool?.length ? (
         <div className="candidate-grid">
           {candidatePool.map((item) => {
             const isTracked = selectedSymbols.includes(item.symbol);
@@ -87,9 +96,11 @@ export default function CandidatePoolPanel({
             );
           })}
         </div>
-      ) : (
+      ) : null}
+
+      {!collapsed && !candidatePool?.length ? (
         <div className="empty-state">候选池暂时不可用，稍后再试。</div>
-      )}
+      ) : null}
     </section>
   );
 }
