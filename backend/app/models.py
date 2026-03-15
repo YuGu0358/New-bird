@@ -147,6 +147,25 @@ class MonitoringOverview(BaseModel):
     tracked_symbols: list[TrackedSymbolView]
 
 
+class ChartPoint(BaseModel):
+    timestamp: datetime
+    open: float
+    high: float
+    low: float
+    close: float
+    volume: int = 0
+
+
+class SymbolChartResponse(BaseModel):
+    symbol: str
+    range: str
+    interval: str
+    generated_at: datetime
+    latest_price: Optional[float] = None
+    range_change_percent: Optional[float] = None
+    points: list[ChartPoint]
+
+
 class WatchlistUpdateRequest(BaseModel):
     symbol: str
 

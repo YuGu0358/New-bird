@@ -426,8 +426,58 @@ select {
   margin-top: 16px;
 }
 
+.price-chart-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 18px;
+}
+
+.price-chart-summary {
+  display: grid;
+  justify-items: end;
+  gap: 4px;
+  min-width: 120px;
+}
+
+.price-chart-summary strong {
+  font-size: 1.05rem;
+}
+
+.price-chart-summary span {
+  font-size: 0.88rem;
+}
+
+.price-chart-shell {
+  margin-top: 18px;
+}
+
+.price-chart-meta,
 .news-copy {
   margin-top: 18px;
+}
+
+.price-chart-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 0;
+  margin-bottom: 14px;
+}
+
+.price-chart-meta span,
+.news-meta span,
+.research-meta span {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(13, 32, 60, 0.62);
+  border: 1px solid rgba(88, 163, 255, 0.08);
+  color: var(--text-soft);
+  font-size: 0.8rem;
 }
 
 .news-copy p {
@@ -1107,6 +1157,10 @@ select {
   .research-toolbar {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .price-chart-summary {
+    justify-items: start;
   }
 
   .positions-table {

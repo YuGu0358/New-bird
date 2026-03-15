@@ -16,6 +16,7 @@ from app.models import (
     Account,
     AssetUniverseItem,
     BotStatus,
+    SymbolChartResponse,
     ControlResponse,
     MonitoringOverview,
     NewsArticle,
@@ -39,6 +40,7 @@ from app import runtime_settings
 from app.services import (
     alpaca_service,
     bot_controller,
+    chart_service,
     market_research_service,
     monitoring_service,
     social_intelligence_service,
@@ -183,6 +185,20 @@ async def get_monitoring_overview(
     except Exception as exc:
         raise _service_error(exc) from exc
     return MonitoringOverview(**payload)
+
+
+@app.get("/api/chart/{symbol}", response_model=SymbolChartResponse)
+async def get_symbol_chart(
+    symbol: str,
+    range: str = "3mo",
+) -> SymbolChartResponse:
+    try:
+        payload = await chart_service.get_symbol_chart(symbol, range)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise _service_error(exc) from exc
+    return SymbolChartResponse(**payload)
 
 
 @app.get("/api/universe", response_model=list[AssetUniverseItem])
