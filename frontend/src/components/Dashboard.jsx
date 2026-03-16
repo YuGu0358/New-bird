@@ -9,12 +9,9 @@ import {
   YAxis,
 } from "recharts";
 import CandidatePoolPanel from "./CandidatePoolPanel";
-import NewsPanel from "./NewsPanel";
+import MarketWorkbench from "./MarketWorkbench";
 import PanelCollapseButton from "./PanelCollapseButton";
-import PriceAlertsPanel from "./PriceAlertsPanel";
 import PortfolioTable from "./PortfolioTable";
-import PriceChartPanel from "./PriceChartPanel";
-import ResearchPanel from "./ResearchPanel";
 import StrategyStudioPanel from "./StrategyStudioPanel";
 import TrendMonitorPanel from "./TrendMonitorPanel";
 import UniverseExplorer from "./UniverseExplorer";
@@ -42,7 +39,6 @@ export default function Dashboard({
 }) {
   const [portfolioCollapsed, setPortfolioCollapsed] = useState(false);
   const [ordersCollapsed, setOrdersCollapsed] = useState(false);
-  const [watchlistCollapsed, setWatchlistCollapsed] = useState(false);
 
   const chartData = trades
     .slice(0, 6)
@@ -217,6 +213,16 @@ export default function Dashboard({
       </section>
 
       <aside className="dashboard-side">
+        <MarketWorkbench
+          selectedSymbol={selectedSymbol}
+          watchlist={watchlist}
+          monitoring={monitoring}
+          apiBaseUrl={apiBaseUrl}
+          onSelectSymbol={onSelectSymbol}
+          onRemoveWatchlistSymbol={onRemoveWatchlistSymbol}
+          actionBusy={actionBusy}
+        />
+
         <section className="panel">
           <div className="panel-header">
             <div>
@@ -302,54 +308,7 @@ export default function Dashboard({
           </dl>
         </section>
 
-        <section className="panel">
-          <div className="panel-header">
-            <div>
-              <p className="panel-kicker">交互</p>
-              <h2>股票速选</h2>
-            </div>
-            <div className="panel-header-actions">
-              <span className="panel-pill">{selectedSymbol || "未选择"}</span>
-              <PanelCollapseButton
-                collapsed={watchlistCollapsed}
-                onToggle={() => setWatchlistCollapsed((current) => !current)}
-              />
-            </div>
-          </div>
-
-          {!watchlistCollapsed ? (
-            watchlist.length ? (
-              <div className="watchlist-grid">
-                {watchlist.map((symbol) => (
-                  <div
-                    key={symbol}
-                    className={`watchlist-chip ${selectedSymbol === symbol ? "is-active" : ""}`}
-                  >
-                    <button
-                      type="button"
-                      className={`symbol-button ${selectedSymbol === symbol ? "is-active" : ""}`}
-                      onClick={() => onSelectSymbol(symbol)}
-                    >
-                      {symbol}
-                    </button>
-                    <button
-                      type="button"
-                      className="watchlist-remove-button"
-                      onClick={() => onRemoveWatchlistSymbol(symbol)}
-                      disabled={actionBusy !== ""}
-                      aria-label={`删除 ${symbol}`}
-                    >
-                      删除
-                    </button>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="empty-state">当前还没有自选股票。</div>
-            )
-          ) : null}
-        </section>
-
+        <StrategyStudioPanel apiBaseUrl={apiBaseUrl} botStatus={botStatus} />
         <UniverseExplorer
           apiBaseUrl={apiBaseUrl}
           selectedSymbols={watchlist}
@@ -357,12 +316,6 @@ export default function Dashboard({
           onAddWatchlistSymbol={onAddWatchlistSymbol}
           actionBusy={actionBusy}
         />
-
-        <PriceChartPanel symbol={selectedSymbol} apiBaseUrl={apiBaseUrl} />
-        <PriceAlertsPanel symbol={selectedSymbol} apiBaseUrl={apiBaseUrl} />
-        <StrategyStudioPanel apiBaseUrl={apiBaseUrl} botStatus={botStatus} />
-        <NewsPanel symbol={selectedSymbol} apiBaseUrl={apiBaseUrl} />
-        <ResearchPanel symbol={selectedSymbol} apiBaseUrl={apiBaseUrl} />
 
         <section className="panel">
           <div className="panel-header">

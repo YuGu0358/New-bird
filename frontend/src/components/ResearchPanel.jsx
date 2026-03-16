@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 
-export default function ResearchPanel({ symbol, apiBaseUrl }) {
+export default function ResearchPanel({ symbol, apiBaseUrl, embedded = false }) {
   const [report, setReport] = useState(null);
   const [researchModel, setResearchModel] = useState("mini");
   const [isLoading, setIsLoading] = useState(false);
@@ -47,11 +47,11 @@ export default function ResearchPanel({ symbol, apiBaseUrl }) {
   };
 
   return (
-    <section className="panel">
-      <div className="panel-header">
+    <section className={embedded ? "embedded-panel" : "panel"}>
+      <div className={embedded ? "embedded-panel-header" : "panel-header"}>
         <div>
-          <p className="panel-kicker">研究</p>
-          <h2>Market Researcher 深度分析</h2>
+          <p className="panel-kicker">{embedded ? "研究" : "研究"}</p>
+          <h2>{embedded ? "深度研究" : "Market Researcher 深度分析"}</h2>
         </div>
         <span className="panel-pill">{symbol || "请选择股票"}</span>
       </div>

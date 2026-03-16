@@ -14,7 +14,7 @@ const ACTION_OPTIONS = [
   { value: "close_position", label: "自动平掉当前持仓" },
 ];
 
-export default function PriceAlertsPanel({ symbol, apiBaseUrl }) {
+export default function PriceAlertsPanel({ symbol, apiBaseUrl, embedded = false }) {
   const deferredSymbol = useDeferredValue(symbol);
   const [collapsed, setCollapsed] = useState(false);
   const [rules, setRules] = useState([]);
@@ -191,26 +191,28 @@ export default function PriceAlertsPanel({ symbol, apiBaseUrl }) {
   const selectedCondition = CONDITION_OPTIONS.find((item) => item.value === conditionType);
 
   return (
-    <section className="panel">
-      <div className="panel-header">
+    <section className={embedded ? "embedded-panel" : "panel"}>
+      <div className={embedded ? "embedded-panel-header" : "panel-header"}>
         <div>
-          <p className="panel-kicker">提醒</p>
-          <h2>价格条件与自动动作</h2>
+          <p className="panel-kicker">{embedded ? "提醒" : "提醒"}</p>
+          <h2>{embedded ? "条件提醒与动作" : "价格条件与自动动作"}</h2>
         </div>
         <div className="panel-header-actions">
           <span className="panel-pill">{deferredSymbol || "请选择股票"}</span>
-          <PanelCollapseButton
-            collapsed={collapsed}
-            onToggle={() => setCollapsed((current) => !current)}
-          />
+          {!embedded ? (
+            <PanelCollapseButton
+              collapsed={collapsed}
+              onToggle={() => setCollapsed((current) => !current)}
+            />
+          ) : null}
         </div>
       </div>
 
-      {!collapsed && !deferredSymbol ? (
+      {(!embedded ? !collapsed : true) && !deferredSymbol ? (
         <div className="news-state">先选择一只股票，再为它设置价格提醒或自动动作。</div>
       ) : null}
 
-      {!collapsed && deferredSymbol ? (
+      {(!embedded ? !collapsed : true) && deferredSymbol ? (
         <>
           <form className="alerts-form" onSubmit={submitRule}>
             <div className="alerts-grid">

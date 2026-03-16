@@ -17,7 +17,7 @@ const RANGE_OPTIONS = [
   { value: "1y", label: "1年" },
 ];
 
-export default function PriceChartPanel({ symbol, apiBaseUrl }) {
+export default function PriceChartPanel({ symbol, apiBaseUrl, embedded = false }) {
   const deferredSymbol = useDeferredValue(symbol);
   const [range, setRange] = useState("3mo");
   const [chart, setChart] = useState(null);
@@ -90,11 +90,11 @@ export default function PriceChartPanel({ symbol, apiBaseUrl }) {
       : "";
 
   return (
-    <section className="panel">
-      <div className="panel-header">
+    <section className={embedded ? "embedded-panel" : "panel"}>
+      <div className={embedded ? "embedded-panel-header" : "panel-header"}>
         <div>
-          <p className="panel-kicker">图表</p>
-          <h2>价格走势图</h2>
+          <p className="panel-kicker">{embedded ? "走势" : "图表"}</p>
+          <h2>{embedded ? "价格走势" : "价格走势图"}</h2>
         </div>
         <span className="panel-pill">{deferredSymbol || "请选择股票"}</span>
       </div>
@@ -139,7 +139,7 @@ export default function PriceChartPanel({ symbol, apiBaseUrl }) {
             <span>更新时间 {formatMetaDate(chart.generated_at)}</span>
           </div>
 
-          <ResponsiveContainer width="100%" height={260}>
+          <ResponsiveContainer width="100%" height={embedded ? 320 : 260}>
             <AreaChart data={chartData} margin={{ top: 12, right: 4, bottom: 4, left: -18 }}>
               <defs>
                 <linearGradient id="priceChartFill" x1="0" y1="0" x2="0" y2="1">

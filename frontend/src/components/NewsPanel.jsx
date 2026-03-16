@@ -1,6 +1,6 @@
 import React, { useDeferredValue, useEffect, useState } from "react";
 
-export default function NewsPanel({ symbol, apiBaseUrl }) {
+export default function NewsPanel({ symbol, apiBaseUrl, embedded = false }) {
   const deferredSymbol = useDeferredValue(symbol);
   const [article, setArticle] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -54,11 +54,11 @@ export default function NewsPanel({ symbol, apiBaseUrl }) {
   }, [apiBaseUrl, deferredSymbol]);
 
   return (
-    <section className="panel">
-      <div className="panel-header">
+    <section className={embedded ? "embedded-panel" : "panel"}>
+      <div className={embedded ? "embedded-panel-header" : "panel-header"}>
         <div>
-          <p className="panel-kicker">资讯</p>
-          <h2>AI 新闻摘要</h2>
+          <p className="panel-kicker">{embedded ? "新闻" : "资讯"}</p>
+          <h2>{embedded ? "AI 新闻摘要" : "AI 新闻摘要"}</h2>
         </div>
         <span className="panel-pill">{deferredSymbol || "请选择股票"}</span>
       </div>
