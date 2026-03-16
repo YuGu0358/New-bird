@@ -16,6 +16,7 @@ export default function MarketWorkbench({
   selectedSymbol,
   watchlist,
   monitoring,
+  monitoringReady,
   apiBaseUrl,
   onSelectSymbol,
   onRemoveWatchlistSymbol,
@@ -29,6 +30,10 @@ export default function MarketWorkbench({
 
   const selectedTags = selectedTracked?.tags ?? [];
   const trend = selectedTracked?.trend ?? null;
+  const loadingTrend = !monitoringReady;
+  const loadingMessage = selectedSymbol
+    ? `正在同步 ${selectedSymbol} 的日/周/月趋势数据...`
+    : "正在同步单股工作台数据...";
 
   return (
     <section className="panel market-workbench">
@@ -48,10 +53,14 @@ export default function MarketWorkbench({
           <div className="market-symbol-copy">
             <h3>{selectedSymbol ? `${selectedSymbol} 观察台` : "请选择一只股票"}</h3>
             <p>
-              把图表、提醒、新闻和研究集中在一个地方，减少来回切换和纵向堆叠。
+              {loadingTrend
+                ? loadingMessage
+                : "把图表、提醒、新闻和研究集中在一个地方，减少来回切换和纵向堆叠。"}
             </p>
             <div className="tag-list">
-              {selectedTags.length ? (
+              {loadingTrend ? (
+                <span className="mini-tag">同步中</span>
+              ) : selectedTags.length ? (
                 selectedTags.map((tag) => (
                   <span key={`${selectedSymbol}-${tag}`} className="mini-tag">
                     {tag}
@@ -65,20 +74,24 @@ export default function MarketWorkbench({
         </div>
 
         <div className="market-trend-grid">
-          <MetricTile label="现价" value={formatCurrency(trend?.current_price)} tone="neutral" />
+          <MetricTile
+            label="现价"
+            value={loadingTrend ? "加载中" : formatCurrency(trend?.current_price)}
+            tone="neutral"
+          />
           <MetricTile
             label="日变化"
-            value={formatPercent(trend?.day_change_percent)}
+            value={loadingTrend ? "加载中" : formatPercent(trend?.day_change_percent)}
             tone={toneClass(trend?.day_change_percent)}
           />
           <MetricTile
             label="周变化"
-            value={formatPercent(trend?.week_change_percent)}
+            value={loadingTrend ? "加载中" : formatPercent(trend?.week_change_percent)}
             tone={toneClass(trend?.week_change_percent)}
           />
           <MetricTile
             label="月变化"
-            value={formatPercent(trend?.month_change_percent)}
+            value={loadingTrend ? "加载中" : formatPercent(trend?.month_change_percent)}
             tone={toneClass(trend?.month_change_percent)}
           />
         </div>
@@ -99,7 +112,9 @@ export default function MarketWorkbench({
         </div>
 
         <div className="panel-header-actions">
-          <span className="panel-pill">自选 {watchlist.length}</span>
+          <span className="panel-pill">
+            {loadingTrend ? "自选同步中" : `自选 ${watchlist.length}`}
+          </span>
           <PanelCollapseButton
             collapsed={watchlistCollapsed}
             onToggle={() => setWatchlistCollapsed((current) => !current)}
@@ -108,7 +123,9 @@ export default function MarketWorkbench({
       </div>
 
       {!watchlistCollapsed ? (
-        watchlist.length ? (
+        loadingTrend ? (
+          <div className="empty-state">正在同步自选列表...</div>
+        ) : watchlist.length ? (
           <div className="workbench-watchlist">
             {watchlist.map((symbol) => (
               <div

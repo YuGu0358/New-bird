@@ -431,7 +431,11 @@ export default function App() {
 
   const watchlist = Array.isArray(monitoring?.selected_symbols)
     ? monitoring.selected_symbols
-    : DEFAULT_WATCHLIST;
+    : isLoading
+      ? []
+      : DEFAULT_WATCHLIST;
+
+  const monitoringReady = Array.isArray(monitoring?.tracked_symbols);
 
   return (
     <div className="app-shell">
@@ -510,6 +514,7 @@ export default function App() {
           trades={trades}
           orders={orders}
           monitoring={monitoring}
+          monitoringReady={monitoringReady}
           botStatus={botStatus}
           selectedSymbol={selectedSymbol}
           onSelectSymbol={selectSymbol}

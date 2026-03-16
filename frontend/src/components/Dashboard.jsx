@@ -22,6 +22,7 @@ export default function Dashboard({
   trades,
   orders,
   botStatus,
+  monitoringReady,
   selectedSymbol,
   onSelectSymbol,
   apiBaseUrl,
@@ -217,6 +218,7 @@ export default function Dashboard({
           selectedSymbol={selectedSymbol}
           watchlist={watchlist}
           monitoring={monitoring}
+          monitoringReady={monitoringReady}
           apiBaseUrl={apiBaseUrl}
           onSelectSymbol={onSelectSymbol}
           onRemoveWatchlistSymbol={onRemoveWatchlistSymbol}
