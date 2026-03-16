@@ -194,8 +194,8 @@ export default function PriceAlertsPanel({ symbol, apiBaseUrl, embedded = false 
     <section className={embedded ? "embedded-panel" : "panel"}>
       <div className={embedded ? "embedded-panel-header" : "panel-header"}>
         <div>
-          <p className="panel-kicker">{embedded ? "提醒" : "提醒"}</p>
-          <h2>{embedded ? "条件提醒与动作" : "价格条件与自动动作"}</h2>
+          <p className="panel-kicker">{embedded ? "提醒 / 交易" : "提醒 / 交易"}</p>
+          <h2>{embedded ? "条件提醒 / 自动交易" : "价格条件提醒 / 自动交易"}</h2>
         </div>
         <div className="panel-header-actions">
           <span className="panel-pill">{deferredSymbol || "请选择股票"}</span>
@@ -214,6 +214,13 @@ export default function PriceAlertsPanel({ symbol, apiBaseUrl, embedded = false 
 
       {(!embedded ? !collapsed : true) && deferredSymbol ? (
         <>
+          <div className="alerts-intro-card">
+            <strong>这里就是自动交易入口。</strong>
+            <p>
+              你可以设置目标价、涨跌幅、触发动作和自动买入金额。触发后可发邮件，也可在允许的账户上自动执行。
+            </p>
+          </div>
+
           <form className="alerts-form" onSubmit={submitRule}>
             <div className="alerts-grid">
               <label className="settings-field">

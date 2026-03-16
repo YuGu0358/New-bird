@@ -7,7 +7,7 @@ import ResearchPanel from "./ResearchPanel";
 
 const TAB_OPTIONS = [
   { value: "chart", label: "走势" },
-  { value: "alerts", label: "提醒" },
+  { value: "alerts", label: "提醒 / 交易" },
   { value: "news", label: "新闻" },
   { value: "research", label: "研究" },
 ];
@@ -96,6 +96,32 @@ export default function MarketWorkbench({
           />
         </div>
       </div>
+
+      <section className="workbench-priority-card">
+        <div className="workbench-priority-copy">
+          <p className="panel-kicker">自动动作</p>
+          <h3>条件提醒 / 自动交易</h3>
+          <p>
+            直接为当前股票设置目标价、预期涨跌幅，以及触发后的邮件提醒或自动下单金额。
+          </p>
+          <div className="tag-list">
+            <span className="mini-tag">目标价格</span>
+            <span className="mini-tag">涨跌幅触发</span>
+            <span className="mini-tag">自动买入金额</span>
+          </div>
+        </div>
+
+        <div className="workbench-priority-actions">
+          <button
+            type="button"
+            className="action-button"
+            onClick={() => setActiveTab("alerts")}
+          >
+            {activeTab === "alerts" ? "正在查看提醒 / 交易" : "设置提醒 / 自动交易"}
+          </button>
+          <span className="panel-pill">Paper 账户默认可自动执行</span>
+        </div>
+      </section>
 
       <div className="market-workbench-toolbar">
         <div className="segmented-control market-tabs">
