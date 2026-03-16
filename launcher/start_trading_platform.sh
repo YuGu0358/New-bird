@@ -62,8 +62,25 @@ ensure_frontend_ready() {
 
 start_backend() {
   cd "$BACKEND_DIR"
-  nohup .venv/bin/uvicorn app.main:app --host "$HOST" --port "$PORT" >"$LOG_FILE" 2>&1 &
-  echo $! >"$PID_FILE"
+  nohup .venv/bin/python -m uvicorn app.main:app --host "$HOST" --port "$PORT" \
+    </dev/null >"$LOG_FILE" 2>&1 &
+  backend_pid=$!
+  disown "$backend_pid" 2>/dev/null || true
+  echo "$backend_pid" >"$PID_FILE"
+}
+
+stop_pid_if_running() {
+  target_pid="$1"
+
+  if kill -0 "$target_pid" >/dev/null 2>&1; then
+    kill "$target_pid" >/dev/null 2>&1 || true
+    sleep 1
+  fi
+
+  if kill -0 "$target_pid" >/dev/null 2>&1; then
+    kill -9 "$target_pid" >/dev/null 2>&1 || true
+    sleep 1
+  fi
 }
 
 if is_platform_up; then
@@ -75,9 +92,8 @@ fi
 if [ -f "$PID_FILE" ]; then
   old_pid="$(cat "$PID_FILE")"
   if kill -0 "$old_pid" >/dev/null 2>&1; then
-    open "$APP_URL"
-    echo "Trading Platform process already exists."
-    exit 0
+    echo "Found stale Trading Platform process ($old_pid). Restarting..."
+    stop_pid_if_running "$old_pid"
   fi
   rm -f "$PID_FILE"
 fi
