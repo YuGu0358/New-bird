@@ -59,7 +59,7 @@ FRONTEND_DIST_DIR = Path(
         "TRADING_PLATFORM_FRONTEND_DIST",
         str(Path(__file__).resolve().parents[2] / "frontend" / "dist"),
     )
-).expanduser()
+).expanduser().resolve()
 FRONTEND_ASSETS_DIR = FRONTEND_DIST_DIR / "assets"
 
 app = FastAPI(
@@ -89,6 +89,14 @@ def _normalize_timestamp(value: datetime) -> datetime:
 
 def _service_error(exc: Exception) -> HTTPException:
     return HTTPException(status_code=503, detail=str(exc))
+
+
+def _is_safe_frontend_path(base_dir: Path, requested_path: Path) -> bool:
+    try:
+        requested_path.relative_to(base_dir)
+    except ValueError:
+        return False
+    return True
 
 
 @app.on_event("startup")
@@ -528,7 +536,11 @@ async def serve_frontend_app(full_path: str) -> FileResponse:
         raise HTTPException(status_code=404, detail="Not found.")
 
     requested_path = (FRONTEND_DIST_DIR / full_path).resolve()
-    if requested_path.exists() and requested_path.is_file() and FRONTEND_DIST_DIR in requested_path.parents:
+    if (
+        requested_path.exists()
+        and requested_path.is_file()
+        and _is_safe_frontend_path(FRONTEND_DIST_DIR, requested_path)
+    ):
         return FileResponse(requested_path)
 
     index_file = FRONTEND_DIST_DIR / "index.html"

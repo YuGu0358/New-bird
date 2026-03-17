@@ -12,6 +12,7 @@ from urllib.request import urlopen
 import aiosqlite  # Ensure PyInstaller collects the async SQLite driver.
 import uvicorn
 import webview
+from dotenv import dotenv_values
 
 APP_NAME = "Trading Raven Platform"
 WINDOW_SIZE = (1480, 980)
@@ -46,11 +47,64 @@ def _frontend_dist_dir() -> Path:
 
     for candidate in candidates:
         if (candidate / "index.html").exists():
-            return candidate
+            return candidate.resolve()
 
     raise RuntimeError(
         "找不到前端构建产物。请先运行前端构建，或使用桌面构建脚本打包应用。"
     )
+
+
+def _candidate_env_files(anchor_paths: list[Path] | tuple[Path, ...] | None = None) -> list[Path]:
+    patterns = (
+        ".env",
+        "backend/.env",
+        "trading_platform/backend/.env",
+    )
+    anchors = list(
+        anchor_paths
+        if anchor_paths is not None
+        else [
+            Path.cwd(),
+            Path(__file__).resolve().parent,
+            _bundle_root(),
+            Path(sys.executable).resolve().parent,
+        ]
+    )
+    candidates: list[Path] = []
+    seen: set[Path] = set()
+
+    for anchor in anchors:
+        for root in (anchor, *anchor.parents):
+            for pattern in patterns:
+                candidate = (root / pattern).expanduser().resolve()
+                if candidate in seen or not candidate.exists() or not candidate.is_file():
+                    continue
+                seen.add(candidate)
+                candidates.append(candidate)
+
+    return candidates
+
+
+def _load_runtime_env(anchor_paths: list[Path] | tuple[Path, ...] | None = None) -> Path | None:
+    explicit_env = os.getenv("TRADING_PLATFORM_ENV_FILE", "").strip()
+    if explicit_env:
+        candidates = [Path(explicit_env).expanduser().resolve()]
+    else:
+        candidates = _candidate_env_files(anchor_paths=anchor_paths)
+
+    for candidate in candidates:
+        values = dotenv_values(candidate)
+        for key, value in values.items():
+            if not key or value is None:
+                continue
+            normalized_value = str(value).strip()
+            if normalized_value and not os.getenv(key):
+                os.environ[key] = normalized_value
+        if values:
+            os.environ["TRADING_PLATFORM_ENV_SOURCE"] = str(candidate)
+            return candidate
+
+    return None
 
 
 def _free_port() -> int:
@@ -77,6 +131,7 @@ def _wait_for_server(url: str, timeout_seconds: float = 30.0) -> None:
 def _prepare_environment() -> None:
     os.environ.setdefault("DATA_DIR", str(_app_support_dir()))
     os.environ["TRADING_PLATFORM_FRONTEND_DIST"] = str(_frontend_dist_dir())
+    _load_runtime_env()
 
 
 def main() -> None:
