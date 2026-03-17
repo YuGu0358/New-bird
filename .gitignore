@@ -8,6 +8,9 @@ backend/.env.backup-readme
 backend/trading_platform.db
 frontend/node_modules/
 frontend/dist/
+backend/build/
+backend/dist/
+backend/*.spec
 logs/
 .run/
 backend/data/

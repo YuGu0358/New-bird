@@ -5,7 +5,9 @@ import SettingsPanel from "./components/SettingsPanel";
 const DEFAULT_API_BASE_URL =
   typeof window === "undefined"
     ? "http://127.0.0.1:8000"
-    : `${window.location.protocol}//${window.location.hostname}:8000`;
+    : import.meta.env.DEV
+      ? `${window.location.protocol}//${window.location.hostname}:8000`
+      : window.location.origin;
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? DEFAULT_API_BASE_URL;
 const DEFAULT_WATCHLIST = [

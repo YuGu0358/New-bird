@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Annotated
@@ -53,7 +54,12 @@ from app.services import (
 )
 
 NEWS_CACHE_TTL = timedelta(hours=4)
-FRONTEND_DIST_DIR = Path(__file__).resolve().parents[2] / "frontend" / "dist"
+FRONTEND_DIST_DIR = Path(
+    os.getenv(
+        "TRADING_PLATFORM_FRONTEND_DIST",
+        str(Path(__file__).resolve().parents[2] / "frontend" / "dist"),
+    )
+).expanduser()
 FRONTEND_ASSETS_DIR = FRONTEND_DIST_DIR / "assets"
 
 app = FastAPI(

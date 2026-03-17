@@ -121,6 +121,39 @@ If you want the frontend to target a non-default backend URL:
 export VITE_API_BASE_URL=http://localhost:8000
 ```
 
+## Desktop App Mode
+
+The project can now run as a native macOS desktop app instead of opening in a browser.
+
+### Run as a desktop app from source
+
+```bash
+./Trading\ Raven\ Desktop.command
+```
+
+This launcher:
+
+- installs desktop-only Python dependencies (`pywebview`, `pyinstaller`) into `backend/.venv`
+- rebuilds the frontend
+- starts FastAPI inside a native desktop window
+- stores app data under `~/Library/Application Support/Trading Raven Platform`
+
+### Build a real `.app`
+
+```bash
+./launcher/build_desktop_app.sh
+```
+
+Build output:
+
+- `output/desktop/Trading Raven Platform.app`
+
+Notes:
+
+- This mode does not open a browser window.
+- Production frontend builds now default to same-origin API requests, which lets the packaged app run on a dynamic local port.
+- The existing browser-based launchers still work if you prefer the web workspace.
+
 ### Strategy Runner
 
 Run this only if you want the Strategy B paper-trading loop:
