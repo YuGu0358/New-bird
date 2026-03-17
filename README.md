@@ -123,22 +123,17 @@ export VITE_API_BASE_URL=http://localhost:8000
 
 ## Desktop App Mode
 
-The project can now run as a native macOS desktop app instead of opening in a browser.
+The project can now run as a native desktop app instead of opening in a browser.
 
-### Run as a desktop app from source
+### macOS
+
+Run from source:
 
 ```bash
 ./Trading\ Raven\ Desktop.command
 ```
 
-This launcher:
-
-- installs desktop-only Python dependencies (`pywebview`, `pyinstaller`) into `backend/.venv`
-- rebuilds the frontend
-- starts FastAPI inside a native desktop window
-- stores app data under `~/Library/Application Support/Trading Raven Platform`
-
-### Build a real `.app`
+Build a real `.app`:
 
 ```bash
 ./launcher/build_desktop_app.sh
@@ -148,10 +143,37 @@ Build output:
 
 - `output/desktop/Trading Raven Platform.app`
 
-Notes:
+Desktop app data is stored under:
 
-- This mode does not open a browser window.
-- Production frontend builds now default to same-origin API requests, which lets the packaged app run on a dynamic local port.
+- `~/Library/Application Support/Trading Raven Platform`
+
+### Windows
+
+Run from source:
+
+```bat
+Trading Raven Desktop.bat
+```
+
+Build a Windows desktop bundle:
+
+```bat
+launcher\build_desktop_app.bat
+```
+
+Build output:
+
+- `output\desktop-windows\Trading Raven Platform\Trading Raven Platform.exe`
+
+Desktop app data is stored under:
+
+- `%APPDATA%\Trading Raven Platform`
+
+### Notes
+
+- Desktop mode does not open a browser window.
+- Desktop launchers install desktop-only Python dependencies (`pywebview`, `pyinstaller`) into `backend/.venv`.
+- Production frontend builds now default to same-origin API requests, which lets the packaged desktop app run on a dynamic local port.
 - The existing browser-based launchers still work if you prefer the web workspace.
 
 ### Strategy Runner

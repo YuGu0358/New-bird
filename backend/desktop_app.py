@@ -25,7 +25,14 @@ def _bundle_root() -> Path:
 
 
 def _app_support_dir() -> Path:
-    path = Path.home() / "Library" / "Application Support" / APP_NAME
+    if sys.platform == "darwin":
+        path = Path.home() / "Library" / "Application Support" / APP_NAME
+    elif os.name == "nt":
+        appdata_root = Path(os.getenv("APPDATA", Path.home() / "AppData" / "Roaming"))
+        path = appdata_root / APP_NAME
+    else:
+        xdg_root = Path(os.getenv("XDG_DATA_HOME", Path.home() / ".local" / "share"))
+        path = xdg_root / APP_NAME
     path.mkdir(parents=True, exist_ok=True)
     return path
 
