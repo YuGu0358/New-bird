@@ -269,9 +269,12 @@ export default function App() {
         setActiveView("dashboard");
         refreshDashboard();
       }
+
+      return { ok: true, status: nextStatus };
     } catch (actionError) {
       setActionMessage("");
       setError(actionError.message);
+      return { ok: false };
     } finally {
       setActionBusy("");
     }
@@ -438,9 +441,55 @@ export default function App() {
       : DEFAULT_WATCHLIST;
 
   const monitoringReady = Array.isArray(monitoring?.tracked_symbols);
+  const marketTapeItems = monitoringReady
+    ? (monitoring?.tracked_symbols ?? []).slice(0, 8)
+    : [];
+  const missingKeyCount = settingsStatus?.missing_required_keys?.length ?? 0;
+  const displayName = getSettingValue(settingsStatus, "DISPLAY_NAME");
+
+  useEffect(() => {
+    document.title = displayName || "Trading Raven Platform";
+  }, [displayName]);
 
   return (
     <div className="app-shell">
+      <section className="market-tape">
+        <div className="market-tape-label">行情带</div>
+        <div className="market-tape-list">
+          {marketTapeItems.length ? (
+            marketTapeItems.map((item) => (
+              <button
+                key={item.symbol}
+                type="button"
+                className={`tape-chip ${selectedSymbol === item.symbol ? "is-active" : ""}`}
+                onClick={() => selectSymbol(item.symbol)}
+              >
+                <span className="tape-symbol">{item.symbol}</span>
+                <span className="tape-price">
+                  {formatTapePrice(item.trend?.current_price)}
+                </span>
+                <span
+                  className={`tape-change ${
+                    Number(item.trend?.day_change_percent ?? 0) > 0
+                      ? "profit"
+                      : Number(item.trend?.day_change_percent ?? 0) < 0
+                        ? "loss"
+                        : ""
+                  }`}
+                >
+                  {formatPercent(item.trend?.day_change_percent)}
+                </span>
+              </button>
+            ))
+          ) : (
+            <span className="market-tape-empty">等待行情与自选数据同步...</span>
+          )}
+        </div>
+        <div className="market-tape-meta">
+          {botStatus?.is_running ? "策略引擎在线" : "策略引擎待命"}
+        </div>
+      </section>
+
       <header className="hero">
         <div className="hero-copy">
           <div className="hero-brand">
@@ -449,11 +498,21 @@ export default function App() {
             </div>
             <div className="hero-brand-copy">
               <p className="eyebrow">策略 B 执行台</p>
-              <h1>个人自动交易平台</h1>
+              <h1>{displayName || "个人自动交易平台"}</h1>
             </div>
           </div>
+          <div className="hero-command-bar">
+            <span className="hero-badge hero-badge--accent">
+              {botStatus?.is_running ? "运行中" : "待启动"}
+            </span>
+            <span className="hero-badge">自选 {watchlist.length}</span>
+            <span className="hero-badge">聚焦 {selectedSymbol || "未选择"}</span>
+            <span className={`hero-badge ${missingKeyCount ? "hero-badge--warning" : ""}`}>
+              {missingKeyCount ? `待配置 ${missingKeyCount} 项` : "环境已就绪"}
+            </span>
+          </div>
           <p className="hero-text">
-            在一个交易面板中查看账户状态、跟踪持仓，并按股票读取 AI 整理的最新资讯。
+            用更接近行情终端的方式查看账户、仓位、策略和单股研究，把决策信息集中在一个桌面里。
           </p>
           <div className="segmented-control hero-segmented">
             <button
@@ -556,4 +615,27 @@ function formatCurrency(value) {
     currency: "USD",
     maximumFractionDigits: 2,
   }).format(value);
+}
+
+function formatPercent(value) {
+  if (typeof value !== "number" || Number.isNaN(value)) {
+    return "--";
+  }
+  return `${value >= 0 ? "+" : ""}${value.toFixed(2)}%`;
+}
+
+function formatTapePrice(value) {
+  if (typeof value !== "number" || Number.isNaN(value)) {
+    return "--";
+  }
+  return new Intl.NumberFormat("zh-CN", {
+    style: "currency",
+    currency: "USD",
+    maximumFractionDigits: value >= 100 ? 2 : 3,
+  }).format(value);
+}
+
+function getSettingValue(settingsStatus, key) {
+  const matchedItem = settingsStatus?.items?.find((item) => item.key === key);
+  return String(matchedItem?.value ?? "").trim();
 }

@@ -77,7 +77,33 @@ class ChartServiceTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_get_symbol_chart_rejects_unsupported_range(self) -> None:
         with self.assertRaisesRegex(ValueError, "不支持的走势图区间"):
-            await chart_service.get_symbol_chart("NVDA", "2y")
+            await chart_service.get_symbol_chart("NVDA", "10y")
+
+    async def test_get_symbol_chart_supports_intraday_range(self) -> None:
+        now = datetime(2026, 3, 15, 14, 0, tzinfo=timezone.utc)
+        frame = _FakeFrame(
+            [
+                (
+                    now - timedelta(minutes=10),
+                    {"Open": 100, "High": 101, "Low": 99.8, "Close": 100.5, "Volume": 800},
+                ),
+                (
+                    now - timedelta(minutes=5),
+                    {"Open": 100.5, "High": 101.4, "Low": 100.1, "Close": 101.2, "Volume": 920},
+                ),
+            ]
+        )
+
+        with patch(
+            "app.services.chart_service._download_chart_frame_sync",
+            return_value=frame,
+        ) as download_mock:
+            payload = await chart_service.get_symbol_chart("aapl", "1d")
+
+        download_mock.assert_called_once_with("AAPL", "1d", "5m")
+        self.assertEqual(payload["range"], "1d")
+        self.assertEqual(payload["interval"], "5m")
+        self.assertEqual(payload["latest_price"], 101.2)
 
 
 if __name__ == "__main__":

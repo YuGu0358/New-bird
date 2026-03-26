@@ -5,6 +5,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
 from app import runtime_settings
+from app.services.network_utils import run_sync_with_retries
 
 RESEARCH_CACHE_TTL = timedelta(hours=6)
 _research_cache: Dict[Tuple[str, str], Dict[str, Any]] = {}
@@ -126,14 +127,14 @@ async def _poll_research(
     max_poll_seconds: int = 90,
 ) -> dict[str, Any]:
     elapsed = 0
-    response = await asyncio.to_thread(client.get_research, request_id)
+    response = await run_sync_with_retries(client.get_research, request_id)
 
     while response.get("status") not in ("completed", "failed"):
         if elapsed >= max_poll_seconds:
             raise TimeoutError("Tavily research polling timed out.")
         await asyncio.sleep(poll_interval)
         elapsed += poll_interval
-        response = await asyncio.to_thread(client.get_research, request_id)
+        response = await run_sync_with_retries(client.get_research, request_id)
 
     if response.get("status") == "failed":
         raise RuntimeError(str(response.get("error", "Tavily research failed.")))
@@ -159,7 +160,7 @@ async def fetch_stock_research(symbol: str, research_model: str = "mini") -> dic
     current_date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
     try:
-        response = await asyncio.to_thread(
+        response = await run_sync_with_retries(
             client.research,
             input=RESEARCH_PROMPT.format(ticker=normalized_symbol, date=current_date),
             output_schema=_get_stock_report_schema(),

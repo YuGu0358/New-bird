@@ -1,11 +1,51 @@
 import React, { useEffect, useState } from "react";
 
+const DEFAULT_STRATEGY_PARAMETERS = {
+  universe_symbols: [
+    "AAPL",
+    "MSFT",
+    "AMZN",
+    "GOOGL",
+    "META",
+    "NVDA",
+    "TSLA",
+    "JPM",
+  ],
+  preferred_sectors: ["technology", "mega_cap"],
+  excluded_symbols: [],
+  entry_drop_percent: 2.0,
+  add_on_drop_percent: 2.0,
+  initial_buy_notional: 1000.0,
+  add_on_buy_notional: 100.0,
+  max_daily_entries: 3,
+  max_add_ons: 3,
+  take_profit_target: 80.0,
+  stop_loss_percent: 12.0,
+  max_hold_days: 30,
+};
+
+const PARAMETER_GUIDE = [
+  { key: "universe_symbols", label: "股票池", range: "最多 20 只", description: "机器人主要扫描和允许交易的股票范围。" },
+  { key: "preferred_sectors", label: "偏好板块", range: "预设板块标签", description: "当你没有明确给出完整股票池时，用来补全候选范围。" },
+  { key: "excluded_symbols", label: "排除股票", range: "最多 20 只", description: "即使在股票池或板块里出现，也强制不参与交易。" },
+  { key: "entry_drop_percent", label: "入场回撤", range: "0.5% - 15%", description: "相对前收盘回撤达到这个阈值时，允许新开仓。" },
+  { key: "add_on_drop_percent", label: "加仓回撤", range: "0.5% - 20%", description: "已有持仓继续走弱到这个阈值时，允许追加买入。" },
+  { key: "initial_buy_notional", label: "初始仓位", range: "50 - 100000 美元", description: "第一次开仓时分配给单只股票的资金。" },
+  { key: "add_on_buy_notional", label: "加仓金额", range: "10 - 50000 美元", description: "每次加仓时追加的固定金额。" },
+  { key: "max_daily_entries", label: "每日新开仓", range: "1 - 20 只", description: "单个交易日允许新开的不同股票数量上限。" },
+  { key: "max_add_ons", label: "最多加仓", range: "0 - 10 次", description: "每只股票最多允许补仓的次数。" },
+  { key: "take_profit_target", label: "止盈", range: "5 - 10000 美元", description: "单只股票达到这个浮盈金额后触发止盈。" },
+  { key: "stop_loss_percent", label: "止损率", range: "1% - 50%", description: "单只股票从成本回撤达到这个百分比后止损。" },
+  { key: "max_hold_days", label: "最长持有", range: "1 - 180 天", description: "即使未触发止盈止损，超过这个持有天数也退出。" },
+];
+
 export default function StrategyStudioPanel({ apiBaseUrl, botStatus }) {
   const [library, setLibrary] = useState({ items: [], max_slots: 5, active_strategy_id: null });
   const [description, setDescription] = useState("");
   const [draft, setDraft] = useState(null);
   const [draftName, setDraftName] = useState("");
   const [preview, setPreview] = useState(null);
+  const [uploadedFiles, setUploadedFiles] = useState([]);
   const [editingStrategyId, setEditingStrategyId] = useState(null);
   const [actionBusy, setActionBusy] = useState("");
   const [error, setError] = useState("");
@@ -33,8 +73,8 @@ export default function StrategyStudioPanel({ apiBaseUrl, botStatus }) {
   };
 
   const analyzeStrategy = async () => {
-    if (!description.trim()) {
-      setError("请先输入你的交易策略描述。");
+    if (!description.trim() && uploadedFiles.length === 0) {
+      setError("请先输入你的交易策略描述，或上传 PDF / Markdown / TXT 材料。");
       return;
     }
 
@@ -44,13 +84,26 @@ export default function StrategyStudioPanel({ apiBaseUrl, botStatus }) {
     setPreview(null);
 
     try {
-      const response = await fetch(`${apiBaseUrl}/api/strategies/analyze`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ description }),
-      });
+      let response;
+      if (uploadedFiles.length) {
+        const formData = new FormData();
+        formData.append("description", description);
+        uploadedFiles.forEach((file) => {
+          formData.append("files", file, file.name);
+        });
+        response = await fetch(`${apiBaseUrl}/api/strategies/analyze-upload`, {
+          method: "POST",
+          body: formData,
+        });
+      } else {
+        response = await fetch(`${apiBaseUrl}/api/strategies/analyze`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ description }),
+        });
+      }
 
       if (!response.ok) {
         throw new Error(await resolveError(response, `策略规范化失败（状态码 ${response.status}）`));
@@ -63,7 +116,9 @@ export default function StrategyStudioPanel({ apiBaseUrl, botStatus }) {
         editingStrategyId
           ? "策略草稿已重新生成。请先做模拟预览，再决定是否覆盖保存。"
           : payload.used_openai
-            ? "GPT 已完成策略规范化。请先做模拟预览，再确认保存。"
+            ? payload.source_documents?.length
+              ? `GPT 已完成策略规范化，并参考了 ${payload.source_documents.length} 个附件。请先做模拟预览，再确认保存。`
+              : "GPT 已完成策略规范化。请先做模拟预览，再确认保存。"
             : "已生成本地回退版本。请先做模拟预览，再确认保存。"
       );
     } catch (actionError) {
@@ -220,9 +275,11 @@ export default function StrategyStudioPanel({ apiBaseUrl, botStatus }) {
       execution_notes: item.execution_notes || [],
       parameters: item.parameters,
       used_openai: false,
+      source_documents: [],
     });
     setDraftName(item.name || "");
     setPreview(null);
+    setUploadedFiles([]);
     setError("");
     setMessage("已载入现有策略。你可以直接预览并覆盖保存，也可以先修改描述后重新让 GPT 规范。");
   };
@@ -239,9 +296,11 @@ export default function StrategyStudioPanel({ apiBaseUrl, botStatus }) {
       execution_notes: item.execution_notes || [],
       parameters: item.parameters,
       used_openai: false,
+      source_documents: [],
     });
     setDraftName(`${item.name} 副本`);
     setPreview(null);
+    setUploadedFiles([]);
     setError("");
     setMessage("已复制为新草稿。保存后会占用新的策略槽位。");
   };
@@ -257,12 +316,52 @@ export default function StrategyStudioPanel({ apiBaseUrl, botStatus }) {
     }
   };
 
+  const handleFileSelection = (event) => {
+    const incomingFiles = Array.from(event.target.files || []);
+    event.target.value = "";
+    if (!incomingFiles.length) {
+      return;
+    }
+
+    setUploadedFiles((current) => {
+      const merged = [...current];
+      for (const file of incomingFiles) {
+        if (merged.some((item) => item.name === file.name && item.size === file.size)) {
+          continue;
+        }
+        if (merged.length >= 5) {
+          break;
+        }
+        merged.push(file);
+      }
+      return merged;
+    });
+
+    if (draft) {
+      setDraft(null);
+      setPreview(null);
+      setDraftName("");
+      setMessage("附件已更新，原草稿已失效。请重新点击“GPT 规范与改进”。");
+    }
+  };
+
+  const removeUploadedFile = (targetName) => {
+    setUploadedFiles((current) => current.filter((file) => file.name !== targetName));
+    if (draft) {
+      setDraft(null);
+      setPreview(null);
+      setDraftName("");
+      setMessage("附件已更新，原草稿已失效。请重新点击“GPT 规范与改进”。");
+    }
+  };
+
   const resetDraftState = () => {
     setEditingStrategyId(null);
     setDescription("");
     setDraft(null);
     setDraftName("");
     setPreview(null);
+    setUploadedFiles([]);
   };
 
   const activeStrategy = library.items.find((item) => item.is_active);
@@ -270,6 +369,12 @@ export default function StrategyStudioPanel({ apiBaseUrl, botStatus }) {
   const isEditing = editingStrategyId !== null;
   const slotsFull = library.items.length >= (library.max_slots ?? 5);
   const canSave = !!draft && !!preview && (!slotsFull || isEditing);
+  const parameterReference = draft?.parameters || activeStrategy?.parameters || DEFAULT_STRATEGY_PARAMETERS;
+  const parameterReferenceLabel = draft
+    ? "当前草稿参数"
+    : activeStrategy
+      ? `当前生效策略：${activeStrategy.name}`
+      : "系统默认参数";
 
   return (
     <section className="panel">
@@ -317,6 +422,43 @@ export default function StrategyStudioPanel({ apiBaseUrl, botStatus }) {
           />
         </label>
 
+        <div className="strategy-upload-card">
+          <div>
+            <span className="strategy-upload-title">补充材料</span>
+            <p className="strategy-caption">
+              支持上传 PDF、Markdown 或 TXT，把研究笔记、策略说明、课堂文档一起交给 GPT 参考。
+            </p>
+          </div>
+          <label className="action-button action-button--neutral strategy-upload-button">
+            选择文件
+            <input
+              type="file"
+              accept=".pdf,.md,.markdown,.txt"
+              multiple
+              onChange={handleFileSelection}
+              hidden
+            />
+          </label>
+        </div>
+
+        {uploadedFiles.length ? (
+          <div className="strategy-attachment-list">
+            {uploadedFiles.map((file) => (
+              <div className="strategy-attachment-chip" key={`${file.name}-${file.size}`}>
+                <span>{file.name}</span>
+                <button
+                  type="button"
+                  className="watchlist-remove-button"
+                  onClick={() => removeUploadedFile(file.name)}
+                  disabled={actionBusy !== ""}
+                >
+                  移除
+                </button>
+              </div>
+            ))}
+          </div>
+        ) : null}
+
         <div className="strategy-actions">
           <button
             type="button"
@@ -341,6 +483,11 @@ export default function StrategyStudioPanel({ apiBaseUrl, botStatus }) {
 
       {message ? <div className="banner success-banner">{message}</div> : null}
       {error ? <div className="banner error-banner">{error}</div> : null}
+
+      <StrategySettingsGuide
+        parameters={parameterReference}
+        referenceLabel={parameterReferenceLabel}
+      />
 
       {draft ? (
         <div className="strategy-draft">
@@ -367,6 +514,16 @@ export default function StrategyStudioPanel({ apiBaseUrl, botStatus }) {
           </label>
 
           <p className="strategy-copy">{draft.normalized_strategy}</p>
+
+          {draft.source_documents?.length ? (
+            <div className="strategy-attachment-list">
+              {draft.source_documents.map((name) => (
+                <div className="strategy-attachment-chip strategy-attachment-chip--readonly" key={name}>
+                  <span>已引用：{name}</span>
+                </div>
+              ))}
+            </div>
+          ) : null}
 
           <div className="strategy-parameter-grid">
             <ParameterCard label="股票池" value={draft.parameters.universe_symbols.join(", ")} />
@@ -553,6 +710,33 @@ function PreviewCard({ preview }) {
   );
 }
 
+function StrategySettingsGuide({ parameters, referenceLabel }) {
+  return (
+    <section className="strategy-settings-panel">
+      <div className="strategy-draft-header">
+        <div>
+          <h3>可调交易设置</h3>
+          <p className="strategy-caption">把当前策略里所有可执行参数集中展示出来，方便你检查止损率、仓位和风控限制。</p>
+        </div>
+        <span className="panel-pill">{referenceLabel}</span>
+      </div>
+
+      <div className="strategy-settings-grid">
+        {PARAMETER_GUIDE.map((item) => (
+          <article className="strategy-setting-card" key={item.key}>
+            <div className="strategy-setting-header">
+              <strong>{item.label}</strong>
+              <span>{item.range}</span>
+            </div>
+            <div className="strategy-setting-value">{formatParameterValue(item.key, parameters)}</div>
+            <p>{item.description}</p>
+          </article>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 function StrategyBulletGroup({ title, items }) {
   if (!items?.length) {
     return null;
@@ -618,6 +802,34 @@ function formatList(items, useSectorLabels = true) {
     return items.join(", ");
   }
   return items.map((item) => SECTOR_LABELS[item] || item).join(", ");
+}
+
+function formatParameterValue(key, parameters) {
+  const value = parameters?.[key];
+  switch (key) {
+    case "universe_symbols":
+      return formatList(value, false);
+    case "preferred_sectors":
+      return formatList(value, true);
+    case "excluded_symbols":
+      return formatList(value, false);
+    case "entry_drop_percent":
+    case "add_on_drop_percent":
+    case "stop_loss_percent":
+      return typeof value === "number" ? `${value.toFixed(1)}%` : "暂无";
+    case "initial_buy_notional":
+    case "add_on_buy_notional":
+    case "take_profit_target":
+      return formatUsd(value);
+    case "max_daily_entries":
+      return typeof value === "number" ? `${value} 只` : "暂无";
+    case "max_add_ons":
+      return typeof value === "number" ? `${value} 次` : "暂无";
+    case "max_hold_days":
+      return typeof value === "number" ? `${value} 天` : "暂无";
+    default:
+      return value ?? "暂无";
+  }
 }
 
 const SECTOR_LABELS = {

@@ -58,6 +58,22 @@ class StrategyProfilesServiceTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("MSFT", normalized.universe_symbols)
         self.assertEqual(normalized.max_daily_entries, 4)
 
+    async def test_analyze_strategy_accepts_uploaded_reference_materials(self) -> None:
+        with patch("app.services.strategy_profiles_service.openai_service.is_configured", return_value=False):
+            draft = await strategy_profiles_service.analyze_strategy(
+                "",
+                [
+                    {
+                        "name": "strategy-context.md",
+                        "content": "关注 NVDA 和 MSFT，回撤 3% 入场，止损 9%，最长持有 20 天。",
+                    }
+                ],
+            )
+
+        self.assertEqual(draft.source_documents, ["strategy-context.md"])
+        self.assertIn("参考上传材料", draft.execution_notes[0])
+        self.assertIn("NVDA", draft.parameters.universe_symbols)
+
     async def test_save_strategy_enforces_max_five_profiles(self) -> None:
         async with self.session_factory() as session:
             for index in range(5):

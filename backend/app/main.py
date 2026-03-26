@@ -5,7 +5,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Annotated
 
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import Depends, FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -17,6 +17,7 @@ from app.models import (
     Account,
     AssetUniverseItem,
     BotStatus,
+    CompanyProfileResponse,
     ControlResponse,
     MonitoringOverview,
     NewsArticle,
@@ -37,6 +38,7 @@ from app.models import (
     StrategyPreviewResponse,
     StrategySaveRequest,
     SymbolChartResponse,
+    TavilySearchResponse,
     TradeRecord,
     WatchlistUpdateRequest,
 )
@@ -45,6 +47,7 @@ from app.services import (
     alpaca_service,
     bot_controller,
     chart_service,
+    company_profile_service,
     market_research_service,
     monitoring_service,
     price_alerts_service,
@@ -52,6 +55,8 @@ from app.services import (
     strategy_profiles_service,
     tavily_service,
 )
+from app.services.network_utils import friendly_service_error_detail
+from app.services import strategy_document_service
 
 NEWS_CACHE_TTL = timedelta(hours=4)
 FRONTEND_DIST_DIR = Path(
@@ -88,7 +93,7 @@ def _normalize_timestamp(value: datetime) -> datetime:
 
 
 def _service_error(exc: Exception) -> HTTPException:
-    return HTTPException(status_code=503, detail=str(exc))
+    return HTTPException(status_code=503, detail=friendly_service_error_detail(exc))
 
 
 def _is_safe_frontend_path(base_dir: Path, requested_path: Path) -> bool:
@@ -183,6 +188,25 @@ async def get_stock_research(symbol: str, research_model: str = "mini") -> Stock
     return StockResearchReport(**payload)
 
 
+@app.get("/api/tavily/search", response_model=TavilySearchResponse)
+async def search_with_tavily(
+    query: str,
+    topic: str = "news",
+    max_results: int = 6,
+) -> TavilySearchResponse:
+    try:
+        payload = await tavily_service.search_web(
+            query=query,
+            topic=topic,
+            max_results=max_results,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise _service_error(exc) from exc
+    return TavilySearchResponse(**payload)
+
+
 @app.get("/api/orders", response_model=list[OrderRecord])
 async def get_orders(status: str = "all") -> list[OrderRecord]:
     try:
@@ -219,6 +243,17 @@ async def get_symbol_chart(
     except Exception as exc:
         raise _service_error(exc) from exc
     return SymbolChartResponse(**payload)
+
+
+@app.get("/api/company/{symbol}", response_model=CompanyProfileResponse)
+async def get_company_profile(symbol: str) -> CompanyProfileResponse:
+    try:
+        payload = await company_profile_service.get_company_profile(symbol)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise _service_error(exc) from exc
+    return CompanyProfileResponse(**payload)
 
 
 @app.get("/api/universe", response_model=list[AssetUniverseItem])
@@ -344,6 +379,24 @@ async def get_strategy_library(session: SessionDep) -> StrategyLibraryResponse:
 async def analyze_strategy(request: StrategyAnalysisRequest) -> StrategyAnalysisDraft:
     try:
         payload = await strategy_profiles_service.analyze_strategy(request.description)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise _service_error(exc) from exc
+    return StrategyAnalysisDraft(**payload.model_dump())
+
+
+@app.post("/api/strategies/analyze-upload", response_model=StrategyAnalysisDraft)
+async def analyze_strategy_with_files(
+    description: str = Form(""),
+    files: list[UploadFile] | None = File(None),
+) -> StrategyAnalysisDraft:
+    try:
+        payloads: list[tuple[str, bytes]] = []
+        for file in files or []:
+            payloads.append((file.filename or "strategy-note.txt", await file.read()))
+        documents = strategy_document_service.extract_strategy_documents(payloads)
+        payload = await strategy_profiles_service.analyze_strategy(description, documents)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:

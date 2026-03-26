@@ -4,6 +4,7 @@ alpaca-trade-api
 polygon-api-client
 tavily-python
 python-dotenv
+python-multipart
 sqlalchemy
 greenlet
 aiofiles
@@ -11,3 +12,4 @@ aiosqlite
 httpx
 yfinance
 openai
+pypdf

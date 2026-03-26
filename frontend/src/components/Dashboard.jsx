@@ -53,10 +53,54 @@ export default function Dashboard({
     (total, position) => total + Number(position.market_value ?? 0),
     0
   );
+  const summaryItems = [
+    {
+      label: "监控股票",
+      value: `${watchlist.length}`,
+      caption: "自选池规模",
+    },
+    {
+      label: "候选池",
+      value: `${monitoring?.candidate_pool?.length ?? 0}`,
+      caption: "今日 AI 备选",
+    },
+    {
+      label: "订单追踪",
+      value: `${orders.length}`,
+      caption: "最近订单数",
+    },
+    {
+      label: "机器人",
+      value: botStatus?.is_running ? "运行中" : "待机",
+      caption: formatUptime(botStatus?.uptime_seconds),
+    },
+  ];
 
   return (
     <main className="dashboard-grid">
       <section className="dashboard-main">
+        <section className="panel session-summary-panel">
+          <div className="panel-header">
+            <div>
+              <p className="panel-kicker">会话概览</p>
+              <h2>交易终端总览</h2>
+            </div>
+            <span className="panel-pill">
+              净值 {formatCurrency(account?.equity)}
+            </span>
+          </div>
+
+          <div className="session-summary-grid">
+            {summaryItems.map((item) => (
+              <article key={item.label} className="session-summary-item">
+                <span>{item.label}</span>
+                <strong>{item.value}</strong>
+                <small>{item.caption}</small>
+              </article>
+            ))}
+          </div>
+        </section>
+
         <section className="panel">
           <div className="panel-header">
             <div>
@@ -112,11 +156,12 @@ export default function Dashboard({
                     tickFormatter={(value) => `${value}`}
                   />
                   <Tooltip
-                    cursor={{ fill: "rgba(88, 163, 255, 0.08)" }}
+                    cursor={{ fill: "rgba(29, 66, 122, 0.08)" }}
                     contentStyle={{
-                      backgroundColor: "#101a2c",
-                      border: "1px solid rgba(88, 163, 255, 0.18)",
-                      borderRadius: "16px",
+                      backgroundColor: "#ffffff",
+                      border: "1px solid rgba(184, 198, 214, 0.96)",
+                      borderRadius: "12px",
+                      boxShadow: "0 18px 34px rgba(21, 42, 73, 0.14)",
                     }}
                     formatter={(value) => formatCurrency(Number(value))}
                   />
@@ -124,7 +169,7 @@ export default function Dashboard({
                     {chartData.map((entry) => (
                       <Cell
                         key={`${entry.symbol}-${entry.pnl}`}
-                        fill={entry.pnl >= 0 ? "#2bd576" : "#ff7f5c"}
+                        fill={entry.pnl >= 0 ? "#e44d4d" : "#1f9d6b"}
                       />
                     ))}
                   </Bar>

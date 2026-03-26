@@ -26,6 +26,14 @@ class SettingDefinition:
 
 SETTING_DEFINITIONS: tuple[SettingDefinition, ...] = (
     SettingDefinition(
+        key="DISPLAY_NAME",
+        label="Display Name",
+        category="profile",
+        required=False,
+        sensitive=False,
+        description="用于首页主标题和桌面窗口标题显示。",
+    ),
+    SettingDefinition(
         key="ALPACA_API_KEY",
         label="Alpaca API Key",
         category="broker",

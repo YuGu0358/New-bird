@@ -11,7 +11,6 @@ from urllib.request import urlopen
 
 import aiosqlite  # Ensure PyInstaller collects the async SQLite driver.
 import uvicorn
-import webview
 from dotenv import dotenv_values
 
 APP_NAME = "Trading Raven Platform"
@@ -134,10 +133,18 @@ def _prepare_environment() -> None:
     _load_runtime_env()
 
 
+def _resolve_window_title() -> str:
+    from app import runtime_settings
+
+    configured_title = str(runtime_settings.get_setting("DISPLAY_NAME", APP_NAME) or "").strip()
+    return configured_title or APP_NAME
+
+
 def main() -> None:
     _prepare_environment()
 
     from app.main import app
+    import webview
 
     port = _free_port()
     server = uvicorn.Server(
@@ -155,7 +162,7 @@ def main() -> None:
     _wait_for_server(f"http://127.0.0.1:{port}/api/bot/status")
 
     window = webview.create_window(
-        APP_NAME,
+        _resolve_window_title(),
         url=f"http://127.0.0.1:{port}",
         width=WINDOW_SIZE[0],
         height=WINDOW_SIZE[1],

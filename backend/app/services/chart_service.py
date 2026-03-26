@@ -1,16 +1,18 @@
 from __future__ import annotations
-
-import asyncio
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
+from app.services.network_utils import run_sync_with_retries
+
 _CHART_CACHE_TTL = timedelta(minutes=10)
 _CHART_RANGE_CONFIG: dict[str, dict[str, str]] = {
+    "1d": {"period": "1d", "interval": "5m"},
     "5d": {"period": "5d", "interval": "30m"},
     "1mo": {"period": "1mo", "interval": "1d"},
     "3mo": {"period": "3mo", "interval": "1d"},
     "6mo": {"period": "6mo", "interval": "1d"},
     "1y": {"period": "1y", "interval": "1wk"},
+    "2y": {"period": "2y", "interval": "1d"},
 }
 _chart_cache: dict[tuple[str, str], tuple[datetime, dict[str, Any]]] = {}
 
@@ -103,7 +105,7 @@ async def get_symbol_chart(symbol: str, range_name: str = "3mo") -> dict[str, An
         return cached_item[1]
 
     range_config = _CHART_RANGE_CONFIG[normalized_range]
-    frame = await asyncio.to_thread(
+    frame = await run_sync_with_retries(
         _download_chart_frame_sync,
         normalized_symbol,
         range_config["period"],

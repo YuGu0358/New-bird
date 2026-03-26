@@ -249,6 +249,7 @@ def _fallback_strategy_analysis(description: str) -> StrategyAnalysisDraft:
     return StrategyAnalysisDraft(
         suggested_name=f"{symbols[0]} 回撤策略" if symbols else "自定义回撤策略",
         original_description=description,
+        source_documents=[],
         normalized_strategy=normalized_strategy,
         improvement_points=[
             "补齐了明确的入场、加仓、止盈、止损和最长持有规则。",
@@ -298,6 +299,25 @@ def _build_strategy_prompt(description: str) -> str:
     )
 
 
+def _compose_analysis_input(
+    description: str,
+    reference_materials: list[dict[str, str]] | None = None,
+) -> str:
+    sections: list[str] = []
+    normalized_description = str(description or "").strip()
+    if normalized_description:
+        sections.append(f"用户直接描述：\n{normalized_description}")
+
+    for index, item in enumerate(reference_materials or [], start=1):
+        name = str(item.get("name") or f"附件 {index}").strip()
+        content = str(item.get("content") or "").strip()
+        if not content:
+            continue
+        sections.append(f"附件 {index}：{name}\n{content}")
+
+    return "\n\n".join(sections).strip()
+
+
 def _analyze_strategy_sync(description: str) -> StrategyAnalysisDraft:
     client = openai_service.create_client()
     model_name = (
@@ -327,6 +347,7 @@ def _analyze_strategy_sync(description: str) -> StrategyAnalysisDraft:
     return StrategyAnalysisDraft(
         suggested_name=parsed.suggested_name.strip() or "GPT 优化策略",
         original_description=description,
+        source_documents=[],
         normalized_strategy=parsed.normalized_strategy.strip(),
         improvement_points=[item.strip() for item in parsed.improvement_points if item.strip()],
         risk_warnings=[item.strip() for item in parsed.risk_warnings if item.strip()],
@@ -462,22 +483,44 @@ def _build_likely_trade_candidates(
     return ranked_items[:5]
 
 
-async def analyze_strategy(description: str) -> StrategyAnalysisDraft:
+async def analyze_strategy(
+    description: str,
+    reference_materials: list[dict[str, str]] | None = None,
+) -> StrategyAnalysisDraft:
     """Normalize a free-form strategy description into supported execution parameters."""
 
     normalized_description = str(description or "").strip()
-    if not normalized_description:
-        raise ValueError("请先输入策略描述。")
+    normalized_materials = [
+        {
+            "name": str(item.get("name") or "").strip(),
+            "content": str(item.get("content") or "").strip(),
+        }
+        for item in (reference_materials or [])
+        if str(item.get("content") or "").strip()
+    ]
+    if not normalized_description and not normalized_materials:
+        raise ValueError("请先输入策略描述，或上传 PDF / Markdown / TXT 材料。")
+
+    analysis_input = _compose_analysis_input(normalized_description, normalized_materials)
+    source_documents = [item["name"] for item in normalized_materials if item["name"]]
 
     if not openai_service.is_configured():
-        return _fallback_strategy_analysis(normalized_description)
+        draft = _fallback_strategy_analysis(analysis_input)
+    else:
+        try:
+            draft = await asyncio.to_thread(_analyze_strategy_sync, analysis_input)
+        except Exception:
+            draft = _fallback_strategy_analysis(analysis_input)
+            draft.risk_warnings.insert(0, "GPT 当前不可用，以下结果由本地回退规则生成。")
 
-    try:
-        return await asyncio.to_thread(_analyze_strategy_sync, normalized_description)
-    except Exception:
-        draft = _fallback_strategy_analysis(normalized_description)
-        draft.risk_warnings.insert(0, "GPT 当前不可用，以下结果由本地回退规则生成。")
-        return draft
+    draft.original_description = normalized_description or "本次草稿主要根据上传材料生成。"
+    draft.source_documents = source_documents
+    if source_documents:
+        draft.execution_notes = [
+            f"本次规范化已参考上传材料：{', '.join(source_documents)}。",
+            *draft.execution_notes,
+        ]
+    return draft
 
 
 async def list_strategies(session: AsyncSession) -> dict:

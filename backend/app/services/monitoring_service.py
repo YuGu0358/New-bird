@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import CandidatePoolItem, WatchlistSymbol
 from app.services import alpaca_service, openai_service, tavily_service
+from app.services.network_utils import run_sync_with_retries
 
 DEFAULT_SELECTED_SYMBOLS = [
     "AAPL",
@@ -431,7 +432,7 @@ async def fetch_trend_snapshots(
             live_snapshots = {}
 
         try:
-            histories = await asyncio.to_thread(_download_histories_sync, stale_symbols)
+            histories = await run_sync_with_retries(_download_histories_sync, stale_symbols)
         except Exception:
             histories = {}
 

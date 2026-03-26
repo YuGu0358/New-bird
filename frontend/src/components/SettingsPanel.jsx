@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 
 const CATEGORY_LABELS = {
+  profile: "个人资料",
   broker: "券商",
   market_data: "行情",
   research: "研究",
@@ -18,13 +19,19 @@ export default function SettingsPanel({
 }) {
   const [adminToken, setAdminToken] = useState("");
   const [formValues, setFormValues] = useState({});
+  const [dirtyFields, setDirtyFields] = useState({});
 
   useEffect(() => {
-    const nextValues = {};
-    for (const item of settingsStatus?.items ?? []) {
-      nextValues[item.key] = item.sensitive ? "" : item.value ?? "";
-    }
-    setFormValues(nextValues);
+    setFormValues((currentValues) => {
+      const nextValues = { ...currentValues };
+      for (const item of settingsStatus?.items ?? []) {
+        if (dirtyFields[item.key]) {
+          continue;
+        }
+        nextValues[item.key] = item.sensitive ? "" : item.value ?? "";
+      }
+      return nextValues;
+    });
   }, [settingsStatus]);
 
   const groupedItems = (settingsStatus?.items ?? []).reduce((groups, item) => {
@@ -40,6 +47,10 @@ export default function SettingsPanel({
     setFormValues((current) => ({
       ...current,
       [key]: value,
+    }));
+    setDirtyFields((current) => ({
+      ...current,
+      [key]: true,
     }));
   };
 
@@ -61,11 +72,20 @@ export default function SettingsPanel({
       }
     }
 
-    await onSave({
+    const saveResult = await onSave({
       admin_token: adminToken,
       settings,
     });
-    setAdminToken("");
+
+    if (saveResult?.ok) {
+      const nextValues = {};
+      for (const item of saveResult.status?.items ?? settingsStatus?.items ?? []) {
+        nextValues[item.key] = item.sensitive ? "" : item.value ?? "";
+      }
+      setFormValues(nextValues);
+      setDirtyFields({});
+      setAdminToken("");
+    }
   };
 
   return (

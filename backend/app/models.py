@@ -166,6 +166,42 @@ class SymbolChartResponse(BaseModel):
     points: list[ChartPoint]
 
 
+class CompanyProfileResponse(BaseModel):
+    symbol: str
+    company_name: str
+    exchange: Optional[str] = None
+    quote_type: Optional[str] = None
+    sector: Optional[str] = None
+    industry: Optional[str] = None
+    category: Optional[str] = None
+    fund_family: Optional[str] = None
+    website: Optional[str] = None
+    currency: Optional[str] = None
+    market_cap: Optional[float] = None
+    full_time_employees: Optional[int] = None
+    location: Optional[str] = None
+    business_summary: str
+    generated_at: datetime
+
+
+class TavilySearchSource(BaseModel):
+    title: str
+    url: str
+    content: str = ""
+    source: Optional[str] = None
+    domain: Optional[str] = None
+    published_date: Optional[str] = None
+    score: float = 0.0
+
+
+class TavilySearchResponse(BaseModel):
+    query: str
+    topic: str
+    answer: str
+    generated_at: datetime
+    results: list[TavilySearchSource]
+
+
 class WatchlistUpdateRequest(BaseModel):
     symbol: str
 
@@ -314,6 +350,7 @@ class StrategyAnalysisRequest(BaseModel):
 class StrategyAnalysisDraft(BaseModel):
     suggested_name: str
     original_description: str
+    source_documents: list[str] = Field(default_factory=list)
     normalized_strategy: str
     improvement_points: list[str]
     risk_warnings: list[str]

@@ -1,11 +1,15 @@
 import React, { useState } from "react";
+import CompanyProfilePanel from "./CompanyProfilePanel";
 import NewsPanel from "./NewsPanel";
 import PanelCollapseButton from "./PanelCollapseButton";
 import PriceAlertsPanel from "./PriceAlertsPanel";
 import PriceChartPanel from "./PriceChartPanel";
 import ResearchPanel from "./ResearchPanel";
+import TavilySearchPanel from "./TavilySearchPanel";
 
 const TAB_OPTIONS = [
+  { value: "profile", label: "资料" },
+  { value: "search", label: "搜索" },
   { value: "chart", label: "走势" },
   { value: "alerts", label: "提醒 / 交易" },
   { value: "news", label: "新闻" },
@@ -22,7 +26,7 @@ export default function MarketWorkbench({
   onRemoveWatchlistSymbol,
   actionBusy,
 }) {
-  const [activeTab, setActiveTab] = useState("chart");
+  const [activeTab, setActiveTab] = useState("profile");
   const [watchlistCollapsed, setWatchlistCollapsed] = useState(false);
 
   const selectedTracked =
@@ -183,6 +187,12 @@ export default function MarketWorkbench({
       ) : null}
 
       <div className="workbench-surface">
+        {activeTab === "profile" ? (
+          <CompanyProfilePanel symbol={selectedSymbol} apiBaseUrl={apiBaseUrl} embedded />
+        ) : null}
+        {activeTab === "search" ? (
+          <TavilySearchPanel symbol={selectedSymbol} apiBaseUrl={apiBaseUrl} embedded />
+        ) : null}
         {activeTab === "chart" ? (
           <PriceChartPanel symbol={selectedSymbol} apiBaseUrl={apiBaseUrl} embedded />
         ) : null}
