@@ -12,6 +12,7 @@ import CandidatePoolPanel from "./CandidatePoolPanel";
 import MarketWorkbench from "./MarketWorkbench";
 import PanelCollapseButton from "./PanelCollapseButton";
 import PortfolioTable from "./PortfolioTable";
+import SocialSignalPanel from "./SocialSignalPanel";
 import StrategyStudioPanel from "./StrategyStudioPanel";
 import TrendMonitorPanel from "./TrendMonitorPanel";
 import UniverseExplorer from "./UniverseExplorer";
@@ -269,6 +270,8 @@ export default function Dashboard({
           onRemoveWatchlistSymbol={onRemoveWatchlistSymbol}
           actionBusy={actionBusy}
         />
+
+        <SocialSignalPanel symbol={selectedSymbol} apiBaseUrl={apiBaseUrl} />
 
         <section className="panel">
           <div className="panel-header">

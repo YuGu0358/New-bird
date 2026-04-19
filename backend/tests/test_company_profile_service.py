@@ -48,6 +48,86 @@ class CompanyProfileServiceTests(unittest.IsolatedAsyncioTestCase):
         with patch(
             "app.services.company_profile_service._download_company_info_sync",
             return_value={},
+        ), patch(
+            "app.services.company_profile_service._download_company_search_sync",
+            return_value={},
         ):
             with self.assertRaisesRegex(ValueError, "没有可用公司资料"):
                 await company_profile_service.get_company_profile("AAPL")
+
+    async def test_get_company_profile_falls_back_when_yfinance_is_unauthorized(self) -> None:
+        with patch(
+            "app.services.company_profile_service._download_company_info_sync",
+            side_effect=Exception("HTTP Error 401: Unauthorized"),
+        ), patch(
+            "app.services.company_profile_service._download_company_search_sync",
+            return_value={
+                "longName": "Apple Inc.",
+                "shortName": "Apple Inc.",
+                "fullExchangeName": "NASDAQ",
+                "quoteType": "EQUITY",
+                "sector": "Technology",
+                "industry": "Consumer Electronics",
+                "_profile_fallback": True,
+            },
+        ):
+            payload = await company_profile_service.get_company_profile("AAPL")
+
+        self.assertEqual(payload["company_name"], "Apple Inc.")
+        self.assertEqual(payload["exchange"], "NASDAQ")
+        self.assertEqual(payload["sector"], "Technology")
+        self.assertIn("未授权", payload["business_summary"])
+        self.assertNotIn("HTTP Error 401", payload["business_summary"])
+
+    async def test_get_company_profile_prefers_search_for_plain_crypto_symbols(self) -> None:
+        with patch(
+            "app.services.company_profile_service._download_company_search_sync",
+            return_value={
+                "longName": "Bitcoin USD",
+                "shortName": "Bitcoin USD",
+                "fullExchangeName": "CCC",
+                "quoteType": "CRYPTOCURRENCY",
+                "_profile_fallback": True,
+            },
+        ) as search_mock, patch(
+            "app.services.company_profile_service._download_company_info_sync",
+            return_value={
+                "longName": "Grayscale Bitcoin Mini Trust ETF",
+                "quoteType": "ETF",
+            },
+        ) as info_mock:
+            payload = await company_profile_service.get_company_profile("BTC")
+
+        search_mock.assert_called_once_with("BTC")
+        info_mock.assert_not_called()
+        self.assertEqual(payload["company_name"], "Bitcoin USD")
+        self.assertEqual(payload["quote_type"], "CRYPTOCURRENCY")
+
+    async def test_get_company_profile_returns_friendly_error_when_all_sources_fail(self) -> None:
+        with patch(
+            "app.services.company_profile_service._download_company_info_sync",
+            side_effect=Exception("HTTP Error 401: Unauthorized"),
+        ), patch(
+            "app.services.company_profile_service._download_company_search_sync",
+            return_value={},
+        ):
+            with self.assertRaisesRegex(ValueError, "公司资料源暂时不可用"):
+                await company_profile_service.get_company_profile("AAPL")
+
+    def test_search_profile_accepts_crypto_alias_symbol(self) -> None:
+        payload = company_profile_service._build_search_profile(  # noqa: SLF001
+            "HYPE",
+            [
+                {
+                    "symbol": "HYPE32196-USD",
+                    "shortname": "Hyperliquid USD",
+                    "quoteType": "CRYPTOCURRENCY",
+                    "exchange": "CCC",
+                    "exchDisp": "CCC",
+                }
+            ],
+        )
+
+        self.assertEqual(payload["shortName"], "Hyperliquid USD")
+        self.assertEqual(payload["quoteType"], "CRYPTOCURRENCY")
+        self.assertTrue(payload["_profile_fallback"])

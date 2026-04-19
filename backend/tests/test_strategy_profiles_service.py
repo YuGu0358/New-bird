@@ -74,6 +74,31 @@ class StrategyProfilesServiceTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("参考上传材料", draft.execution_notes[0])
         self.assertIn("NVDA", draft.parameters.universe_symbols)
 
+    async def test_analyze_factor_code_strategy_uses_static_fallback(self) -> None:
+        code = """
+factor_name = "volume_momentum"
+
+def alpha(df):
+    score = df["close"].pct_change(20) * df["volume"].rolling(5).mean()
+    buy_signal = score > 0
+    return score.rank(ascending=False)
+"""
+
+        with patch("app.services.strategy_profiles_service.openai_service.is_configured", return_value=False):
+            draft = await strategy_profiles_service.analyze_factor_code_strategy(
+                code,
+                description="优先观察 NVDA 和 MSFT，单笔金额保持保守。",
+                source_name="volume_momentum.py",
+            )
+
+        self.assertEqual(draft.source_documents, ["volume_momentum.py"])
+        self.assertIsNotNone(draft.factor_analysis)
+        self.assertEqual(draft.factor_analysis.source_name, "volume_momentum.py")
+        self.assertIn("volume_momentum", draft.suggested_name)
+        self.assertIn("NVDA", draft.parameters.universe_symbols)
+        self.assertIn("不能直接运行原始 QuantBrain 因子", " ".join(draft.risk_warnings))
+        self.assertFalse(draft.used_openai)
+
     async def test_save_strategy_enforces_max_five_profiles(self) -> None:
         async with self.session_factory() as session:
             for index in range(5):

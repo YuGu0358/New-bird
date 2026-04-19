@@ -303,6 +303,63 @@ class SocialSearchResponse(BaseModel):
     rate_limit_reset: Optional[int] = None
 
 
+class SocialSignalQueryProfile(BaseModel):
+    symbol: str
+    company_name: str
+    keywords: list[str] = Field(default_factory=list)
+    context_terms: list[str] = Field(default_factory=list)
+    x_query: str
+    tavily_query: str
+    lang: str = "en"
+    hours: int = 6
+
+
+class SocialSignalSource(BaseModel):
+    title: str
+    url: str
+    content: str = ""
+    source: Optional[str] = None
+    domain: Optional[str] = None
+    published_date: Optional[str] = None
+    score: float = 0.0
+
+
+class SocialSignalSnapshotView(BaseModel):
+    symbol: str
+    generated_at: datetime
+    query_profile: SocialSignalQueryProfile
+    social_score: float
+    market_score: float
+    final_weight: float
+    action: str
+    confidence: float
+    confidence_label: str = "low"
+    reasons: list[str] = Field(default_factory=list)
+    top_posts: list[SocialPostItem] = Field(default_factory=list)
+    top_sources: list[SocialSignalSource] = Field(default_factory=list)
+    executed: bool = False
+    executed_order_id: Optional[str] = None
+    execution_message: str = ""
+
+
+class SocialSignalRunRequest(BaseModel):
+    symbols: list[str] = Field(default_factory=list)
+    keywords: list[str] = Field(default_factory=list)
+    include_watchlist: bool = True
+    include_positions: bool = True
+    include_candidates: bool = True
+    hours: int = 6
+    lang: str = "en"
+    execute: bool = False
+    force_refresh: bool = False
+
+
+class SocialSignalRunResponse(BaseModel):
+    generated_at: datetime
+    symbols: list[SocialSignalSnapshotView] = Field(default_factory=list)
+    executed_count: int = 0
+
+
 class RuntimeSettingItem(BaseModel):
     key: str
     label: str
@@ -347,6 +404,27 @@ class StrategyAnalysisRequest(BaseModel):
     description: str
 
 
+class QuantBrainFactorAnalysis(BaseModel):
+    source_name: str = "pasted-factor.py"
+    factor_names: list[str] = Field(default_factory=list)
+    input_fields: list[str] = Field(default_factory=list)
+    windows: list[int] = Field(default_factory=list)
+    buy_conditions: list[str] = Field(default_factory=list)
+    sell_conditions: list[str] = Field(default_factory=list)
+    sort_direction: str = "unknown"
+    signal_summary: str = ""
+    unsupported_features: list[str] = Field(default_factory=list)
+    risk_flags: list[str] = Field(default_factory=list)
+    safe_static_analysis: bool = True
+    raw_code_chars: int = 0
+
+
+class QuantBrainFactorAnalysisRequest(BaseModel):
+    code: str
+    description: str = ""
+    source_name: str = "pasted-factor.py"
+
+
 class StrategyAnalysisDraft(BaseModel):
     suggested_name: str
     original_description: str
@@ -357,6 +435,7 @@ class StrategyAnalysisDraft(BaseModel):
     execution_notes: list[str]
     parameters: StrategyExecutionParameters
     used_openai: bool = False
+    factor_analysis: Optional[QuantBrainFactorAnalysis] = None
 
 
 class StrategySaveRequest(BaseModel):

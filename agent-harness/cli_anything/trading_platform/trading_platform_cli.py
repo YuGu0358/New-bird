@@ -509,6 +509,87 @@ def _render_social_payload(payload: dict[str, Any]) -> None:
         )
 
 
+def _render_social_signal(payload: dict[str, Any]) -> None:
+    click.echo(
+        "\n".join(
+            [
+                f"Symbol: {payload['symbol']}",
+                f"Action: {payload['action']}",
+                f"Social score: {float(payload['social_score']):+.2f}",
+                f"Market score: {float(payload['market_score']):+.2f}",
+                f"Final weight: {float(payload['final_weight']):+.2f}",
+                f"Confidence: {payload.get('confidence_label', 'low')} ({float(payload.get('confidence', 0.0)):.2f})",
+            ]
+        )
+    )
+    query_profile = payload.get("query_profile", {}) or {}
+    if query_profile:
+        click.echo("")
+        click.echo(f"X query: {query_profile.get('x_query', '')}")
+        click.echo(f"Tavily query: {query_profile.get('tavily_query', '')}")
+    reasons = payload.get("reasons", []) or []
+    if reasons:
+        click.echo("")
+        click.echo("Reasons:")
+        for item in reasons:
+            click.echo(f"- {item}")
+    top_posts = payload.get("top_posts", []) or []
+    if top_posts:
+        click.echo("")
+        _print_table(
+            ["Author", "Sentiment", "Weight", "Likes", "Text"],
+            [
+                [
+                    f"@{((item.get('author', {}) or {}).get('username') or 'unknown')}",
+                    ((item.get("classification", {}) or {}).get("label") or "n/a"),
+                    f"{float(item.get('weight', 0.0) or 0.0):.3f}",
+                    (item.get("metrics", {}) or {}).get("like_count", 0),
+                    _truncate_text(item.get("text", ""), length=72),
+                ]
+                for item in top_posts
+            ],
+        )
+    top_sources = payload.get("top_sources", []) or []
+    if top_sources:
+        click.echo("")
+        _print_table(
+            ["Source", "Score", "Title"],
+            [
+                [
+                    item.get("domain") or item.get("source") or "web",
+                    f"{float(item.get('score', 0.0) or 0.0):.2f}",
+                    _truncate_text(item.get("title", ""), length=72),
+                ]
+                for item in top_sources
+            ],
+        )
+    execution_message = str(payload.get("execution_message", "") or "").strip()
+    if execution_message:
+        click.echo("")
+        click.echo(execution_message)
+
+
+def _social_score_query_path(
+    *,
+    symbol: str,
+    keywords: tuple[str, ...],
+    hours: int,
+    lang: str,
+    execute: bool,
+    refresh: bool,
+) -> str:
+    params: list[tuple[str, Any]] = [
+        ("symbol", symbol.upper()),
+        ("hours", hours),
+        ("lang", lang),
+        ("execute", execute),
+        ("force_refresh", refresh),
+    ]
+    for item in keywords:
+        params.append(("keyword", item))
+    return f"/api/social/score?{urlencode(params, doseq=True)}"
+
+
 @social.command("search")
 @click.argument("query")
 @click.option("--provider", default="x", show_default=True)
@@ -593,6 +674,127 @@ def social_digest(
         ),
     )
     _emit(payload, human=lambda: _render_social_payload(payload))
+
+
+@social.command("score")
+@click.argument("symbol")
+@click.option("--keyword", "keywords", multiple=True, help="Additional keyword filters.")
+@click.option("--hours", default=6, show_default=True, type=int)
+@click.option("--lang", default="en", show_default=True)
+@click.option("--execute", is_flag=True, help="Allow auto-execution if safety gates pass.")
+@click.option("--refresh", is_flag=True, help="Bypass upstream caches when possible.")
+def social_score(
+    symbol: str,
+    keywords: tuple[str, ...],
+    hours: int,
+    lang: str,
+    execute: bool,
+    refresh: bool,
+) -> None:
+    payload = _api_request(
+        "GET",
+        _social_score_query_path(
+            symbol=symbol,
+            keywords=keywords,
+            hours=hours,
+            lang=lang,
+            execute=execute,
+            refresh=refresh,
+        ),
+    )
+    _emit(payload, human=lambda: _render_social_signal(payload))
+
+
+@social.group("signals")
+def social_signals() -> None:
+    """Saved social-signal snapshots."""
+
+
+@social_signals.command("latest")
+@click.argument("symbol", required=False)
+@click.option("--limit", default=10, show_default=True, type=int)
+def social_signals_latest(symbol: str | None, limit: int) -> None:
+    params: list[tuple[str, Any]] = [("limit", limit)]
+    if symbol:
+        params.append(("symbol", symbol.upper()))
+    payload = _api_request("GET", f"/api/social/signals?{urlencode(params, doseq=True)}")
+    _emit(
+        payload,
+        human=lambda: _print_table(
+            ["Symbol", "Action", "Final", "Social", "Market", "Confidence", "Executed"],
+            [
+                [
+                    item["symbol"],
+                    item["action"],
+                    f"{float(item.get('final_weight', 0.0)):+.2f}",
+                    f"{float(item.get('social_score', 0.0)):+.2f}",
+                    f"{float(item.get('market_score', 0.0)):+.2f}",
+                    f"{item.get('confidence_label', 'low')} ({float(item.get('confidence', 0.0)):.2f})",
+                    item.get("executed", False),
+                ]
+                for item in payload
+            ],
+        ),
+    )
+
+
+@social.group("monitor")
+def social_monitor() -> None:
+    """Batch social-signal commands."""
+
+
+@social_monitor.command("run")
+@click.option("--symbol", "symbols", multiple=True, help="Explicit symbols to include.")
+@click.option("--keyword", "keywords", multiple=True, help="Additional keywords shared by all symbols.")
+@click.option("--watchlist/--no-watchlist", default=True, show_default=True)
+@click.option("--positions/--no-positions", default=True, show_default=True)
+@click.option("--candidates/--no-candidates", default=True, show_default=True)
+@click.option("--hours", default=6, show_default=True, type=int)
+@click.option("--lang", default="en", show_default=True)
+@click.option("--execute", is_flag=True, help="Allow auto-execution if safety gates pass.")
+@click.option("--refresh", is_flag=True, help="Bypass caches.")
+def social_monitor_run(
+    symbols: tuple[str, ...],
+    keywords: tuple[str, ...],
+    watchlist: bool,
+    positions: bool,
+    candidates: bool,
+    hours: int,
+    lang: str,
+    execute: bool,
+    refresh: bool,
+) -> None:
+    payload = _api_request(
+        "POST",
+        "/api/social/run",
+        payload={
+            "symbols": [item.upper() for item in symbols],
+            "keywords": list(keywords),
+            "include_watchlist": watchlist,
+            "include_positions": positions,
+            "include_candidates": candidates,
+            "hours": hours,
+            "lang": lang,
+            "execute": execute,
+            "force_refresh": refresh,
+        },
+    )
+    _emit(
+        payload,
+        human=lambda: _print_table(
+            ["Symbol", "Action", "Final", "Confidence", "Executed"],
+            [
+                [
+                    item["symbol"],
+                    item["action"],
+                    f"{float(item.get('final_weight', 0.0)):+.2f}",
+                    f"{item.get('confidence_label', 'low')} ({float(item.get('confidence', 0.0)):.2f})",
+                    item.get("executed", False),
+                ]
+                for item in payload.get("symbols", [])
+            ],
+        ),
+    )
 
 
 @main.group()

@@ -158,6 +158,33 @@ class StrategyProfile(Base):
     )
 
 
+class SocialSignalSnapshot(Base):
+    __tablename__ = "social_signal_snapshots"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    symbol: Mapped[str] = mapped_column(String(16), index=True)
+    snapshot_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+        index=True,
+    )
+    query_profile_json: Mapped[str] = mapped_column(Text, nullable=False)
+    social_score: Mapped[float] = mapped_column(Float, nullable=False)
+    market_score: Mapped[float] = mapped_column(Float, nullable=False)
+    final_weight: Mapped[float] = mapped_column(Float, nullable=False)
+    action: Mapped[str] = mapped_column(String(32), nullable=False)
+    confidence: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    confidence_label: Mapped[str] = mapped_column(String(16), nullable=False, default="low")
+    reasons_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
+    top_posts_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
+    top_sources_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
+    executed: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    executed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    executed_order_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    execution_message: Mapped[str] = mapped_column(Text, nullable=False, default="")
+
+
 async def get_session() -> AsyncIterator[AsyncSession]:
     async with AsyncSessionLocal() as session:
         yield session

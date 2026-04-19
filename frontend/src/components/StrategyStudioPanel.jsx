@@ -46,6 +46,9 @@ export default function StrategyStudioPanel({ apiBaseUrl, botStatus }) {
   const [draftName, setDraftName] = useState("");
   const [preview, setPreview] = useState(null);
   const [uploadedFiles, setUploadedFiles] = useState([]);
+  const [factorCode, setFactorCode] = useState("");
+  const [factorNotes, setFactorNotes] = useState("");
+  const [factorFiles, setFactorFiles] = useState([]);
   const [editingStrategyId, setEditingStrategyId] = useState(null);
   const [actionBusy, setActionBusy] = useState("");
   const [error, setError] = useState("");
@@ -128,6 +131,65 @@ export default function StrategyStudioPanel({ apiBaseUrl, botStatus }) {
     }
   };
 
+  const analyzeFactorCode = async () => {
+    if (!factorCode.trim() && factorFiles.length === 0) {
+      setError("请先粘贴 QuantBrain 因子代码，或上传 .py / .txt / .md 文件。");
+      return;
+    }
+
+    setActionBusy("factor");
+    setEditingStrategyId(null);
+    setMessage("");
+    setError("");
+    setPreview(null);
+
+    try {
+      let response;
+      if (factorFiles.length) {
+        const formData = new FormData();
+        formData.append("description", factorNotes);
+        formData.append("code", factorCode);
+        factorFiles.forEach((file) => {
+          formData.append("files", file, file.name);
+        });
+        response = await fetch(`${apiBaseUrl}/api/strategies/analyze-factor-upload`, {
+          method: "POST",
+          body: formData,
+        });
+      } else {
+        response = await fetch(`${apiBaseUrl}/api/strategies/analyze-factor-code`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            code: factorCode,
+            description: factorNotes,
+            source_name: "pasted-quantbrain-factor.py",
+          }),
+        });
+      }
+
+      if (!response.ok) {
+        throw new Error(await resolveError(response, `因子代码识别失败（状态码 ${response.status}）`));
+      }
+
+      const payload = await response.json();
+      setDraft(payload);
+      setDraftName(payload.suggested_name || "");
+      setDescription(payload.original_description || factorNotes || "QuantBrain 因子代码导入");
+      setMessage(
+        payload.used_openai
+          ? "QuantBrain 因子已完成静态识别，并由 GPT 转换成策略草稿。请先模拟预览，再确认保存。"
+          : "QuantBrain 因子已完成静态识别，并生成本地回退草稿。请先模拟预览，再确认保存。"
+      );
+    } catch (actionError) {
+      setError(actionError.message);
+    } finally {
+      setActionBusy("");
+    }
+  };
+
   const previewStrategy = async () => {
     if (!draft) {
       setError("请先生成或载入策略草稿。");
@@ -190,7 +252,7 @@ export default function StrategyStudioPanel({ apiBaseUrl, botStatus }) {
           },
           body: JSON.stringify({
             name: draftName || draft.suggested_name,
-            original_description: description || draft.original_description,
+            original_description: draft.original_description || description,
             normalized_strategy: draft.normalized_strategy,
             improvement_points: draft.improvement_points,
             risk_warnings: draft.risk_warnings,
@@ -345,6 +407,65 @@ export default function StrategyStudioPanel({ apiBaseUrl, botStatus }) {
     }
   };
 
+  const handleFactorFileSelection = (event) => {
+    const incomingFiles = Array.from(event.target.files || []);
+    event.target.value = "";
+    if (!incomingFiles.length) {
+      return;
+    }
+
+    setFactorFiles((current) => {
+      const merged = [...current];
+      for (const file of incomingFiles) {
+        if (merged.some((item) => item.name === file.name && item.size === file.size)) {
+          continue;
+        }
+        if (merged.length >= 5) {
+          break;
+        }
+        merged.push(file);
+      }
+      return merged;
+    });
+
+    if (draft) {
+      setDraft(null);
+      setPreview(null);
+      setDraftName("");
+      setMessage("QuantBrain 因子文件已更新，原草稿已失效。请重新识别因子代码。");
+    }
+  };
+
+  const removeFactorFile = (targetName) => {
+    setFactorFiles((current) => current.filter((file) => file.name !== targetName));
+    if (draft) {
+      setDraft(null);
+      setPreview(null);
+      setDraftName("");
+      setMessage("QuantBrain 因子文件已更新，原草稿已失效。请重新识别因子代码。");
+    }
+  };
+
+  const handleFactorCodeChange = (event) => {
+    setFactorCode(event.target.value);
+    if (draft) {
+      setDraft(null);
+      setPreview(null);
+      setDraftName("");
+      setMessage("QuantBrain 因子代码已修改，原草稿已失效。请重新识别因子代码。");
+    }
+  };
+
+  const handleFactorNotesChange = (event) => {
+    setFactorNotes(event.target.value);
+    if (draft) {
+      setDraft(null);
+      setPreview(null);
+      setDraftName("");
+      setMessage("QuantBrain 因子补充说明已修改，原草稿已失效。请重新识别因子代码。");
+    }
+  };
+
   const removeUploadedFile = (targetName) => {
     setUploadedFiles((current) => current.filter((file) => file.name !== targetName));
     if (draft) {
@@ -362,6 +483,9 @@ export default function StrategyStudioPanel({ apiBaseUrl, botStatus }) {
     setDraftName("");
     setPreview(null);
     setUploadedFiles([]);
+    setFactorCode("");
+    setFactorNotes("");
+    setFactorFiles([]);
   };
 
   const activeStrategy = library.items.find((item) => item.is_active);
@@ -481,6 +605,94 @@ export default function StrategyStudioPanel({ apiBaseUrl, botStatus }) {
         </div>
       </div>
 
+      <section className="quantbrain-factor-card">
+        <div className="quantbrain-factor-header">
+          <div>
+            <p className="panel-kicker">QuantBrain</p>
+            <h3>因子代码导入</h3>
+            <p className="strategy-caption">
+              粘贴或上传因子代码，系统只做静态解析，不执行代码；识别后会生成可预览、可保存、可激活的策略草稿。
+            </p>
+          </div>
+          <span className="panel-pill">静态解析</span>
+        </div>
+
+        <div className="quantbrain-factor-grid">
+          <label className="strategy-field strategy-field--code">
+            <span>QuantBrain 因子代码</span>
+            <textarea
+              value={factorCode}
+              onChange={handleFactorCodeChange}
+              placeholder={`例如：\nfactor_name = "momentum_breakout"\n\ndef alpha(df):\n    score = df["close"].pct_change(20) * df["volume"].rolling(5).mean()\n    buy_signal = score > 0\n    return score.rank(ascending=False)`}
+              rows={9}
+              spellCheck="false"
+            />
+          </label>
+
+          <div className="quantbrain-factor-side">
+            <label className="strategy-field">
+              <span>补充说明</span>
+              <textarea
+                value={factorNotes}
+                onChange={handleFactorNotesChange}
+                placeholder="例如：优先用于美股科技股，只做多，不做空；单笔金额控制在 1000 美元以内。"
+                rows={4}
+              />
+            </label>
+
+            <div className="strategy-upload-card quantbrain-upload-card">
+              <div>
+                <span className="strategy-upload-title">上传因子文件</span>
+                <p className="strategy-caption">支持 .py、.txt、.md，最多 5 个文件。</p>
+              </div>
+              <label className="action-button action-button--neutral strategy-upload-button">
+                选择代码文件
+                <input
+                  type="file"
+                  accept=".py,.txt,.md,.markdown"
+                  multiple
+                  onChange={handleFactorFileSelection}
+                  hidden
+                />
+              </label>
+            </div>
+
+            {factorFiles.length ? (
+              <div className="strategy-attachment-list">
+                {factorFiles.map((file) => (
+                  <div className="strategy-attachment-chip" key={`${file.name}-${file.size}`}>
+                    <span>{file.name}</span>
+                    <button
+                      type="button"
+                      className="watchlist-remove-button"
+                      onClick={() => removeFactorFile(file.name)}
+                      disabled={actionBusy !== ""}
+                    >
+                      移除
+                    </button>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+
+            <div className="strategy-actions">
+              <button
+                type="button"
+                className="action-button"
+                onClick={analyzeFactorCode}
+                disabled={actionBusy !== ""}
+              >
+                {actionBusy === "factor" ? "识别中..." : "识别因子并生成策略"}
+              </button>
+            </div>
+
+            <div className="quantbrain-safety-note">
+              不运行用户代码，不导入外部包；复杂横截面排序、未来函数或分钟级逻辑会作为转换限制显示。
+            </div>
+          </div>
+        </div>
+      </section>
+
       {message ? <div className="banner success-banner">{message}</div> : null}
       {error ? <div className="banner error-banner">{error}</div> : null}
 
@@ -499,7 +711,7 @@ export default function StrategyStudioPanel({ apiBaseUrl, botStatus }) {
               </p>
             </div>
             <span className={`status-chip ${draft.used_openai ? "status-chip--running" : "status-chip--stopped"}`}>
-              {draft.used_openai ? "GPT 输出" : isEditing ? "库中策略" : "本地回退"}
+              {draft.factor_analysis ? "因子导入" : draft.used_openai ? "GPT 输出" : isEditing ? "库中策略" : "本地回退"}
             </span>
           </div>
 
@@ -524,6 +736,8 @@ export default function StrategyStudioPanel({ apiBaseUrl, botStatus }) {
               ))}
             </div>
           ) : null}
+
+          {draft.factor_analysis ? <FactorAnalysisCard analysis={draft.factor_analysis} /> : null}
 
           <div className="strategy-parameter-grid">
             <ParameterCard label="股票池" value={draft.parameters.universe_symbols.join(", ")} />
@@ -710,6 +924,44 @@ function PreviewCard({ preview }) {
   );
 }
 
+function FactorAnalysisCard({ analysis }) {
+  if (!analysis) {
+    return null;
+  }
+
+  return (
+    <section className="factor-analysis-card">
+      <div className="strategy-draft-header">
+        <div>
+          <h3>QuantBrain 静态解析结果</h3>
+          <p className="strategy-caption">
+            这些信息来自 AST/文本规则解析，系统没有执行、导入或调用你的因子代码。
+          </p>
+        </div>
+        <span className="status-chip status-chip--running">SAFE STATIC</span>
+      </div>
+
+      <div className="strategy-parameter-grid">
+        <ParameterCard label="来源" value={analysis.source_name || "粘贴代码"} />
+        <ParameterCard label="因子名" value={formatList(analysis.factor_names, false)} />
+        <ParameterCard label="输入字段" value={formatList(analysis.input_fields, false)} />
+        <ParameterCard label="窗口期" value={analysis.windows?.length ? analysis.windows.join(", ") : "未识别"} />
+        <ParameterCard label="排序方向" value={formatSortDirection(analysis.sort_direction)} />
+        <ParameterCard label="代码长度" value={`${analysis.raw_code_chars || 0} 字符`} />
+      </div>
+
+      <p className="strategy-copy">{analysis.signal_summary || "暂未识别到明确因子逻辑。"}</p>
+
+      <div className="factor-analysis-columns">
+        <StrategyBulletGroup title="买入条件" items={analysis.buy_conditions} />
+        <StrategyBulletGroup title="卖出条件" items={analysis.sell_conditions} />
+        <StrategyBulletGroup title="转换限制" items={analysis.unsupported_features} />
+        <StrategyBulletGroup title="风险标记" items={analysis.risk_flags} />
+      </div>
+    </section>
+  );
+}
+
 function StrategySettingsGuide({ parameters, referenceLabel }) {
   return (
     <section className="strategy-settings-panel">
@@ -802,6 +1054,15 @@ function formatList(items, useSectorLabels = true) {
     return items.join(", ");
   }
   return items.map((item) => SECTOR_LABELS[item] || item).join(", ");
+}
+
+function formatSortDirection(value) {
+  const mapping = {
+    higher_is_better: "高分偏多",
+    lower_is_better: "低分偏多 / 反转",
+    unknown: "方向待确认",
+  };
+  return mapping[value] || value || "方向待确认";
 }
 
 function formatParameterValue(key, parameters) {

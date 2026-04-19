@@ -26,9 +26,13 @@ from app.models import (
     PriceAlertRuleCreateRequest,
     PriceAlertRuleUpdateRequest,
     PriceAlertRuleView,
+    QuantBrainFactorAnalysisRequest,
     RuntimeSettingsStatus,
     SettingsUpdateRequest,
     SocialProviderStatus,
+    SocialSignalRunRequest,
+    SocialSignalRunResponse,
+    SocialSignalSnapshotView,
     SocialSearchResponse,
     StockResearchReport,
     StrategyAnalysisDraft,
@@ -51,7 +55,10 @@ from app.services import (
     market_research_service,
     monitoring_service,
     price_alerts_service,
+    quantbrain_factor_service,
+    social_polling_service,
     social_intelligence_service,
+    social_signal_service,
     strategy_profiles_service,
     tavily_service,
 )
@@ -108,11 +115,13 @@ def _is_safe_frontend_path(base_dir: Path, requested_path: Path) -> bool:
 async def startup_event() -> None:
     await init_database()
     await price_alerts_service.start_monitor()
+    await social_polling_service.start_monitor()
 
 
 @app.on_event("shutdown")
 async def shutdown_event() -> None:
     await price_alerts_service.shutdown_monitor()
+    await social_polling_service.shutdown_monitor()
     await bot_controller.shutdown_bot()
 
 
@@ -404,6 +413,54 @@ async def analyze_strategy_with_files(
     return StrategyAnalysisDraft(**payload.model_dump())
 
 
+@app.post("/api/strategies/analyze-factor-code", response_model=StrategyAnalysisDraft)
+async def analyze_quantbrain_factor_code(
+    request: QuantBrainFactorAnalysisRequest,
+) -> StrategyAnalysisDraft:
+    try:
+        payload = await strategy_profiles_service.analyze_factor_code_strategy(
+            request.code,
+            description=request.description,
+            source_name=request.source_name,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise _service_error(exc) from exc
+    return StrategyAnalysisDraft(**payload.model_dump())
+
+
+@app.post("/api/strategies/analyze-factor-upload", response_model=StrategyAnalysisDraft)
+async def analyze_quantbrain_factor_upload(
+    description: str = Form(""),
+    code: str = Form(""),
+    files: list[UploadFile] | None = File(None),
+) -> StrategyAnalysisDraft:
+    try:
+        payloads: list[tuple[str, bytes]] = []
+        for file in files or []:
+            payloads.append((file.filename or "quantbrain-factor.py", await file.read()))
+        documents = quantbrain_factor_service.extract_factor_code_files(payloads)
+        code_sections = []
+        if str(code or "").strip():
+            code_sections.append(f"# Source: pasted-quantbrain-factor.py\n{code.strip()}")
+        code_sections.extend(f"# Source: {item['name']}\n{item['code']}" for item in documents)
+        combined_code = "\n\n".join(code_sections)
+        source_names = ["pasted-quantbrain-factor.py"] if str(code or "").strip() else []
+        source_names.extend(item["name"] for item in documents)
+        source_name = ", ".join(source_names)
+        payload = await strategy_profiles_service.analyze_factor_code_strategy(
+            combined_code,
+            description=description,
+            source_name=source_name or "uploaded-factor.py",
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise _service_error(exc) from exc
+    return StrategyAnalysisDraft(**payload.model_dump())
+
+
 @app.post("/api/strategies", response_model=StrategyLibraryResponse)
 async def save_strategy(
     request: StrategySaveRequest,
@@ -528,6 +585,77 @@ async def search_social(
     except Exception as exc:
         raise _service_error(exc) from exc
     return SocialSearchResponse(**payload)
+
+
+@app.get("/api/social/score", response_model=SocialSignalSnapshotView)
+async def score_social_signal(
+    session: SessionDep,
+    symbol: str,
+    keyword: list[str] | None = None,
+    hours: int = 6,
+    lang: str = "en",
+    execute: bool = False,
+    force_refresh: bool = False,
+) -> SocialSignalSnapshotView:
+    try:
+        payload = await social_signal_service.score_symbol_signal(
+            session,
+            symbol=symbol,
+            keywords=keyword or (),
+            hours=hours,
+            lang=lang,
+            execute=execute,
+            force_refresh=force_refresh,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise _service_error(exc) from exc
+    return SocialSignalSnapshotView(**payload)
+
+
+@app.get("/api/social/signals", response_model=list[SocialSignalSnapshotView])
+async def get_social_signals(
+    session: SessionDep,
+    symbol: str | None = None,
+    limit: int = 25,
+) -> list[SocialSignalSnapshotView]:
+    try:
+        payload = await social_signal_service.get_latest_signals(
+            session,
+            symbol=symbol,
+            limit=limit,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise _service_error(exc) from exc
+    return [SocialSignalSnapshotView(**item) for item in payload]
+
+
+@app.post("/api/social/run", response_model=SocialSignalRunResponse)
+async def run_social_signals(
+    request: SocialSignalRunRequest,
+    session: SessionDep,
+) -> SocialSignalRunResponse:
+    try:
+        payload = await social_signal_service.run_social_monitor(
+            session,
+            symbols=request.symbols,
+            keywords=request.keywords,
+            include_watchlist=request.include_watchlist,
+            include_positions=request.include_positions,
+            include_candidates=request.include_candidates,
+            hours=request.hours,
+            lang=request.lang,
+            execute=request.execute,
+            force_refresh=request.force_refresh,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise _service_error(exc) from exc
+    return SocialSignalRunResponse(**payload)
 
 
 @app.get("/api/bot/status", response_model=BotStatus)

@@ -11,12 +11,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import AsyncSessionLocal, StrategyProfile
 from app.models import (
+    QuantBrainFactorAnalysis,
     StrategyAnalysisDraft,
     StrategyExecutionParameters,
     StrategyPreviewRequest,
     StrategySaveRequest,
 )
-from app.services import monitoring_service, openai_service
+from app.services import monitoring_service, openai_service, quantbrain_factor_service
 from app import runtime_settings
 
 MAX_SAVED_STRATEGIES = 5
@@ -99,6 +100,18 @@ def _dedupe_symbols(values: list[str]) -> list[str]:
         seen.add(symbol)
         symbols.append(symbol)
     return symbols
+
+
+def _dedupe_text(values: list[str]) -> list[str]:
+    seen: set[str] = set()
+    result: list[str] = []
+    for item in values:
+        value = str(item or "").strip()
+        if not value or value in seen:
+            continue
+        seen.add(value)
+        result.append(value)
+    return result
 
 
 def _clamp_float(value: float | int | None, *, default: float, low: float, high: float) -> float:
@@ -272,6 +285,70 @@ def _fallback_strategy_analysis(description: str) -> StrategyAnalysisDraft:
             }
         ),
         used_openai=False,
+    )
+
+
+def _fallback_factor_strategy_analysis(
+    factor_analysis: QuantBrainFactorAnalysis,
+    description: str,
+) -> StrategyAnalysisDraft:
+    preferred_sectors = _extract_candidate_sectors(description) or list(DEFAULT_PARAMETERS.preferred_sectors)
+    symbols = _extract_candidate_symbols(description)
+    if not symbols:
+        symbols = _build_universe_from_sectors(preferred_sectors)[:8]
+    if not symbols:
+        symbols = list(DEFAULT_PARAMETERS.universe_symbols[:8])
+
+    strategy_flavor = (
+        "高分偏多的动量观察策略"
+        if factor_analysis.sort_direction == "higher_is_better"
+        else "低分偏多的反转观察策略"
+        if factor_analysis.sort_direction == "lower_is_better"
+        else "方向待确认的因子观察策略"
+    )
+    normalized_strategy = (
+        f"根据 QuantBrain 因子静态解析结果，将 {factor_analysis.signal_summary} "
+        f"近似转换为 {strategy_flavor}。当前执行器不能直接运行原始因子代码，"
+        "因此以股票池、回撤入场、固定仓位、止盈止损和最长持有天数来表达。"
+    )
+
+    return StrategyAnalysisDraft(
+        suggested_name=(
+            f"{factor_analysis.factor_names[0]} 因子策略"
+            if factor_analysis.factor_names
+            else "QuantBrain 因子策略"
+        ),
+        original_description=description or "QuantBrain 因子代码导入",
+        source_documents=[factor_analysis.source_name],
+        normalized_strategy=normalized_strategy,
+        improvement_points=[
+            "把因子代码中的字段、窗口期和买卖条件整理为可确认的策略草稿。",
+            "保留静态解析结果，方便你检查因子逻辑是否被正确理解。",
+            "保存前仍需要先运行模拟预览，避免直接影响当前机器人。",
+        ],
+        risk_warnings=[
+            "当前是本地回退结果，没有使用 GPT 深度解释因子代码。",
+            "Strategy B 不能直接运行原始 QuantBrain 因子，只能近似映射成现有交易参数。",
+            *factor_analysis.unsupported_features,
+            *factor_analysis.risk_flags,
+        ],
+        execution_notes=[
+            "因子导入只做静态解析，不执行上传代码，也不会导入外部依赖。",
+            "确认并激活后，新的策略会在机器人下一次启动时生效。",
+        ],
+        parameters=StrategyExecutionParameters(
+            **{
+                **DEFAULT_PARAMETERS.model_dump(),
+                "preferred_sectors": preferred_sectors,
+                "universe_symbols": symbols[:20],
+                "entry_drop_percent": 1.5
+                if factor_analysis.sort_direction == "higher_is_better"
+                else DEFAULT_PARAMETERS.entry_drop_percent,
+                "stop_loss_percent": 10.0,
+            }
+        ),
+        used_openai=False,
+        factor_analysis=factor_analysis,
     )
 
 
@@ -520,6 +597,51 @@ async def analyze_strategy(
             f"本次规范化已参考上传材料：{', '.join(source_documents)}。",
             *draft.execution_notes,
         ]
+    return draft
+
+
+async def analyze_factor_code_strategy(
+    code: str,
+    *,
+    description: str = "",
+    source_name: str = "pasted-factor.py",
+) -> StrategyAnalysisDraft:
+    """Convert QuantBrain-style factor code into a reviewable strategy draft."""
+
+    factor_analysis = quantbrain_factor_service.analyze_factor_code(code, source_name=source_name)
+    analysis_input = quantbrain_factor_service.build_factor_strategy_input(
+        factor_analysis,
+        code=code,
+        user_notes=description,
+    )
+
+    if not openai_service.is_configured():
+        draft = _fallback_factor_strategy_analysis(factor_analysis, description)
+    else:
+        try:
+            draft = await asyncio.to_thread(_analyze_strategy_sync, analysis_input)
+        except Exception:
+            draft = _fallback_factor_strategy_analysis(factor_analysis, description)
+            draft.risk_warnings.insert(0, "GPT 当前不可用，以下结果由本地回退规则生成。")
+
+    draft.original_description = description or "QuantBrain 因子代码导入"
+    draft.source_documents = [factor_analysis.source_name]
+    draft.factor_analysis = factor_analysis
+    draft.risk_warnings = _dedupe_text(
+        [
+            *draft.risk_warnings,
+            "当前执行器不能直接运行原始 QuantBrain 因子，只能近似映射为 Strategy B 参数。",
+            *factor_analysis.unsupported_features,
+            *factor_analysis.risk_flags,
+        ]
+    )
+    draft.execution_notes = _dedupe_text(
+        [
+            f"已静态解析 QuantBrain 因子代码：{factor_analysis.source_name}。",
+            "系统没有执行、导入或调用用户上传的代码。",
+            *draft.execution_notes,
+        ]
+    )
     return draft
 
 
