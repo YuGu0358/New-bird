@@ -28,7 +28,7 @@ def test_bot_status_returns_state(client) -> None:
 
 
 def test_strategies_library_returns_payload(client, monkeypatch) -> None:
-    from app.main import strategy_profiles_service
+    from app.services import strategy_profiles_service
 
     async def _list_strategies(_session):
         return {"max_slots": 5, "items": [], "active_strategy_id": None}

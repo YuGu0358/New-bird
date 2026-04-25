@@ -23,8 +23,6 @@ from app.services import (
     social_polling_service,
 )
 
-strategy_profiles_service = strategies_router.strategy_profiles_service
-
 FRONTEND_DIST_DIR = Path(
     os.getenv(
         "TRADING_PLATFORM_FRONTEND_DIST",
