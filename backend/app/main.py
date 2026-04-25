@@ -3,16 +3,15 @@ from __future__ import annotations
 import os
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Annotated
 
-from fastapi import Depends, FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import desc, select
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.database import NewsCache, Trade, get_session, init_database
+from app.database import NewsCache, Trade, init_database
+from app.dependencies import SessionDep, service_error
 from app.models import (
     Account,
     AssetUniverseItem,
@@ -62,7 +61,6 @@ from app.services import (
     strategy_profiles_service,
     tavily_service,
 )
-from app.services.network_utils import friendly_service_error_detail
 from app.services import strategy_document_service
 
 NEWS_CACHE_TTL = timedelta(hours=4)
@@ -90,17 +88,11 @@ app.add_middleware(
 if FRONTEND_ASSETS_DIR.exists():
     app.mount("/assets", StaticFiles(directory=FRONTEND_ASSETS_DIR), name="assets")
 
-SessionDep = Annotated[AsyncSession, Depends(get_session)]
-
 
 def _normalize_timestamp(value: datetime) -> datetime:
     if value.tzinfo is None:
         return value.replace(tzinfo=timezone.utc)
     return value
-
-
-def _service_error(exc: Exception) -> HTTPException:
-    return HTTPException(status_code=503, detail=friendly_service_error_detail(exc))
 
 
 def _is_safe_frontend_path(base_dir: Path, requested_path: Path) -> bool:
@@ -130,7 +122,7 @@ async def get_account() -> Account:
     try:
         payload = await alpaca_service.get_account()
     except Exception as exc:
-        raise _service_error(exc) from exc
+        raise service_error(exc) from exc
     return Account(**payload)
 
 
@@ -139,7 +131,7 @@ async def get_positions() -> list[Position]:
     try:
         payload = await alpaca_service.list_positions()
     except Exception as exc:
-        raise _service_error(exc) from exc
+        raise service_error(exc) from exc
     return [Position(**row) for row in payload]
 
 
@@ -173,7 +165,7 @@ async def get_news(symbol: str, session: SessionDep) -> NewsArticle:
     except Exception as exc:
         if cached_item is not None:
             return NewsArticle.model_validate(cached_item)
-        raise _service_error(exc) from exc
+        raise service_error(exc) from exc
 
     news_item = NewsCache(
         symbol=payload["symbol"],
@@ -193,7 +185,7 @@ async def get_stock_research(symbol: str, research_model: str = "mini") -> Stock
     try:
         payload = await market_research_service.fetch_stock_research(symbol, research_model)
     except Exception as exc:
-        raise _service_error(exc) from exc
+        raise service_error(exc) from exc
     return StockResearchReport(**payload)
 
 
@@ -212,7 +204,7 @@ async def search_with_tavily(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
-        raise _service_error(exc) from exc
+        raise service_error(exc) from exc
     return TavilySearchResponse(**payload)
 
 
@@ -221,7 +213,7 @@ async def get_orders(status: str = "all") -> list[OrderRecord]:
     try:
         payload = await alpaca_service.list_orders(status=status)
     except Exception as exc:
-        raise _service_error(exc) from exc
+        raise service_error(exc) from exc
     return [OrderRecord(**row) for row in payload]
 
 
@@ -236,7 +228,7 @@ async def get_monitoring_overview(
             force_refresh=force_refresh,
         )
     except Exception as exc:
-        raise _service_error(exc) from exc
+        raise service_error(exc) from exc
     return MonitoringOverview(**payload)
 
 
@@ -250,7 +242,7 @@ async def get_symbol_chart(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
-        raise _service_error(exc) from exc
+        raise service_error(exc) from exc
     return SymbolChartResponse(**payload)
 
 
@@ -261,7 +253,7 @@ async def get_company_profile(symbol: str) -> CompanyProfileResponse:
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
-        raise _service_error(exc) from exc
+        raise service_error(exc) from exc
     return CompanyProfileResponse(**payload)
 
 
@@ -273,7 +265,7 @@ async def get_universe(
     try:
         payload = await monitoring_service.search_alpaca_universe(query=query, limit=limit)
     except Exception as exc:
-        raise _service_error(exc) from exc
+        raise service_error(exc) from exc
     return [AssetUniverseItem(**row) for row in payload]
 
 
@@ -287,7 +279,7 @@ async def add_watchlist_symbol(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
-        raise _service_error(exc) from exc
+        raise service_error(exc) from exc
 
 
 @app.delete("/api/watchlist/{symbol}", response_model=list[str])
@@ -298,7 +290,7 @@ async def remove_watchlist_symbol(
     try:
         return await monitoring_service.remove_watchlist_symbol(session, symbol)
     except Exception as exc:
-        raise _service_error(exc) from exc
+        raise service_error(exc) from exc
 
 
 @app.post("/api/monitoring/refresh", response_model=MonitoringOverview)
@@ -309,7 +301,7 @@ async def refresh_monitoring(session: SessionDep) -> MonitoringOverview:
             force_refresh=True,
         )
     except Exception as exc:
-        raise _service_error(exc) from exc
+        raise service_error(exc) from exc
     return MonitoringOverview(**payload)
 
 
@@ -323,7 +315,7 @@ async def get_price_alert_rules(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
-        raise _service_error(exc) from exc
+        raise service_error(exc) from exc
     return [PriceAlertRuleView(**item) for item in payload]
 
 
@@ -337,7 +329,7 @@ async def create_price_alert_rule(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
-        raise _service_error(exc) from exc
+        raise service_error(exc) from exc
     return PriceAlertRuleView(**payload)
 
 
@@ -354,7 +346,7 @@ async def update_price_alert_rule(
         status_code = 404 if "没有找到" in message else 400
         raise HTTPException(status_code=status_code, detail=message) from exc
     except Exception as exc:
-        raise _service_error(exc) from exc
+        raise service_error(exc) from exc
     return PriceAlertRuleView(**payload)
 
 
@@ -368,7 +360,7 @@ async def delete_price_alert_rule(
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except Exception as exc:
-        raise _service_error(exc) from exc
+        raise service_error(exc) from exc
     return ControlResponse(success=True, message="提醒规则已删除。")
 
 
@@ -391,7 +383,7 @@ async def analyze_strategy(request: StrategyAnalysisRequest) -> StrategyAnalysis
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
-        raise _service_error(exc) from exc
+        raise service_error(exc) from exc
     return StrategyAnalysisDraft(**payload.model_dump())
 
 
@@ -409,7 +401,7 @@ async def analyze_strategy_with_files(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
-        raise _service_error(exc) from exc
+        raise service_error(exc) from exc
     return StrategyAnalysisDraft(**payload.model_dump())
 
 
@@ -426,7 +418,7 @@ async def analyze_quantbrain_factor_code(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
-        raise _service_error(exc) from exc
+        raise service_error(exc) from exc
     return StrategyAnalysisDraft(**payload.model_dump())
 
 
@@ -457,7 +449,7 @@ async def analyze_quantbrain_factor_upload(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
-        raise _service_error(exc) from exc
+        raise service_error(exc) from exc
     return StrategyAnalysisDraft(**payload.model_dump())
 
 
@@ -471,7 +463,7 @@ async def save_strategy(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
-        raise _service_error(exc) from exc
+        raise service_error(exc) from exc
     return StrategyLibraryResponse(**payload)
 
 
@@ -488,7 +480,7 @@ async def update_strategy(
         status_code = 404 if "没有找到" in message else 400
         raise HTTPException(status_code=status_code, detail=message) from exc
     except Exception as exc:
-        raise _service_error(exc) from exc
+        raise service_error(exc) from exc
     return StrategyLibraryResponse(**payload)
 
 
@@ -499,7 +491,7 @@ async def preview_strategy(request: StrategyPreviewRequest) -> StrategyPreviewRe
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
-        raise _service_error(exc) from exc
+        raise service_error(exc) from exc
     return StrategyPreviewResponse(**payload)
 
 
@@ -513,7 +505,7 @@ async def activate_strategy(
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except Exception as exc:
-        raise _service_error(exc) from exc
+        raise service_error(exc) from exc
     return StrategyLibraryResponse(**payload)
 
 
@@ -527,7 +519,7 @@ async def delete_strategy(
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except Exception as exc:
-        raise _service_error(exc) from exc
+        raise service_error(exc) from exc
     return StrategyLibraryResponse(**payload)
 
 
@@ -546,7 +538,7 @@ async def update_runtime_settings(request: SettingsUpdateRequest) -> RuntimeSett
     except PermissionError as exc:
         raise HTTPException(status_code=403, detail=str(exc)) from exc
     except Exception as exc:
-        raise _service_error(exc) from exc
+        raise service_error(exc) from exc
     return RuntimeSettingsStatus(**payload)
 
 
@@ -583,7 +575,7 @@ async def search_social(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
-        raise _service_error(exc) from exc
+        raise service_error(exc) from exc
     return SocialSearchResponse(**payload)
 
 
@@ -610,7 +602,7 @@ async def score_social_signal(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
-        raise _service_error(exc) from exc
+        raise service_error(exc) from exc
     return SocialSignalSnapshotView(**payload)
 
 
@@ -629,7 +621,7 @@ async def get_social_signals(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
-        raise _service_error(exc) from exc
+        raise service_error(exc) from exc
     return [SocialSignalSnapshotView(**item) for item in payload]
 
 
@@ -654,7 +646,7 @@ async def run_social_signals(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
-        raise _service_error(exc) from exc
+        raise service_error(exc) from exc
     return SocialSignalRunResponse(**payload)
 
 
@@ -682,7 +674,7 @@ async def cancel_orders() -> ControlResponse:
     try:
         cancelled_count = await alpaca_service.cancel_all_orders()
     except Exception as exc:
-        raise _service_error(exc) from exc
+        raise service_error(exc) from exc
 
     return ControlResponse(
         success=True,
@@ -695,7 +687,7 @@ async def close_positions() -> ControlResponse:
     try:
         submitted_count = await alpaca_service.close_all_positions()
     except Exception as exc:
-        raise _service_error(exc) from exc
+        raise service_error(exc) from exc
 
     return ControlResponse(
         success=True,
