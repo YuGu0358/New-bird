@@ -10,18 +10,15 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import desc, select
 
-from app.database import NewsCache, Trade, init_database
+from app.database import NewsCache, init_database
 from app.dependencies import SessionDep, service_error
 from app.models import (
-    Account,
     AssetUniverseItem,
     BotStatus,
     CompanyProfileResponse,
     ControlResponse,
     MonitoringOverview,
     NewsArticle,
-    OrderRecord,
-    Position,
     PriceAlertRuleCreateRequest,
     PriceAlertRuleUpdateRequest,
     PriceAlertRuleView,
@@ -42,12 +39,11 @@ from app.models import (
     StrategySaveRequest,
     SymbolChartResponse,
     TavilySearchResponse,
-    TradeRecord,
     WatchlistUpdateRequest,
 )
 from app import runtime_settings
+from app.routers import account as account_router
 from app.services import (
-    alpaca_service,
     bot_controller,
     chart_service,
     company_profile_service,
@@ -89,10 +85,7 @@ if FRONTEND_ASSETS_DIR.exists():
     app.mount("/assets", StaticFiles(directory=FRONTEND_ASSETS_DIR), name="assets")
 
 
-def _normalize_timestamp(value: datetime) -> datetime:
-    if value.tzinfo is None:
-        return value.replace(tzinfo=timezone.utc)
-    return value
+app.include_router(account_router.router)
 
 
 def _is_safe_frontend_path(base_dir: Path, requested_path: Path) -> bool:
@@ -117,33 +110,6 @@ async def shutdown_event() -> None:
     await bot_controller.shutdown_bot()
 
 
-@app.get("/api/account", response_model=Account)
-async def get_account() -> Account:
-    try:
-        payload = await alpaca_service.get_account()
-    except Exception as exc:
-        raise service_error(exc) from exc
-    return Account(**payload)
-
-
-@app.get("/api/positions", response_model=list[Position])
-async def get_positions() -> list[Position]:
-    try:
-        payload = await alpaca_service.list_positions()
-    except Exception as exc:
-        raise service_error(exc) from exc
-    return [Position(**row) for row in payload]
-
-
-@app.get("/api/trades", response_model=list[TradeRecord])
-async def get_trades(session: SessionDep) -> list[TradeRecord]:
-    result = await session.execute(
-        select(Trade).order_by(desc(Trade.exit_date), desc(Trade.id))
-    )
-    trades = result.scalars().all()
-    return [TradeRecord.model_validate(item) for item in trades]
-
-
 @app.get("/api/news/{symbol}", response_model=NewsArticle)
 async def get_news(symbol: str, session: SessionDep) -> NewsArticle:
     normalized_symbol = symbol.upper()
@@ -156,7 +122,7 @@ async def get_news(symbol: str, session: SessionDep) -> NewsArticle:
     cached_item = result.scalars().first()
 
     if cached_item is not None:
-        cached_at = _normalize_timestamp(cached_item.timestamp)
+        cached_at = account_router._normalize_timestamp(cached_item.timestamp)
         if datetime.now(timezone.utc) - cached_at <= NEWS_CACHE_TTL:
             return NewsArticle.model_validate(cached_item)
 
@@ -206,15 +172,6 @@ async def search_with_tavily(
     except Exception as exc:
         raise service_error(exc) from exc
     return TavilySearchResponse(**payload)
-
-
-@app.get("/api/orders", response_model=list[OrderRecord])
-async def get_orders(status: str = "all") -> list[OrderRecord]:
-    try:
-        payload = await alpaca_service.list_orders(status=status)
-    except Exception as exc:
-        raise service_error(exc) from exc
-    return [OrderRecord(**row) for row in payload]
 
 
 @app.get("/api/monitoring", response_model=MonitoringOverview)
@@ -667,32 +624,6 @@ async def stop_bot() -> ControlResponse:
     status = await bot_controller.stop_bot()
     message = "机器人已停止。" if not status["is_running"] else "机器人仍在运行。"
     return ControlResponse(success=not status["is_running"], message=message)
-
-
-@app.post("/api/orders/cancel", response_model=ControlResponse)
-async def cancel_orders() -> ControlResponse:
-    try:
-        cancelled_count = await alpaca_service.cancel_all_orders()
-    except Exception as exc:
-        raise service_error(exc) from exc
-
-    return ControlResponse(
-        success=True,
-        message=f"已提交撤销挂单请求，共处理 {cancelled_count} 笔订单。",
-    )
-
-
-@app.post("/api/positions/close", response_model=ControlResponse)
-async def close_positions() -> ControlResponse:
-    try:
-        submitted_count = await alpaca_service.close_all_positions()
-    except Exception as exc:
-        raise service_error(exc) from exc
-
-    return ControlResponse(
-        success=True,
-        message=f"已提交全部平仓请求，共处理 {submitted_count} 个持仓。",
-    )
 
 
 @app.get("/", include_in_schema=False)

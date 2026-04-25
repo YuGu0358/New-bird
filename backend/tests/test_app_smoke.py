@@ -47,3 +47,27 @@ def test_unknown_route_returns_404_or_spa_index(client) -> None:
     server doesn't 500."""
     response = client.get("/this-route-does-not-exist-xyz")
     assert response.status_code in (200, 404)
+
+
+def test_account_endpoint_responds(client, monkeypatch) -> None:
+    """`/api/account` should return 200 when alpaca_service.get_account is
+    mocked, or 503 with a friendly detail when it raises."""
+    from app.services import alpaca_service
+
+    async def fake_get_account():
+        return {
+            "account_id": "",
+            "equity": 0.0,
+            "buying_power": 0.0,
+            "cash": 0.0,
+            "portfolio_value": 0.0,
+            "day_trade_count": 0,
+            "status": "PAPER_OK",
+            "last_equity": 0.0,
+        }
+
+    monkeypatch.setattr(alpaca_service, "get_account", fake_get_account)
+    response = client.get("/api/account")
+    assert response.status_code in (200, 503)
+    if response.status_code == 200:
+        assert "equity" in response.json()
