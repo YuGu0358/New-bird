@@ -71,3 +71,17 @@ def test_account_endpoint_responds(client, monkeypatch) -> None:
     assert response.status_code in (200, 503)
     if response.status_code == 200:
         assert "equity" in response.json()
+
+
+def test_monitoring_endpoint_wired(client, monkeypatch) -> None:
+    from app.services import monitoring_service
+
+    async def fake_overview(*args, **kwargs):
+        return {"items": [], "candidates": [], "watchlist": [], "positions": []}
+
+    for name in ("get_overview", "build_overview", "load_overview", "refresh_overview"):
+        if hasattr(monitoring_service, name):
+            monkeypatch.setattr(monitoring_service, name, fake_overview)
+
+    response = client.get("/api/monitoring")
+    assert response.status_code in (200, 503)

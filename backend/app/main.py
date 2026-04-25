@@ -13,11 +13,9 @@ from sqlalchemy import desc, select
 from app.database import NewsCache, init_database
 from app.dependencies import SessionDep, service_error
 from app.models import (
-    AssetUniverseItem,
     BotStatus,
     CompanyProfileResponse,
     ControlResponse,
-    MonitoringOverview,
     NewsArticle,
     PriceAlertRuleCreateRequest,
     PriceAlertRuleUpdateRequest,
@@ -39,16 +37,15 @@ from app.models import (
     StrategySaveRequest,
     SymbolChartResponse,
     TavilySearchResponse,
-    WatchlistUpdateRequest,
 )
 from app import runtime_settings
 from app.routers import account as account_router
+from app.routers import monitoring as monitoring_router
 from app.services import (
     bot_controller,
     chart_service,
     company_profile_service,
     market_research_service,
-    monitoring_service,
     price_alerts_service,
     quantbrain_factor_service,
     social_polling_service,
@@ -86,6 +83,7 @@ if FRONTEND_ASSETS_DIR.exists():
 
 
 app.include_router(account_router.router)
+app.include_router(monitoring_router.router)
 
 
 def _is_safe_frontend_path(base_dir: Path, requested_path: Path) -> bool:
@@ -174,21 +172,6 @@ async def search_with_tavily(
     return TavilySearchResponse(**payload)
 
 
-@app.get("/api/monitoring", response_model=MonitoringOverview)
-async def get_monitoring_overview(
-    session: SessionDep,
-    force_refresh: bool = False,
-) -> MonitoringOverview:
-    try:
-        payload = await monitoring_service.get_monitoring_overview(
-            session,
-            force_refresh=force_refresh,
-        )
-    except Exception as exc:
-        raise service_error(exc) from exc
-    return MonitoringOverview(**payload)
-
-
 @app.get("/api/chart/{symbol}", response_model=SymbolChartResponse)
 async def get_symbol_chart(
     symbol: str,
@@ -212,54 +195,6 @@ async def get_company_profile(symbol: str) -> CompanyProfileResponse:
     except Exception as exc:
         raise service_error(exc) from exc
     return CompanyProfileResponse(**payload)
-
-
-@app.get("/api/universe", response_model=list[AssetUniverseItem])
-async def get_universe(
-    query: str = "",
-    limit: int = 50,
-) -> list[AssetUniverseItem]:
-    try:
-        payload = await monitoring_service.search_alpaca_universe(query=query, limit=limit)
-    except Exception as exc:
-        raise service_error(exc) from exc
-    return [AssetUniverseItem(**row) for row in payload]
-
-
-@app.post("/api/watchlist", response_model=list[str])
-async def add_watchlist_symbol(
-    request: WatchlistUpdateRequest,
-    session: SessionDep,
-) -> list[str]:
-    try:
-        return await monitoring_service.add_watchlist_symbol(session, request.symbol)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except Exception as exc:
-        raise service_error(exc) from exc
-
-
-@app.delete("/api/watchlist/{symbol}", response_model=list[str])
-async def remove_watchlist_symbol(
-    symbol: str,
-    session: SessionDep,
-) -> list[str]:
-    try:
-        return await monitoring_service.remove_watchlist_symbol(session, symbol)
-    except Exception as exc:
-        raise service_error(exc) from exc
-
-
-@app.post("/api/monitoring/refresh", response_model=MonitoringOverview)
-async def refresh_monitoring(session: SessionDep) -> MonitoringOverview:
-    try:
-        payload = await monitoring_service.get_monitoring_overview(
-            session,
-            force_refresh=True,
-        )
-    except Exception as exc:
-        raise service_error(exc) from exc
-    return MonitoringOverview(**payload)
 
 
 @app.get("/api/alerts", response_model=list[PriceAlertRuleView])
