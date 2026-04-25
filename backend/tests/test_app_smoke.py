@@ -104,3 +104,16 @@ def test_company_endpoint_wired(client, monkeypatch) -> None:
         monkeypatch.setattr(company_profile_service, "get_company_profile", fake_profile)
     response = client.get("/api/company/AAPL")
     assert response.status_code in (200, 503)
+
+
+def test_alerts_list_responds(client, monkeypatch) -> None:
+    from app.services import price_alerts_service
+
+    async def fake_list(*args, **kwargs):
+        return []
+
+    for name in ("list_rules", "get_rules", "list_alerts"):
+        if hasattr(price_alerts_service, name):
+            monkeypatch.setattr(price_alerts_service, name, fake_list)
+    response = client.get("/api/alerts")
+    assert response.status_code in (200, 503)

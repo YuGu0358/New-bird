@@ -13,9 +13,6 @@ from app.dependencies import SessionDep, service_error
 from app.models import (
     BotStatus,
     ControlResponse,
-    PriceAlertRuleCreateRequest,
-    PriceAlertRuleUpdateRequest,
-    PriceAlertRuleView,
     RuntimeSettingsStatus,
     SettingsUpdateRequest,
     SocialProviderStatus,
@@ -26,6 +23,7 @@ from app.models import (
 )
 from app import runtime_settings
 from app.routers import account as account_router
+from app.routers import alerts as alerts_router
 from app.routers import monitoring as monitoring_router
 from app.routers import research as research_router
 from app.routers import strategies as strategies_router
@@ -68,6 +66,7 @@ app.include_router(account_router.router)
 app.include_router(monitoring_router.router)
 app.include_router(research_router.router)
 app.include_router(strategies_router.router)
+app.include_router(alerts_router.router)
 
 
 def _is_safe_frontend_path(base_dir: Path, requested_path: Path) -> bool:
@@ -90,65 +89,6 @@ async def shutdown_event() -> None:
     await price_alerts_service.shutdown_monitor()
     await social_polling_service.shutdown_monitor()
     await bot_controller.shutdown_bot()
-
-
-@app.get("/api/alerts", response_model=list[PriceAlertRuleView])
-async def get_price_alert_rules(
-    session: SessionDep,
-    symbol: str | None = None,
-) -> list[PriceAlertRuleView]:
-    try:
-        payload = await price_alerts_service.list_rules(session, symbol=symbol)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except Exception as exc:
-        raise service_error(exc) from exc
-    return [PriceAlertRuleView(**item) for item in payload]
-
-
-@app.post("/api/alerts", response_model=PriceAlertRuleView)
-async def create_price_alert_rule(
-    request: PriceAlertRuleCreateRequest,
-    session: SessionDep,
-) -> PriceAlertRuleView:
-    try:
-        payload = await price_alerts_service.create_rule(session, request)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except Exception as exc:
-        raise service_error(exc) from exc
-    return PriceAlertRuleView(**payload)
-
-
-@app.patch("/api/alerts/{rule_id}", response_model=PriceAlertRuleView)
-async def update_price_alert_rule(
-    rule_id: int,
-    request: PriceAlertRuleUpdateRequest,
-    session: SessionDep,
-) -> PriceAlertRuleView:
-    try:
-        payload = await price_alerts_service.update_rule(session, rule_id, request)
-    except ValueError as exc:
-        message = str(exc)
-        status_code = 404 if "没有找到" in message else 400
-        raise HTTPException(status_code=status_code, detail=message) from exc
-    except Exception as exc:
-        raise service_error(exc) from exc
-    return PriceAlertRuleView(**payload)
-
-
-@app.delete("/api/alerts/{rule_id}", response_model=ControlResponse)
-async def delete_price_alert_rule(
-    rule_id: int,
-    session: SessionDep,
-) -> ControlResponse:
-    try:
-        await price_alerts_service.delete_rule(session, rule_id)
-    except ValueError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
-    except Exception as exc:
-        raise service_error(exc) from exc
-    return ControlResponse(success=True, message="提醒规则已删除。")
 
 
 @app.get("/api/social/providers", response_model=list[SocialProviderStatus])
