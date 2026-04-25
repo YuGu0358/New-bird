@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -16,7 +16,6 @@ from app.models import (
     PriceAlertRuleCreateRequest,
     PriceAlertRuleUpdateRequest,
     PriceAlertRuleView,
-    QuantBrainFactorAnalysisRequest,
     RuntimeSettingsStatus,
     SettingsUpdateRequest,
     SocialProviderStatus,
@@ -24,27 +23,21 @@ from app.models import (
     SocialSignalRunResponse,
     SocialSignalSnapshotView,
     SocialSearchResponse,
-    StrategyAnalysisDraft,
-    StrategyAnalysisRequest,
-    StrategyLibraryResponse,
-    StrategyPreviewRequest,
-    StrategyPreviewResponse,
-    StrategySaveRequest,
 )
 from app import runtime_settings
 from app.routers import account as account_router
 from app.routers import monitoring as monitoring_router
 from app.routers import research as research_router
+from app.routers import strategies as strategies_router
 from app.services import (
     bot_controller,
     price_alerts_service,
-    quantbrain_factor_service,
     social_polling_service,
     social_intelligence_service,
     social_signal_service,
-    strategy_profiles_service,
 )
-from app.services import strategy_document_service
+
+strategy_profiles_service = strategies_router.strategy_profiles_service
 
 FRONTEND_DIST_DIR = Path(
     os.getenv(
@@ -74,6 +67,7 @@ if FRONTEND_ASSETS_DIR.exists():
 app.include_router(account_router.router)
 app.include_router(monitoring_router.router)
 app.include_router(research_router.router)
+app.include_router(strategies_router.router)
 
 
 def _is_safe_frontend_path(base_dir: Path, requested_path: Path) -> bool:
@@ -161,159 +155,6 @@ async def delete_price_alert_rule(
 async def get_social_providers() -> list[SocialProviderStatus]:
     payload = social_intelligence_service.list_social_providers()
     return [SocialProviderStatus(**item) for item in payload]
-
-
-@app.get("/api/strategies", response_model=StrategyLibraryResponse)
-async def get_strategy_library(session: SessionDep) -> StrategyLibraryResponse:
-    payload = await strategy_profiles_service.list_strategies(session)
-    return StrategyLibraryResponse(**payload)
-
-
-@app.post("/api/strategies/analyze", response_model=StrategyAnalysisDraft)
-async def analyze_strategy(request: StrategyAnalysisRequest) -> StrategyAnalysisDraft:
-    try:
-        payload = await strategy_profiles_service.analyze_strategy(request.description)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except Exception as exc:
-        raise service_error(exc) from exc
-    return StrategyAnalysisDraft(**payload.model_dump())
-
-
-@app.post("/api/strategies/analyze-upload", response_model=StrategyAnalysisDraft)
-async def analyze_strategy_with_files(
-    description: str = Form(""),
-    files: list[UploadFile] | None = File(None),
-) -> StrategyAnalysisDraft:
-    try:
-        payloads: list[tuple[str, bytes]] = []
-        for file in files or []:
-            payloads.append((file.filename or "strategy-note.txt", await file.read()))
-        documents = strategy_document_service.extract_strategy_documents(payloads)
-        payload = await strategy_profiles_service.analyze_strategy(description, documents)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except Exception as exc:
-        raise service_error(exc) from exc
-    return StrategyAnalysisDraft(**payload.model_dump())
-
-
-@app.post("/api/strategies/analyze-factor-code", response_model=StrategyAnalysisDraft)
-async def analyze_quantbrain_factor_code(
-    request: QuantBrainFactorAnalysisRequest,
-) -> StrategyAnalysisDraft:
-    try:
-        payload = await strategy_profiles_service.analyze_factor_code_strategy(
-            request.code,
-            description=request.description,
-            source_name=request.source_name,
-        )
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except Exception as exc:
-        raise service_error(exc) from exc
-    return StrategyAnalysisDraft(**payload.model_dump())
-
-
-@app.post("/api/strategies/analyze-factor-upload", response_model=StrategyAnalysisDraft)
-async def analyze_quantbrain_factor_upload(
-    description: str = Form(""),
-    code: str = Form(""),
-    files: list[UploadFile] | None = File(None),
-) -> StrategyAnalysisDraft:
-    try:
-        payloads: list[tuple[str, bytes]] = []
-        for file in files or []:
-            payloads.append((file.filename or "quantbrain-factor.py", await file.read()))
-        documents = quantbrain_factor_service.extract_factor_code_files(payloads)
-        code_sections = []
-        if str(code or "").strip():
-            code_sections.append(f"# Source: pasted-quantbrain-factor.py\n{code.strip()}")
-        code_sections.extend(f"# Source: {item['name']}\n{item['code']}" for item in documents)
-        combined_code = "\n\n".join(code_sections)
-        source_names = ["pasted-quantbrain-factor.py"] if str(code or "").strip() else []
-        source_names.extend(item["name"] for item in documents)
-        source_name = ", ".join(source_names)
-        payload = await strategy_profiles_service.analyze_factor_code_strategy(
-            combined_code,
-            description=description,
-            source_name=source_name or "uploaded-factor.py",
-        )
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except Exception as exc:
-        raise service_error(exc) from exc
-    return StrategyAnalysisDraft(**payload.model_dump())
-
-
-@app.post("/api/strategies", response_model=StrategyLibraryResponse)
-async def save_strategy(
-    request: StrategySaveRequest,
-    session: SessionDep,
-) -> StrategyLibraryResponse:
-    try:
-        payload = await strategy_profiles_service.save_strategy(session, request)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except Exception as exc:
-        raise service_error(exc) from exc
-    return StrategyLibraryResponse(**payload)
-
-
-@app.put("/api/strategies/{strategy_id}", response_model=StrategyLibraryResponse)
-async def update_strategy(
-    strategy_id: int,
-    request: StrategySaveRequest,
-    session: SessionDep,
-) -> StrategyLibraryResponse:
-    try:
-        payload = await strategy_profiles_service.update_strategy(session, strategy_id, request)
-    except ValueError as exc:
-        message = str(exc)
-        status_code = 404 if "没有找到" in message else 400
-        raise HTTPException(status_code=status_code, detail=message) from exc
-    except Exception as exc:
-        raise service_error(exc) from exc
-    return StrategyLibraryResponse(**payload)
-
-
-@app.post("/api/strategies/preview", response_model=StrategyPreviewResponse)
-async def preview_strategy(request: StrategyPreviewRequest) -> StrategyPreviewResponse:
-    try:
-        payload = await strategy_profiles_service.preview_strategy(request)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except Exception as exc:
-        raise service_error(exc) from exc
-    return StrategyPreviewResponse(**payload)
-
-
-@app.post("/api/strategies/{strategy_id}/activate", response_model=StrategyLibraryResponse)
-async def activate_strategy(
-    strategy_id: int,
-    session: SessionDep,
-) -> StrategyLibraryResponse:
-    try:
-        payload = await strategy_profiles_service.activate_strategy(session, strategy_id)
-    except ValueError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
-    except Exception as exc:
-        raise service_error(exc) from exc
-    return StrategyLibraryResponse(**payload)
-
-
-@app.delete("/api/strategies/{strategy_id}", response_model=StrategyLibraryResponse)
-async def delete_strategy(
-    strategy_id: int,
-    session: SessionDep,
-) -> StrategyLibraryResponse:
-    try:
-        payload = await strategy_profiles_service.delete_strategy(session, strategy_id)
-    except ValueError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
-    except Exception as exc:
-        raise service_error(exc) from exc
-    return StrategyLibraryResponse(**payload)
 
 
 @app.get("/api/settings/status", response_model=RuntimeSettingsStatus)
