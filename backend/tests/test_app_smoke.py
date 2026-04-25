@@ -85,3 +85,22 @@ def test_monitoring_endpoint_wired(client, monkeypatch) -> None:
 
     response = client.get("/api/monitoring")
     assert response.status_code in (200, 503)
+
+
+def test_company_endpoint_wired(client, monkeypatch) -> None:
+    from datetime import datetime, timezone
+
+    from app.services import company_profile_service
+
+    async def fake_profile(symbol: str):
+        return {
+            "symbol": symbol,
+            "company_name": symbol,
+            "business_summary": "",
+            "generated_at": datetime.now(timezone.utc),
+        }
+
+    if hasattr(company_profile_service, "get_company_profile"):
+        monkeypatch.setattr(company_profile_service, "get_company_profile", fake_profile)
+    response = client.get("/api/company/AAPL")
+    assert response.status_code in (200, 503)

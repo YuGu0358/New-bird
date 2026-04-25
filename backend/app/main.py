@@ -1,22 +1,18 @@
 from __future__ import annotations
 
 import os
-from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
-from sqlalchemy import desc, select
 
-from app.database import NewsCache, init_database
+from app.database import init_database
 from app.dependencies import SessionDep, service_error
 from app.models import (
     BotStatus,
-    CompanyProfileResponse,
     ControlResponse,
-    NewsArticle,
     PriceAlertRuleCreateRequest,
     PriceAlertRuleUpdateRequest,
     PriceAlertRuleView,
@@ -28,35 +24,28 @@ from app.models import (
     SocialSignalRunResponse,
     SocialSignalSnapshotView,
     SocialSearchResponse,
-    StockResearchReport,
     StrategyAnalysisDraft,
     StrategyAnalysisRequest,
     StrategyLibraryResponse,
     StrategyPreviewRequest,
     StrategyPreviewResponse,
     StrategySaveRequest,
-    SymbolChartResponse,
-    TavilySearchResponse,
 )
 from app import runtime_settings
 from app.routers import account as account_router
 from app.routers import monitoring as monitoring_router
+from app.routers import research as research_router
 from app.services import (
     bot_controller,
-    chart_service,
-    company_profile_service,
-    market_research_service,
     price_alerts_service,
     quantbrain_factor_service,
     social_polling_service,
     social_intelligence_service,
     social_signal_service,
     strategy_profiles_service,
-    tavily_service,
 )
 from app.services import strategy_document_service
 
-NEWS_CACHE_TTL = timedelta(hours=4)
 FRONTEND_DIST_DIR = Path(
     os.getenv(
         "TRADING_PLATFORM_FRONTEND_DIST",
@@ -84,6 +73,7 @@ if FRONTEND_ASSETS_DIR.exists():
 
 app.include_router(account_router.router)
 app.include_router(monitoring_router.router)
+app.include_router(research_router.router)
 
 
 def _is_safe_frontend_path(base_dir: Path, requested_path: Path) -> bool:
@@ -106,95 +96,6 @@ async def shutdown_event() -> None:
     await price_alerts_service.shutdown_monitor()
     await social_polling_service.shutdown_monitor()
     await bot_controller.shutdown_bot()
-
-
-@app.get("/api/news/{symbol}", response_model=NewsArticle)
-async def get_news(symbol: str, session: SessionDep) -> NewsArticle:
-    normalized_symbol = symbol.upper()
-    result = await session.execute(
-        select(NewsCache)
-        .where(NewsCache.symbol == normalized_symbol)
-        .order_by(desc(NewsCache.timestamp), desc(NewsCache.id))
-        .limit(1)
-    )
-    cached_item = result.scalars().first()
-
-    if cached_item is not None:
-        cached_at = account_router._normalize_timestamp(cached_item.timestamp)
-        if datetime.now(timezone.utc) - cached_at <= NEWS_CACHE_TTL:
-            return NewsArticle.model_validate(cached_item)
-
-    try:
-        payload = await tavily_service.fetch_news_summary(normalized_symbol)
-    except Exception as exc:
-        if cached_item is not None:
-            return NewsArticle.model_validate(cached_item)
-        raise service_error(exc) from exc
-
-    news_item = NewsCache(
-        symbol=payload["symbol"],
-        timestamp=datetime.now(timezone.utc),
-        summary=payload["summary"],
-        source=payload["source"],
-    )
-    session.add(news_item)
-    await session.commit()
-    await session.refresh(news_item)
-
-    return NewsArticle.model_validate(news_item)
-
-
-@app.get("/api/research/{symbol}", response_model=StockResearchReport)
-async def get_stock_research(symbol: str, research_model: str = "mini") -> StockResearchReport:
-    try:
-        payload = await market_research_service.fetch_stock_research(symbol, research_model)
-    except Exception as exc:
-        raise service_error(exc) from exc
-    return StockResearchReport(**payload)
-
-
-@app.get("/api/tavily/search", response_model=TavilySearchResponse)
-async def search_with_tavily(
-    query: str,
-    topic: str = "news",
-    max_results: int = 6,
-) -> TavilySearchResponse:
-    try:
-        payload = await tavily_service.search_web(
-            query=query,
-            topic=topic,
-            max_results=max_results,
-        )
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except Exception as exc:
-        raise service_error(exc) from exc
-    return TavilySearchResponse(**payload)
-
-
-@app.get("/api/chart/{symbol}", response_model=SymbolChartResponse)
-async def get_symbol_chart(
-    symbol: str,
-    range: str = "3mo",
-) -> SymbolChartResponse:
-    try:
-        payload = await chart_service.get_symbol_chart(symbol, range)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except Exception as exc:
-        raise service_error(exc) from exc
-    return SymbolChartResponse(**payload)
-
-
-@app.get("/api/company/{symbol}", response_model=CompanyProfileResponse)
-async def get_company_profile(symbol: str) -> CompanyProfileResponse:
-    try:
-        payload = await company_profile_service.get_company_profile(symbol)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except Exception as exc:
-        raise service_error(exc) from exc
-    return CompanyProfileResponse(**payload)
 
 
 @app.get("/api/alerts", response_model=list[PriceAlertRuleView])
