@@ -21,6 +21,15 @@ from app.models.alerts import (
     PriceAlertRuleUpdateRequest,
     PriceAlertRuleView,
 )
+from app.models.backtest import (
+    BacktestEquityCurveResponse,
+    BacktestEquityPoint,
+    BacktestRunRequest,
+    BacktestRunResponse,
+    BacktestRunsListResponse,
+    BacktestSummaryView,
+    BacktestTradeView,
+)
 from app.models.monitoring import (
     AssetUniverseItem,
     CandidatePoolEntry,
@@ -76,6 +85,13 @@ from app.models.strategies import (
 __all__ = [
     "Account",
     "AssetUniverseItem",
+    "BacktestEquityCurveResponse",
+    "BacktestEquityPoint",
+    "BacktestRunRequest",
+    "BacktestRunResponse",
+    "BacktestRunsListResponse",
+    "BacktestSummaryView",
+    "BacktestTradeView",
     "BotStatus",
     "CandidatePoolEntry",
     "ChartPoint",
