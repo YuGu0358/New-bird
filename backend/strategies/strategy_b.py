@@ -12,6 +12,7 @@ from typing import Any
 
 from app.models import StrategyExecutionParameters
 
+from core.broker import Broker
 from core.strategy.base import Strategy
 from core.strategy.context import StrategyContext
 from core.strategy.registry import register_strategy
@@ -55,9 +56,14 @@ class StrategyB(Strategy):
     def parameters_schema(cls) -> type[StrategyExecutionParameters]:
         return StrategyExecutionParameters
 
-    def __init__(self, parameters: StrategyExecutionParameters) -> None:
+    def __init__(
+        self,
+        parameters: StrategyExecutionParameters,
+        *,
+        broker: Broker | None = None,
+    ) -> None:
         super().__init__(parameters)
-        self._engine = StrategyBEngine(_to_engine_config(parameters))
+        self._engine = StrategyBEngine(_to_engine_config(parameters), broker=broker)
 
     @property
     def engine(self) -> StrategyBEngine:

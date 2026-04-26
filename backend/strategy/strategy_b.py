@@ -8,7 +8,16 @@ from typing import Any
 from app.database import AsyncSessionLocal, Trade
 from app.services import alpaca_service
 
+from core.broker import AlpacaBroker, Broker
+
 logger = logging.getLogger(__name__)
+
+
+def _legacy_alpaca_service_patch_target() -> Any:
+    """Keep the historical test patch path available while calls use Broker."""
+
+    return alpaca_service
+
 
 DEFAULT_UNIVERSE = [
     "AAPL",
@@ -93,8 +102,14 @@ def build_default_strategy_config() -> StrategyExecutionConfig:
 class StrategyBEngine:
     """Implements the fixed-notional Strategy B execution rules."""
 
-    def __init__(self, config: StrategyExecutionConfig | None = None) -> None:
+    def __init__(
+        self,
+        config: StrategyExecutionConfig | None = None,
+        *,
+        broker: Broker | None = None,
+    ) -> None:
         self.config = config or build_default_strategy_config()
+        self._broker: Broker = broker if broker is not None else AlpacaBroker()
         self.positions: dict[str, PositionState] = {}
         self.pending_buy_symbols: set[str] = set()
         self.pending_sell_symbols: set[str] = set()
@@ -115,20 +130,20 @@ class StrategyBEngine:
         """
 
         try:
-            broker_positions = await alpaca_service.list_positions()
+            broker_positions = await self._broker.list_positions()
         except Exception as exc:
             logger.warning("Skipping broker sync because positions could not be loaded: %s", exc)
             broker_positions = []
 
         try:
-            open_orders = await alpaca_service.list_orders(status="open")
+            open_orders = await self._broker.list_orders(status="open")
         except Exception as exc:
             logger.warning("Skipping open-order sync because orders could not be loaded: %s", exc)
             open_orders = []
 
         all_orders: list[dict[str, Any]] = []
         try:
-            all_orders = await alpaca_service.list_orders(status="all", limit=200)
+            all_orders = await self._broker.list_orders(status="all", limit=200)
         except Exception as exc:
             logger.warning("Skipping order-history sync because orders could not be loaded: %s", exc)
 
@@ -251,7 +266,7 @@ class StrategyBEngine:
         if self._estimate_qty(self.config.initial_buy_notional, current_price) <= 0:
             return
 
-        await alpaca_service.submit_order(
+        await self._broker.submit_order(
             symbol=symbol,
             side="buy",
             notional=self.config.initial_buy_notional,
@@ -269,7 +284,7 @@ class StrategyBEngine:
         if self._estimate_qty(self.config.add_on_buy_notional, current_price) <= 0:
             return
 
-        await alpaca_service.submit_order(
+        await self._broker.submit_order(
             symbol=position.symbol,
             side="buy",
             notional=self.config.add_on_buy_notional,
@@ -309,9 +324,9 @@ class StrategyBEngine:
             exit_reason = "MAX_HOLD"
 
         try:
-            await alpaca_service.close_position(position.symbol)
+            await self._broker.close_position(position.symbol)
         except Exception:
-            await alpaca_service.submit_order(
+            await self._broker.submit_order(
                 symbol=position.symbol,
                 side="sell",
                 qty=round(position.total_qty, 6),
