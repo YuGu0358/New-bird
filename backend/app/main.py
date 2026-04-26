@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
@@ -31,9 +32,28 @@ FRONTEND_DIST_DIR = Path(
 ).expanduser().resolve()
 FRONTEND_ASSETS_DIR = FRONTEND_DIST_DIR / "assets"
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Application startup/shutdown sequence (replaces deprecated @app.on_event).
+
+    Tests bypass this by constructing TestClient(app) without `with`.
+    """
+    await init_database()
+    await price_alerts_service.start_monitor()
+    await social_polling_service.start_monitor()
+    try:
+        yield
+    finally:
+        await price_alerts_service.shutdown_monitor()
+        await social_polling_service.shutdown_monitor()
+        await bot_controller.shutdown_bot()
+
+
 app = FastAPI(
     title="Personal Automated Trading Platform",
     version="1.0.0",
+    lifespan=lifespan,
 )
 
 app.add_middleware(
@@ -64,20 +84,6 @@ def _is_safe_frontend_path(base_dir: Path, requested_path: Path) -> bool:
     except ValueError:
         return False
     return True
-
-
-@app.on_event("startup")
-async def startup_event() -> None:
-    await init_database()
-    await price_alerts_service.start_monitor()
-    await social_polling_service.start_monitor()
-
-
-@app.on_event("shutdown")
-async def shutdown_event() -> None:
-    await price_alerts_service.shutdown_monitor()
-    await social_polling_service.shutdown_monitor()
-    await bot_controller.shutdown_bot()
 
 
 @app.get("/", include_in_schema=False)
