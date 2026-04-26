@@ -129,3 +129,11 @@ def test_alerts_list_responds(client, monkeypatch) -> None:
             monkeypatch.setattr(price_alerts_service, name, fake_list)
     response = client.get("/api/alerts")
     assert response.status_code in (200, 503)
+
+
+def test_backtest_runs_list_responds(client) -> None:
+    response = client.get("/api/backtest/runs")
+    assert response.status_code == 200
+    body = response.json()
+    assert "items" in body
+    assert isinstance(body["items"], list)

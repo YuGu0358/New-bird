@@ -12,6 +12,7 @@ from fastapi.staticfiles import StaticFiles
 from app.database import init_database
 from app.routers import account as account_router
 from app.routers import alerts as alerts_router
+from app.routers import backtest as backtest_router
 from app.routers import bot as bot_router
 from app.routers import monitoring as monitoring_router
 from app.routers import research as research_router
@@ -73,6 +74,7 @@ app.include_router(monitoring_router.router)
 app.include_router(research_router.router)
 app.include_router(strategies_router.router)
 app.include_router(alerts_router.router)
+app.include_router(backtest_router.router)
 app.include_router(social_router.router)
 app.include_router(bot_router.router)
 app.include_router(settings_router.router)
