@@ -17,6 +17,8 @@ from app.db.engine import (
     init_database,
 )
 from app.db.tables import (
+    BacktestRun,
+    BacktestTrade,
     CandidatePoolItem,
     NewsCache,
     PriceAlertRule,
@@ -29,6 +31,8 @@ from app.db.tables import (
 
 __all__ = [
     "AsyncSessionLocal",
+    "BacktestRun",
+    "BacktestTrade",
     "Base",
     "CandidatePoolItem",
     "DATA_DIR",

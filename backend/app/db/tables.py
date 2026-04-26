@@ -164,3 +164,48 @@ class SocialSignalSnapshot(Base):
     executed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     executed_order_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
     execution_message: Mapped[str] = mapped_column(Text, nullable=False, default="")
+
+
+class BacktestRun(Base):
+    __tablename__ = "backtest_runs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    strategy_name: Mapped[str] = mapped_column(String(64), nullable=False)
+    parameters_json: Mapped[str] = mapped_column(Text, nullable=False)
+    universe_json: Mapped[str] = mapped_column(Text, nullable=False)
+    start_date: Mapped[str] = mapped_column(String(10), nullable=False)
+    end_date: Mapped[str] = mapped_column(String(10), nullable=False)
+    initial_cash: Mapped[float] = mapped_column(Float, nullable=False)
+    final_cash: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    final_equity: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    metrics_json: Mapped[str] = mapped_column(Text, nullable=False, default="{}")
+    equity_curve_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
+    started_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+    )
+    finished_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+    )
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="completed")
+    error_message: Mapped[str] = mapped_column(Text, nullable=False, default="")
+
+
+class BacktestTrade(Base):
+    __tablename__ = "backtest_trades"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    run_id: Mapped[int] = mapped_column(Integer, index=True, nullable=False)
+    symbol: Mapped[str] = mapped_column(String(16), index=True)
+    side: Mapped[str] = mapped_column(String(8), nullable=False)
+    qty: Mapped[float] = mapped_column(Float, nullable=False)
+    price: Mapped[float] = mapped_column(Float, nullable=False)
+    notional: Mapped[float] = mapped_column(Float, nullable=False)
+    reason: Mapped[str] = mapped_column(String(64), nullable=False, default="")
+    timestamp: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+    )
