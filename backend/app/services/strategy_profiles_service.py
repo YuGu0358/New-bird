@@ -131,6 +131,22 @@ def _clamp_int(value: float | int | None, *, default: int, low: int, high: int) 
 
 
 def _normalize_parameters(parameters: StrategyExecutionParameters) -> StrategyExecutionParameters:
+    # Registry preflight: if the active strategy uses a non-Strategy-B parameter
+    # schema, skip the Strategy-B-specific clamping below and trust the schema.
+    try:
+        import strategies  # noqa: F401  -- ensure decorators have run
+        from core.strategy.registry import StrategyNotFoundError, default_registry
+
+        try:
+            strategy_cls = default_registry.get("strategy_b_v1")
+        except StrategyNotFoundError:
+            strategy_cls = None
+        if strategy_cls is not None and strategy_cls.parameters_schema() is not StrategyExecutionParameters:
+            return parameters
+    except Exception:
+        # Never block a save on framework wiring issues.
+        pass
+
     preferred_sectors = _normalize_sector_names(parameters.preferred_sectors)
     excluded_symbols = _dedupe_symbols(parameters.excluded_symbols)
     symbols = _dedupe_symbols(parameters.universe_symbols)
