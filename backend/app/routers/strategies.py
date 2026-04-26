@@ -5,6 +5,8 @@ from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from app.dependencies import SessionDep, service_error
 from app.models import (
     QuantBrainFactorAnalysisRequest,
+    RegisteredStrategiesResponse,
+    RegisteredStrategyEntry,
     StrategyAnalysisDraft,
     StrategyAnalysisRequest,
     StrategyLibraryResponse,
@@ -172,3 +174,28 @@ async def delete_strategy(
     except Exception as exc:
         raise service_error(exc) from exc
     return StrategyLibraryResponse(**payload)
+
+
+@router.get("/registered", response_model=RegisteredStrategiesResponse)
+async def list_registered_strategies() -> RegisteredStrategiesResponse:
+    """Return every strategy registered in the framework registry.
+
+    Frontend uses this to render parameter schemas in the strategy editor.
+    """
+    # Import here so registration decorators run at first request rather than
+    # at app boot. (At app boot the routers import early; the strategies
+    # package may not be loaded yet, which would yield an empty list.)
+    import strategies  # noqa: F401
+
+    from core.strategy.registry import default_registry
+
+    items: list[RegisteredStrategyEntry] = []
+    for name, cls in default_registry.items():
+        items.append(
+            RegisteredStrategyEntry(
+                name=name,
+                description=cls.description,
+                parameters_schema=cls.parameters_schema().model_json_schema(),
+            )
+        )
+    return RegisteredStrategiesResponse(items=items)

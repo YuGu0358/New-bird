@@ -60,6 +60,8 @@ from app.models.social import (
 from app.models.strategies import (
     QuantBrainFactorAnalysis,
     QuantBrainFactorAnalysisRequest,
+    RegisteredStrategiesResponse,
+    RegisteredStrategyEntry,
     StoredStrategy,
     StrategyAnalysisDraft,
     StrategyAnalysisRequest,
@@ -88,6 +90,8 @@ __all__ = [
     "PriceAlertRuleView",
     "QuantBrainFactorAnalysis",
     "QuantBrainFactorAnalysisRequest",
+    "RegisteredStrategiesResponse",
+    "RegisteredStrategyEntry",
     "ResearchSource",
     "RuntimeSettingItem",
     "RuntimeSettingsStatus",

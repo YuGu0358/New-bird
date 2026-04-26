@@ -41,6 +41,18 @@ def test_strategies_library_returns_payload(client, monkeypatch) -> None:
     assert "items" in body
 
 
+def test_strategies_registered_lists_strategy_b(client) -> None:
+    response = client.get("/api/strategies/registered")
+    assert response.status_code == 200
+    body = response.json()
+    assert "items" in body
+    names = [item["name"] for item in body["items"]]
+    assert "strategy_b_v1" in names
+    strategy_b = next(item for item in body["items"] if item["name"] == "strategy_b_v1")
+    assert strategy_b["description"]
+    assert "properties" in strategy_b["parameters_schema"]
+
+
 def test_unknown_route_returns_404_or_spa_index(client) -> None:
     """The SPA fallback at `/{full_path:path}` may serve index.html if the
     frontend dist exists, else 404. Either is acceptable; we only assert the

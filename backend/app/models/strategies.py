@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Optional
+from typing import Any, Optional
 
 from pydantic import BaseModel, Field
 
@@ -120,3 +120,13 @@ class StrategyLibraryResponse(BaseModel):
     max_slots: int
     items: list[StoredStrategy]
     active_strategy_id: Optional[int] = None
+
+
+class RegisteredStrategyEntry(BaseModel):
+    name: str
+    description: str
+    parameters_schema: dict[str, Any]
+
+
+class RegisteredStrategiesResponse(BaseModel):
+    items: list[RegisteredStrategyEntry]
