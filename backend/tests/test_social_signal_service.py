@@ -174,7 +174,7 @@ class SocialSignalServiceTests(unittest.IsolatedAsyncioTestCase):
 
         with (
             patch(
-                "app.services.social_signal_service.build_query_profile",
+                "app.services.social_signal.runner.build_query_profile",
                 new=AsyncMock(
                     return_value={
                         "symbol": "NVDA",
@@ -211,7 +211,7 @@ class SocialSignalServiceTests(unittest.IsolatedAsyncioTestCase):
                 ),
             ),
             patch(
-                "app.services.social_signal_service._load_positions_map",
+                "app.services.social_signal.runner._load_positions_map",
                 new=AsyncMock(return_value={"NVDA": {"symbol": "NVDA", "qty": 5}}),
             ),
         ):
@@ -274,7 +274,7 @@ class SocialSignalServiceTests(unittest.IsolatedAsyncioTestCase):
 
         with (
             patch(
-                "app.services.social_signal_service.build_query_profile",
+                "app.services.social_signal.runner.build_query_profile",
                 new=AsyncMock(
                     return_value={
                         "symbol": "AAPL",
@@ -311,7 +311,7 @@ class SocialSignalServiceTests(unittest.IsolatedAsyncioTestCase):
                 ),
             ),
             patch(
-                "app.services.social_signal_service._load_positions_map",
+                "app.services.social_signal.runner._load_positions_map",
                 new=AsyncMock(return_value={}),
             ),
         ):
@@ -329,7 +329,7 @@ class SocialSignalServiceTests(unittest.IsolatedAsyncioTestCase):
     async def test_score_symbol_signal_degrades_when_social_sources_fail(self) -> None:
         with (
             patch(
-                "app.services.social_signal_service.build_query_profile",
+                "app.services.social_signal.runner.build_query_profile",
                 new=AsyncMock(
                     return_value={
                         "symbol": "AAPL",
@@ -366,7 +366,7 @@ class SocialSignalServiceTests(unittest.IsolatedAsyncioTestCase):
                 ),
             ),
             patch(
-                "app.services.social_signal_service._load_positions_map",
+                "app.services.social_signal.runner._load_positions_map",
                 new=AsyncMock(return_value={}),
             ),
         ):
