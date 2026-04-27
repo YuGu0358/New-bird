@@ -60,7 +60,8 @@ export const getNews = (symbol) => request(`/api/news/${encodeURIComponent(symbo
 export const getResearch = (symbol, model = 'mini') =>
   request(`/api/research/${encodeURIComponent(symbol)}?research_model=${model}`);
 export const tavilySearch = (query) => request(`/api/tavily/search?query=${encodeURIComponent(query)}`);
-export const getChart = (symbol, range = '1m') =>
+// Backend expects yfinance-style range strings: 1d / 5d / 1mo / 3mo / 6mo / 1y / 2y.
+export const getChart = (symbol, range = '3mo') =>
   request(`/api/chart/${encodeURIComponent(symbol)}?range=${range}`);
 export const getCompany = (symbol) => request(`/api/company/${encodeURIComponent(symbol)}`);
 

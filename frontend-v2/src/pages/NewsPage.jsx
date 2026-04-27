@@ -39,7 +39,7 @@ export default function NewsPage() {
   });
   const chartQ = useQuery({
     queryKey: ['chart', symbol],
-    queryFn: () => getChart(symbol, '1m'),
+    queryFn: () => getChart(symbol, '1mo'),
     enabled: !!symbol,
   });
   const tavilyQ = useQuery({

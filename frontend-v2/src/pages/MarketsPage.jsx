@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { Plus, X, RefreshCw, Search as SearchIcon, ArrowUpRight, ArrowDownRight } from 'lucide-react';
@@ -24,20 +24,29 @@ export default function MarketsPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const monitoringQ = useQuery({ queryKey: ['monitoring'], queryFn: getMonitoring, refetchInterval: 30_000 });
 
+  // Watchlist isn't surfaced by /api/monitoring; we derive it from the
+  // tracked-symbols list on first load and then keep it in sync with the
+  // list[str] payload that POST/DELETE /api/watchlist returns.
+  const [watchlist, setWatchlist] = useState([]);
+
   const refreshMut = useMutation({
     mutationFn: refreshMonitoring,
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['monitoring'] }),
   });
   const addMut = useMutation({
     mutationFn: addWatchlist,
-    onSuccess: () => {
+    onSuccess: (data) => {
+      if (Array.isArray(data)) setWatchlist(data);
       queryClient.invalidateQueries({ queryKey: ['monitoring'] });
       setSearchTerm('');
     },
   });
   const removeMut = useMutation({
     mutationFn: removeWatchlist,
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['monitoring'] }),
+    onSuccess: (data) => {
+      if (Array.isArray(data)) setWatchlist(data);
+      queryClient.invalidateQueries({ queryKey: ['monitoring'] });
+    },
   });
 
   const universeQ = useQuery({
@@ -46,10 +55,25 @@ export default function MarketsPage() {
     enabled: searchTerm.length >= 1,
   });
 
-  const watchlist = monitoringQ.data?.watchlist || [];
   const positions = monitoringQ.data?.positions || [];
-  const candidates = monitoringQ.data?.candidates || [];
-  const tracked = monitoringQ.data?.tracked || monitoringQ.data?.items || [];
+  const candidates =
+    monitoringQ.data?.candidates ||
+    monitoringQ.data?.candidate_pool ||
+    [];
+  const tracked =
+    monitoringQ.data?.tracked ||
+    monitoringQ.data?.tracked_symbols ||
+    monitoringQ.data?.items ||
+    [];
+
+  // Hydrate watchlist from monitoring response (some backend builds expose it
+  // under monitoring.watchlist; if absent, leave the local state alone — the
+  // first POST/DELETE will populate it correctly).
+  useEffect(() => {
+    if (Array.isArray(monitoringQ.data?.watchlist)) {
+      setWatchlist(monitoringQ.data.watchlist);
+    }
+  }, [monitoringQ.data]);
 
   return (
     <div className="space-y-8">

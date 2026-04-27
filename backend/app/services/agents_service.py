@@ -87,7 +87,7 @@ class LiveContextBuilder(ContextBuilder):
 
         chart_points: list[dict[str, Any]] = []
         try:
-            chart = await chart_service.get_chart(symbol, range="3m")
+            chart = await chart_service.get_symbol_chart(symbol, range_name="3mo")
             chart_points = list((chart or {}).get("points") or [])
         except Exception as exc:
             logger.debug("chart failed for %s: %s", symbol, exc)
