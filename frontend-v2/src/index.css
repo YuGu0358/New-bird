@@ -1,0 +1,160 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Global resets ----------------------------------------------------------- */
+@layer base {
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-feature-settings: 'tnum' 1, 'cv11' 1;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Scrollbar — kept thin and steel-toned */
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: #0F1923;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #26344A;
+    border-radius: 4px;
+    border: 2px solid #0F1923;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #3D7FA5;
+  }
+
+  /* Numeric content always tabular */
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+/* Component primitives ---------------------------------------------------- */
+@layer components {
+  .card {
+    @apply bg-ink-800 border border-steel-400 rounded-lg p-5;
+  }
+  .card-dense {
+    @apply bg-ink-800 border border-steel-400 rounded-lg p-4;
+  }
+  .card-emph {
+    @apply bg-ink-800 border border-steel-400 rounded-lg p-6;
+  }
+  .card-hover {
+    @apply transition duration-150 hover:border-steel-600;
+  }
+
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 h-9 px-4 rounded font-medium text-body
+           transition duration-150 select-none;
+  }
+  .btn-primary {
+    @apply btn bg-steel-500 text-ink-950 hover:bg-steel-600 hover:shadow-focus
+           active:bg-steel-600 disabled:bg-ink-700 disabled:text-steel-300 disabled:shadow-none;
+  }
+  .btn-secondary {
+    @apply btn border border-steel-400 text-steel-100 bg-transparent
+           hover:border-steel-500 hover:text-steel-500;
+  }
+  .btn-destructive {
+    @apply btn bg-bear text-ink-950 hover:bg-bear-weak;
+  }
+  .btn-ghost {
+    @apply btn bg-transparent text-steel-200 hover:bg-ink-800 hover:text-steel-50;
+  }
+  .btn-sm {
+    @apply h-7 px-3 text-body-sm;
+  }
+  .btn-lg {
+    @apply h-11 px-5 text-base;
+  }
+
+  .input {
+    @apply h-9 w-full bg-ink-900 border border-steel-400 rounded px-3 text-body text-steel-50
+           placeholder-steel-200 transition duration-150
+           focus:outline-none focus:border-steel-500 focus:shadow-focus;
+  }
+  .input-error {
+    @apply border-bear focus:border-bear focus:shadow-focus-error;
+  }
+
+  .select {
+    @apply input pr-8 appearance-none cursor-pointer bg-no-repeat bg-right;
+  }
+
+  .pill {
+    @apply inline-flex items-center h-[22px] px-2 rounded-sm text-caption font-medium uppercase;
+  }
+  .pill-default { @apply pill bg-ink-700 text-steel-100; }
+  .pill-bull    { @apply pill bg-bull-tint text-bull; }
+  .pill-bear    { @apply pill bg-bear-tint text-bear; }
+  .pill-warn    { @apply pill bg-warn-tint text-warn; }
+  .pill-social  { @apply pill bg-social-tint text-social; }
+  .pill-active  { @apply pill bg-steel-500 text-ink-950; }
+
+  /* Section/page heads */
+  .h-page {
+    @apply text-h1 font-semibold text-steel-50;
+  }
+  .h-section {
+    @apply text-h2 font-semibold text-steel-50;
+  }
+  .h-caption {
+    @apply text-caption text-steel-200 uppercase font-medium;
+  }
+  .h-sub {
+    @apply text-h3 uppercase text-steel-200 font-medium;
+  }
+
+  /* Data table */
+  .tbl {
+    @apply w-full text-body-sm tabular;
+  }
+  .tbl thead th {
+    @apply h-10 px-3 bg-ink-850 text-left text-caption uppercase font-medium text-steel-200
+           border-b border-steel-400;
+  }
+  .tbl tbody td {
+    @apply h-10 px-3 border-b border-steel-400 text-steel-100;
+  }
+  .tbl tbody tr {
+    @apply transition duration-150 hover:bg-ink-700;
+  }
+  .tbl-dense thead th { @apply h-8; }
+  .tbl-dense tbody td { @apply h-8; }
+  .tbl-num { @apply text-right; }
+
+  /* KPI metric */
+  .metric-caption {
+    @apply h-caption mb-2;
+  }
+  .metric-value {
+    @apply text-num-lg font-semibold text-steel-50 tabular;
+  }
+  .metric-delta-up {
+    @apply text-body-sm font-medium text-bull;
+  }
+  .metric-delta-down {
+    @apply text-body-sm font-medium text-bear;
+  }
+  .metric-delta-flat {
+    @apply text-body-sm font-medium text-steel-200;
+  }
+}
