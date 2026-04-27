@@ -573,7 +573,20 @@
       "dxy_desc": "Broad trade-weighted USD index.",
       "vix": "VIX",
       "vix_desc": "CBOE volatility index — proxy for vol regime."
-    }
+    },
+    "editThresholds": "Edit thresholds",
+    "customized": "CUSTOM",
+    "direction": "Direction",
+    "higherIsWorse": "Higher is worse",
+    "higherIsBetter": "Higher is better",
+    "informational": "Informational only",
+    "okMax": "OK ≤",
+    "warnMax": "WARN ≤",
+    "dangerMax": "DANGER ≤",
+    "directionHintWorse": "OK if value ≤ ok_max, WARN if value ≤ warn_max, DANGER if value ≤ danger_max — anything above is also DANGER. Use for inflation, HY OAS, recession probability, etc.",
+    "directionHintBetter": "OK if value ≥ warn_max, WARN if value ≥ ok_max, DANGER below. Use for yield-curve spread, growth, etc.",
+    "directionHintInfo": "No signal level — the card just shows the value. Used for raw liquidity / FX series.",
+    "resetToDefault": "Reset to default"
   },
   "valuation": {
     "title": "Valuation Lab",
@@ -657,6 +670,24 @@
     "strike": "Strike",
     "distance": "Distance",
     "openInterest": "OI",
-    "volume": "Volume"
+    "volume": "Volume",
+    "fridayScanTitle": "Pinning Scanner",
+    "fridayScanSubtitle": "Composite score (0–100) for whether the next Friday/0DTE will pin between the walls",
+    "fridayScanLoading": "Scoring pinning…",
+    "fridayScanEmpty": "Friday-chain not available",
+    "fridayScanNoData": "No contracts for the chosen expiry — cannot score.",
+    "pinningVerdict": "Pinning verdict",
+    "verdict": {
+      "bet": "BET",
+      "mixed": "MIXED",
+      "skip": "SKIP"
+    },
+    "verdictHintBet": "Walls are clear, IV is cheap, gamma is high — strong setup for selling premium that pins.",
+    "verdictHintMixed": "Some signals favor pinning, others don't — wait for closer to expiry or pick a directional play.",
+    "verdictHintSkip": "Walls are weak or vol is too high — pinning is unlikely to hold.",
+    "suggestedShortCall": "Suggested short call",
+    "suggestedShortPut": "Suggested short put",
+    "advDollar": "ADV ($)",
+    "scoreBreakdown": "Score breakdown"
   }
 }

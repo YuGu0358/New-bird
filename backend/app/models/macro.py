@@ -4,7 +4,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Literal, Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class MacroSparkPoint(BaseModel):
@@ -21,6 +21,8 @@ class MacroIndicatorView(BaseModel):
     description_key: str
     unit: str
     default_thresholds: dict[str, Any]
+    thresholds: dict[str, Any]                # effective (override or default)
+    thresholds_overridden: bool = False
     value: Optional[float] = None
     as_of: Optional[str] = None
     change_abs: Optional[float] = None
@@ -37,3 +39,20 @@ class MacroDashboardResponse(BaseModel):
     generated_at: datetime
     indicators: list[MacroIndicatorView]
     ensemble: MacroEnsembleSummary
+
+
+class MacroThresholdUpdateRequest(BaseModel):
+    direction: Literal["higher_is_worse", "higher_is_better", "informational"]
+    ok_max: Optional[float] = Field(None, description="Required for non-informational direction")
+    warn_max: Optional[float] = Field(None, description="Required for non-informational direction")
+    danger_max: Optional[float] = Field(None, description="Required for non-informational direction")
+
+
+class MacroThresholdUpdateResponse(BaseModel):
+    code: str
+    thresholds: dict[str, Any]
+
+
+class MacroThresholdResetResponse(BaseModel):
+    code: str
+    removed: bool

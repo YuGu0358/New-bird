@@ -150,6 +150,10 @@ export const deleteUserStrategy = (id) => request(`/api/code/strategies/${id}`, 
 // ----------------------------------------------------------- macro (Tradewell port)
 export const getMacroDashboard = () => request('/api/macro');
 export const refreshMacroDashboard = () => request('/api/macro/refresh', { method: 'POST' });
+export const updateIndicatorThresholds = (code, body) =>
+  request(`/api/macro/indicators/${encodeURIComponent(code)}/thresholds`, { method: 'PUT', body });
+export const resetIndicatorThresholds = (code) =>
+  request(`/api/macro/indicators/${encodeURIComponent(code)}/thresholds`, { method: 'DELETE' });
 
 // ----------------------------------------------------------- valuation (DCF + PE channel)
 export const runDcf = (body) => request('/api/valuation/dcf', { method: 'POST', body });
@@ -173,6 +177,13 @@ export const getExpiryFocus = (ticker, expiry, opts = {}) => {
     `/api/options-chain/${encodeURIComponent(ticker)}/expiry/${encodeURIComponent(expiry)}${
       qs.toString() ? `?${qs}` : ''
     }`,
+  );
+};
+export const getFridayScan = (ticker, expiry = null) => {
+  const qs = new URLSearchParams();
+  if (expiry) qs.set('expiry', expiry);
+  return request(
+    `/api/options-chain/${encodeURIComponent(ticker)}/friday-scan${qs.toString() ? `?${qs}` : ''}`,
   );
 };
 

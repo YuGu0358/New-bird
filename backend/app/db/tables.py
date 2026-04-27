@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from sqlalchemy import Boolean, DateTime, Float, Integer, String, Text
+from sqlalchemy import Boolean, DateTime, Float, Integer, JSON, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.engine import Base
@@ -289,6 +289,27 @@ class UserStrategy(Base):
         nullable=False,
         default=lambda: datetime.now(timezone.utc),
     )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+    )
+
+
+class MacroThresholdOverride(Base):
+    """Per-indicator threshold customization.
+
+    Stored as JSON to mirror the same shape as the seed `default_thresholds`
+    so the threshold engine can read either source identically. Sparse —
+    only indicators the user has actually overridden have a row.
+    """
+
+    __tablename__ = "macro_threshold_overrides"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    indicator_code: Mapped[str] = mapped_column(String(32), unique=True, index=True, nullable=False)
+    thresholds_json: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,

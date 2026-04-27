@@ -68,3 +68,43 @@ class ExpiryFocusResponse(BaseModel):
     top_call_strikes: list[ExpiryFocusStrikeRow]
     top_put_strikes: list[ExpiryFocusStrikeRow]
     generated_at: datetime
+
+
+class FridayScanWall(BaseModel):
+    strike: Optional[float] = None
+    oi: int
+    concentration_pct: Optional[float] = None
+    salience_mult: Optional[float] = None
+    pressure_pct: Optional[float] = None
+    distance_pct: Optional[float] = None
+    gex_dollar: float
+
+
+class FridayScanResponse(BaseModel):
+    ticker: str
+    spot: float
+    target_expiry: str
+    dte_calendar: int
+    has_data: bool
+    atm_iv: Optional[float] = None
+    expected_move: Optional[float] = None
+    expected_low: Optional[float] = None
+    expected_high: Optional[float] = None
+    contract_count: int
+    total_chain_oi: int
+    median_strike_oi: int
+    total_friday_gex: float
+    friday_gex_pressure_pct: Optional[float] = None
+    adv_dollar: Optional[float] = None
+    call_wall: FridayScanWall
+    put_wall: FridayScanWall
+    max_pain: Optional[float] = None
+    put_call_oi_ratio: Optional[float] = None
+    pinning_score: int
+    verdict: str  # BET | MIXED | SKIP
+    reasons: list[str]
+    suggested_short_call: Optional[float] = None
+    suggested_short_put: Optional[float] = None
+    breakeven_low: Optional[float] = None
+    breakeven_high: Optional[float] = None
+    generated_at: datetime

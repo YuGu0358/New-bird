@@ -9,6 +9,7 @@ from core.options_chain import (
     OptionContract,
     black_scholes_greeks,
     focus_expiry,
+    scan_pinning,
     summarize_chain,
 )
 
@@ -122,3 +123,75 @@ class TestExpiryFocus:
         _exp, rows = self._build()
         wrong_exp = date(2030, 1, 1)
         assert focus_expiry(ticker="TEST", spot=100.0, contracts=rows, expiry=wrong_exp) is None
+
+
+class TestFridayScan:
+    """Pinning scanner — verify the score components fire as expected."""
+
+    def _strong_setup(self) -> tuple[date, list[OptionContract]]:
+        # Spot=100, walls 95/105 (within 5% → triggers <2% only on closer side),
+        # huge OI cluster on both walls (concentration + salience high), DTE=1.
+        exp = date.today() + timedelta(days=1)
+        return exp, [
+            # Massive call wall at 105 (just above spot)
+            OptionContract(expiry=exp, strike=105, option_type="C", open_interest=50000, volume=1000, iv=0.20, delta=0.4, gamma=0.04),
+            # Filler call OI at the other strikes — keep median low so 105 is salient
+            OptionContract(expiry=exp, strike=110, option_type="C", open_interest=200, volume=10, iv=0.20, delta=0.2, gamma=0.025),
+            OptionContract(expiry=exp, strike=115, option_type="C", open_interest=200, volume=10, iv=0.20, delta=0.1, gamma=0.018),
+            # Massive put wall at 95
+            OptionContract(expiry=exp, strike=95,  option_type="P", open_interest=50000, volume=1000, iv=0.20, delta=-0.4, gamma=0.04),
+            OptionContract(expiry=exp, strike=90,  option_type="P", open_interest=200,  volume=10, iv=0.20, delta=-0.2, gamma=0.025),
+            OptionContract(expiry=exp, strike=85,  option_type="P", open_interest=200,  volume=10, iv=0.20, delta=-0.1, gamma=0.018),
+        ]
+
+    def test_strong_pinning_setup_scores_high(self) -> None:
+        exp, rows = self._strong_setup()
+        scan = scan_pinning(ticker="TEST", spot=100.0, contracts=rows, target_expiry=exp)
+        assert scan.has_data is True
+        assert scan.verdict in {"BET", "MIXED"}
+        # spot fenced + strong concentration + salience + DTE=1 should easily score ≥40
+        assert scan.pinning_score >= 40
+        # Reasons should include the geometry hit
+        assert any("fenced" in r.lower() for r in scan.reasons)
+
+    def test_no_data_returns_zero_score(self) -> None:
+        scan = scan_pinning(
+            ticker="TEST",
+            spot=100.0,
+            contracts=[],
+            target_expiry=date.today() + timedelta(days=1),
+        )
+        assert scan.has_data is False
+        assert scan.pinning_score == 0
+        assert scan.verdict == "SKIP"
+
+    def test_zero_spot_returns_zero_score(self) -> None:
+        exp, rows = self._strong_setup()
+        scan = scan_pinning(ticker="TEST", spot=0.0, contracts=rows, target_expiry=exp)
+        assert scan.has_data is False
+        assert scan.pinning_score == 0
+
+    def test_walls_picked_correctly(self) -> None:
+        exp, rows = self._strong_setup()
+        scan = scan_pinning(ticker="TEST", spot=100.0, contracts=rows, target_expiry=exp)
+        assert scan.call_wall.strike == 105
+        assert scan.put_wall.strike == 95
+        # Both walls should have non-zero concentration/salience
+        assert (scan.call_wall.concentration_pct or 0) > 0
+        assert (scan.put_wall.concentration_pct or 0) > 0
+
+    def test_adv_pressure_check_fires_when_provided(self) -> None:
+        # Asymmetric chain — heavy call side, light put side, so total GEX
+        # doesn't cancel to 0 (which would make the pressure calc moot).
+        exp = date.today() + timedelta(days=1)
+        rows = [
+            OptionContract(expiry=exp, strike=105, option_type="C", open_interest=50000, volume=1000, iv=0.20, delta=0.4, gamma=0.04),
+            OptionContract(expiry=exp, strike=95,  option_type="P", open_interest=100,   volume=10,   iv=0.20, delta=-0.4, gamma=0.04),
+        ]
+        small_adv = 1.0  # $1 ADV is impossibly small but proves the lever fires
+        scan = scan_pinning(
+            ticker="TEST", spot=100.0, contracts=rows, target_expiry=exp, adv_dollar=small_adv
+        )
+        assert scan.friday_gex_pressure_pct is not None and scan.friday_gex_pressure_pct > 10
+        # Pressure-driven reason line should be present
+        assert any("ADV" in r or "GEX" in r.upper() for r in scan.reasons)

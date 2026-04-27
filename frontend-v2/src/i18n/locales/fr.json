@@ -573,7 +573,20 @@
       "dxy_desc": "Indice large du dollar pondéré par les échanges.",
       "vix": "VIX",
       "vix_desc": "Indice de volatilité CBOE — proxy de régime de vol."
-    }
+    },
+    "editThresholds": "Modifier les seuils",
+    "customized": "PERSONNALISÉ",
+    "direction": "Direction",
+    "higherIsWorse": "Plus haut = pire",
+    "higherIsBetter": "Plus haut = mieux",
+    "informational": "Informatif seulement",
+    "okMax": "OK ≤",
+    "warnMax": "ALERTE ≤",
+    "dangerMax": "DANGER ≤",
+    "directionHintWorse": "OK si valeur ≤ ok_max, ALERTE si ≤ warn_max, DANGER si ≤ danger_max — au-delà toujours DANGER. Pour inflation, HY OAS, proba de récession, etc.",
+    "directionHintBetter": "OK si ≥ warn_max, ALERTE si ≥ ok_max, sinon DANGER. Pour spread de courbe, croissance, etc.",
+    "directionHintInfo": "Pas de niveau de signal — la carte n'affiche que la valeur. Pour les séries de liquidité / FX.",
+    "resetToDefault": "Rétablir les valeurs par défaut"
   },
   "valuation": {
     "title": "Laboratoire de valorisation",
@@ -657,6 +670,24 @@
     "strike": "Strike",
     "distance": "Distance",
     "openInterest": "OI",
-    "volume": "Volume"
+    "volume": "Volume",
+    "fridayScanTitle": "Scanner de Pinning",
+    "fridayScanSubtitle": "Score composite (0–100) — le prochain vendredi/0DTE va-t-il piner entre les murs ?",
+    "fridayScanLoading": "Calcul du score…",
+    "fridayScanEmpty": "Chaîne du vendredi indisponible",
+    "fridayScanNoData": "Aucun contrat pour cette échéance — score impossible.",
+    "pinningVerdict": "Verdict de pinning",
+    "verdict": {
+      "bet": "BET",
+      "mixed": "MIXED",
+      "skip": "SKIP"
+    },
+    "verdictHintBet": "Murs nets, IV bas marché, gamma élevé — très bon setup pour vendre de la prime qui pinne.",
+    "verdictHintMixed": "Certains signaux favorisent le pinning, d'autres non — attendre l'échéance ou choisir un trade directionnel.",
+    "verdictHintSkip": "Murs faibles ou vol trop élevée — le pinning ne tiendra probablement pas.",
+    "suggestedShortCall": "Short call suggéré",
+    "suggestedShortPut": "Short put suggéré",
+    "advDollar": "ADV ($)",
+    "scoreBreakdown": "Détail du score"
   }
 }

@@ -11,6 +11,7 @@ from fastapi import APIRouter, HTTPException
 from app.dependencies import service_error
 from app.models.options_chain import (
     ExpiryFocusResponse,
+    FridayScanResponse,
     GexSummaryResponse,
 )
 from app.services import options_chain_service
@@ -38,6 +39,33 @@ async def refresh_chain_gex(ticker: str, max_expiries: int = 6) -> GexSummaryRes
     except Exception as exc:
         raise service_error(exc) from exc
     return GexSummaryResponse(**payload)
+
+
+@router.get("/{ticker}/friday-scan", response_model=FridayScanResponse)
+async def get_friday_scan(
+    ticker: str,
+    expiry: str | None = None,
+    max_expiries: int = 6,
+) -> FridayScanResponse:
+    """Pinning-probability score for the next Friday (or specified expiry).
+
+    `expiry` is optional — when omitted we pick the next Friday found in the
+    chain (or the next available expiry within 7 days).
+    """
+    try:
+        payload = await options_chain_service.get_friday_scan(
+            ticker, expiry, max_expiries=max(1, min(max_expiries, 12))
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise service_error(exc) from exc
+    if payload is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No chain data available for {ticker.upper()}",
+        )
+    return FridayScanResponse(**payload)
 
 
 @router.get("/{ticker}/expiry/{expiry}", response_model=ExpiryFocusResponse)

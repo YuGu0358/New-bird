@@ -11,7 +11,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { RefreshCw, TrendingUp, Target, X as XIcon } from 'lucide-react';
+import { RefreshCw, TrendingUp, Target, X as XIcon, Crosshair } from 'lucide-react';
 import {
   Bar,
   BarChart,
@@ -23,7 +23,12 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import { getOptionsChainGex, refreshOptionsChainGex, getExpiryFocus } from '../lib/api.js';
+import {
+  getOptionsChainGex,
+  refreshOptionsChainGex,
+  getExpiryFocus,
+  getFridayScan,
+} from '../lib/api.js';
 import {
   PageHeader,
   SectionHeader,
@@ -57,6 +62,12 @@ export default function OptionsChainPage() {
     queryKey: ['expiry-focus', ticker, selectedExpiry],
     queryFn: () => getExpiryFocus(ticker, selectedExpiry),
     enabled: !!ticker && !!selectedExpiry,
+    retry: false,
+  });
+  const fridayQ = useQuery({
+    queryKey: ['friday-scan', ticker],
+    queryFn: () => getFridayScan(ticker),
+    enabled: !!ticker,
     retry: false,
   });
 
@@ -133,6 +144,30 @@ export default function OptionsChainPage() {
               <Stat label={t('options.callGex')} value={fmtCompact(d.call_gex_total)} tone="bull" />
               <Stat label={t('options.putGex')} value={fmtCompact(d.put_gex_total)} tone="bear" />
             </div>
+          </div>
+
+          {/* Friday OPEX pinning scanner */}
+          <div className="card">
+            <SectionHeader
+              title={t('options.fridayScanTitle')}
+              subtitle={t('options.fridayScanSubtitle')}
+              meta={
+                fridayQ.data?.target_expiry && (
+                  <span className="font-mono text-[10px] tracking-[0.15em] text-text-muted uppercase">
+                    {fridayQ.data.target_expiry} · DTE {fridayQ.data.dte_calendar}
+                  </span>
+                )
+              }
+            />
+            {fridayQ.isLoading ? (
+              <LoadingState rows={3} label={t('options.fridayScanLoading')} />
+            ) : fridayQ.isError ? (
+              <ErrorState error={fridayQ.error} />
+            ) : !fridayQ.data ? (
+              <EmptyState title={t('options.fridayScanEmpty')} />
+            ) : (
+              <FridayScanCard scan={fridayQ.data} t={t} />
+            )}
           </div>
 
           {/* GEX-by-strike chart */}
@@ -393,4 +428,96 @@ function fmtCompact(n) {
   if (abs >= 1e6) return (n / 1e6).toFixed(2) + 'M';
   if (abs >= 1e3) return (n / 1e3).toFixed(1) + 'K';
   return Math.round(n).toString();
+}
+
+/* ---------------------------------------------------------- Friday-scan card */
+
+function FridayScanCard({ scan, t }) {
+  if (!scan.has_data) {
+    return (
+      <div className="text-caption text-text-muted">
+        {t('options.fridayScanNoData')}
+      </div>
+    );
+  }
+  const verdict = scan.verdict;  // BET | MIXED | SKIP
+  const verdictColor =
+    verdict === 'BET' ? 'text-bull' :
+    verdict === 'SKIP' ? 'text-bear' :
+    'text-warn';
+  const verdictBg =
+    verdict === 'BET' ? 'border-bull bg-bull/5' :
+    verdict === 'SKIP' ? 'border-bear bg-bear/5' :
+    'border-warn bg-warn/5';
+  const verdictLabel = t(`options.verdict.${verdict.toLowerCase()}`);
+
+  return (
+    <div className="space-y-5">
+      {/* Headline verdict */}
+      <div className={classNames('border p-4 flex items-center gap-4', verdictBg)}>
+        <Crosshair size={28} className={verdictColor} />
+        <div className="flex-1">
+          <div className="font-mono text-[10px] text-text-muted tracking-[0.2em] uppercase mb-1">
+            {t('options.pinningVerdict')}
+          </div>
+          <div className="flex items-baseline gap-3">
+            <span className={classNames('font-display text-[28px] font-light tabular leading-none', verdictColor)}>
+              {verdictLabel}
+            </span>
+            <span className="font-mono text-[16px] text-text-secondary tabular">
+              · {scan.pinning_score}/100
+            </span>
+          </div>
+          <div className="text-caption text-text-secondary mt-1.5">
+            {verdict === 'BET' && t('options.verdictHintBet')}
+            {verdict === 'MIXED' && t('options.verdictHintMixed')}
+            {verdict === 'SKIP' && t('options.verdictHintSkip')}
+          </div>
+        </div>
+      </div>
+
+      {/* Suggested ranges */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-px bg-border-subtle">
+        <FocusStat
+          label={t('options.suggestedShortPut')}
+          value={scan.suggested_short_put != null ? fmtUsd(scan.suggested_short_put) : '—'}
+          tone="bull"
+        />
+        <FocusStat
+          label={t('options.suggestedShortCall')}
+          value={scan.suggested_short_call != null ? fmtUsd(scan.suggested_short_call) : '—'}
+          tone="bear"
+        />
+        <FocusStat
+          label={t('options.expectedRange')}
+          value={
+            scan.expected_low != null && scan.expected_high != null
+              ? `${fmtUsd(scan.expected_low)} → ${fmtUsd(scan.expected_high)}`
+              : '—'
+          }
+        />
+        <FocusStat
+          label={t('options.advDollar')}
+          value={scan.adv_dollar != null ? `$${fmtCompact(scan.adv_dollar)}` : '—'}
+        />
+      </div>
+
+      {/* Reasons list */}
+      <div>
+        <div className="font-mono text-[11px] text-text-muted tracking-[0.15em] uppercase mb-2">
+          {t('options.scoreBreakdown')}
+        </div>
+        <ul className="space-y-1.5">
+          {(scan.reasons || []).map((reason, i) => (
+            <li
+              key={i}
+              className="text-body-sm text-text-secondary border-l-2 border-cyan/40 pl-3 py-0.5"
+            >
+              {reason}
+            </li>
+          ))}
+        </ul>
+      </div>
+    </div>
+  );
 }

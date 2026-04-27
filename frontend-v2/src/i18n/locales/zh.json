@@ -573,7 +573,20 @@
       "dxy_desc": "广义贸易加权美元指数.",
       "vix": "VIX",
       "vix_desc": "CBOE 波动率指数 — 波动率体制代理."
-    }
+    },
+    "editThresholds": "编辑阈值",
+    "customized": "自定义",
+    "direction": "方向",
+    "higherIsWorse": "越高越差",
+    "higherIsBetter": "越高越好",
+    "informational": "仅供参考",
+    "okMax": "OK ≤",
+    "warnMax": "警告 ≤",
+    "dangerMax": "危险 ≤",
+    "directionHintWorse": "值 ≤ ok_max 为 OK,≤ warn_max 为 WARN,≤ danger_max 为 DANGER — 超过 danger_max 仍是 DANGER. 用于通胀、HY OAS、衰退概率等.",
+    "directionHintBetter": "值 ≥ warn_max 为 OK,≥ ok_max 为 WARN,低于则 DANGER. 用于收益率曲线利差、增长等.",
+    "directionHintInfo": "无信号等级 — 卡片只显示数值. 用于流动性、外汇等原始数据.",
+    "resetToDefault": "恢复默认"
   },
   "valuation": {
     "title": "估值实验室",
@@ -657,6 +670,24 @@
     "strike": "执行价",
     "distance": "距离",
     "openInterest": "持仓量",
-    "volume": "成交量"
+    "volume": "成交量",
+    "fridayScanTitle": "Pinning 扫描器",
+    "fridayScanSubtitle": "0–100 综合评分: 下个周五/0DTE 是否会被夹在两堵墙之间",
+    "fridayScanLoading": "正在评分…",
+    "fridayScanEmpty": "该到期日数据暂不可用",
+    "fridayScanNoData": "所选到期日无合约,无法评分.",
+    "pinningVerdict": "Pinning 判定",
+    "verdict": {
+      "bet": "BET 押注",
+      "mixed": "MIXED 中性",
+      "skip": "SKIP 跳过"
+    },
+    "verdictHintBet": "墙体清晰、IV 偏低、Gamma 高 — 卖方收 Pinning 权利金的好机会.",
+    "verdictHintMixed": "部分信号支持 pinning,部分不支持 — 等更接近到期再判断,或直接选方向.",
+    "verdictHintSkip": "墙体单薄或波动率过高 — 难以维持 pinning.",
+    "suggestedShortCall": "建议 Short Call",
+    "suggestedShortPut": "建议 Short Put",
+    "advDollar": "日均 $ 成交额",
+    "scoreBreakdown": "评分明细"
   }
 }

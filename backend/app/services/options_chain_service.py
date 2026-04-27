@@ -26,6 +26,7 @@ from core.options_chain import (
     OptionContract,
     black_scholes_greeks,
     focus_expiry,
+    scan_pinning,
     summarize_chain,
 )
 
@@ -57,6 +58,20 @@ def _build_contracts_blocking(ticker: str, max_expiries: int, r: float) -> dict[
                 spot = float(hist["Close"].iloc[-1])
         except Exception:  # noqa: BLE001
             spot = 0.0
+
+    # Average daily $-volume over the last ~21 trading days. Used by
+    # scan_pinning() to compute the GEX/ADV pressure component. Optional:
+    # if the history call fails the friday-scan just skips that one
+    # +10-point lever in the pinning score.
+    adv_dollar: float | None = None
+    try:
+        hist_1mo = t.history(period="1mo", auto_adjust=False)
+        if not hist_1mo.empty and "Volume" in hist_1mo.columns:
+            avg_vol = float(hist_1mo["Volume"].dropna().mean() or 0)
+            if avg_vol > 0 and spot > 0:
+                adv_dollar = avg_vol * spot
+    except Exception:  # noqa: BLE001
+        adv_dollar = None
 
     expiry_strings = list(t.options or [])[:max_expiries]
     contracts: list[OptionContract] = []
@@ -123,7 +138,12 @@ def _build_contracts_blocking(ticker: str, max_expiries: int, r: float) -> dict[
                     logger.debug("option row parse failed for %s %s: %s", ticker, exp_iso, exc)
                     continue
 
-    return {"spot": spot, "contracts": contracts, "expiries": expiry_strings}
+    return {
+        "spot": spot,
+        "contracts": contracts,
+        "expiries": expiry_strings,
+        "adv_dollar": adv_dollar,
+    }
 
 
 async def _get_chain(
@@ -193,6 +213,105 @@ async def get_gex_summary(
     }
     _summary_cache[cache_key] = (now, payload)
     return payload
+
+
+async def get_friday_scan(
+    ticker: str,
+    expiry_iso: str | None = None,
+    *,
+    max_expiries: int = DEFAULT_MAX_EXPIRIES,
+    risk_free: float = DEFAULT_RISK_FREE,
+) -> dict[str, Any] | None:
+    """Pinning-probability scan for one expiry.
+
+    If `expiry_iso` is None we pick the next Friday found in the chain (or
+    the next expiry within 7 days, whichever comes first). Returns the
+    score 0..100 + verdict + human-readable reasons.
+    """
+    normalized = ticker.upper()
+    raw = await _get_chain(
+        normalized, max_expiries=max_expiries, risk_free=risk_free, force=False
+    )
+    spot = float(raw.get("spot") or 0)
+    contracts = raw.get("contracts") or []
+    adv_dollar = raw.get("adv_dollar")
+    expiry_strings = raw.get("expiries") or []
+    if not contracts or spot <= 0:
+        return None
+
+    today = date.today()
+    target: date | None = None
+    if expiry_iso:
+        try:
+            target = date.fromisoformat(expiry_iso)
+        except ValueError as exc:
+            raise ValueError(f"Invalid expiry date: {expiry_iso}") from exc
+    else:
+        # Auto-pick: next Friday in the chain, else the nearest expiry.
+        candidates: list[date] = []
+        for s in expiry_strings:
+            try:
+                candidates.append(date.fromisoformat(s))
+            except ValueError:
+                continue
+        candidates.sort()
+        fridays = [d for d in candidates if d.weekday() == 4 and d >= today]
+        if fridays:
+            target = fridays[0]
+        elif candidates:
+            target = candidates[0]
+    if target is None:
+        return None
+
+    scan = scan_pinning(
+        ticker=normalized,
+        spot=spot,
+        contracts=contracts,
+        target_expiry=target,
+        today=today,
+        adv_dollar=adv_dollar,
+    )
+    return {
+        "ticker": scan.ticker,
+        "spot": scan.spot,
+        "target_expiry": scan.target_expiry,
+        "dte_calendar": scan.dte_calendar,
+        "has_data": scan.has_data,
+        "atm_iv": scan.atm_iv,
+        "expected_move": scan.expected_move,
+        "expected_low": scan.expected_low,
+        "expected_high": scan.expected_high,
+        "contract_count": scan.contract_count,
+        "total_chain_oi": scan.total_chain_oi,
+        "median_strike_oi": scan.median_strike_oi,
+        "total_friday_gex": scan.total_friday_gex,
+        "friday_gex_pressure_pct": scan.friday_gex_pressure_pct,
+        "adv_dollar": scan.adv_dollar,
+        "call_wall": _wall_dict(scan.call_wall),
+        "put_wall": _wall_dict(scan.put_wall),
+        "max_pain": scan.max_pain,
+        "put_call_oi_ratio": scan.put_call_oi_ratio,
+        "pinning_score": scan.pinning_score,
+        "verdict": scan.verdict,
+        "reasons": list(scan.reasons),
+        "suggested_short_call": scan.suggested_short_call,
+        "suggested_short_put": scan.suggested_short_put,
+        "breakeven_low": scan.breakeven_low,
+        "breakeven_high": scan.breakeven_high,
+        "generated_at": datetime.now(timezone.utc),
+    }
+
+
+def _wall_dict(w: Any) -> dict[str, Any]:
+    return {
+        "strike": w.strike,
+        "oi": w.oi,
+        "concentration_pct": w.concentration_pct,
+        "salience_mult": w.salience_mult,
+        "pressure_pct": w.pressure_pct,
+        "distance_pct": w.distance_pct,
+        "gex_dollar": w.gex_dollar,
+    }
 
 
 async def get_expiry_focus(
