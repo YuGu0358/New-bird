@@ -2,22 +2,25 @@ import { NavLink } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { classNames } from '../lib/format.js';
 
+// `key` is reserved by React (used for list reconciliation and never
+// passed through as a prop), so we use `slug` instead for the i18n
+// translation key. This was the root cause of the "nav.undefined" bug.
 const NAV_ITEMS = [
-  { to: '/',             key: 'dashboard',    end: true },
-  { to: '/markets',      key: 'markets' },
-  { to: '/portfolio',    key: 'portfolio' },
-  { to: '/news',         key: 'news' },
-  { to: '/intelligence', key: 'intelligence' },
-  { to: '/backtest',     key: 'backtest' },
-  { to: '/algo',         key: 'algorithms' },
-  { to: '/quantlib',     key: 'quantlab' },
-  { to: '/risk',         key: 'risk' },
-  { to: '/social',       key: 'social' },
-  { to: '/code',         key: 'code' },
+  { to: '/',             slug: 'dashboard',    end: true },
+  { to: '/markets',      slug: 'markets' },
+  { to: '/portfolio',    slug: 'portfolio' },
+  { to: '/news',         slug: 'news' },
+  { to: '/intelligence', slug: 'intelligence' },
+  { to: '/backtest',     slug: 'backtest' },
+  { to: '/algo',         slug: 'algorithms' },
+  { to: '/quantlib',     slug: 'quantlab' },
+  { to: '/risk',         slug: 'risk' },
+  { to: '/social',       slug: 'social' },
+  { to: '/code',         slug: 'code' },
 ];
 
 const SYS_ITEMS = [
-  { to: '/settings',     key: 'settings', glyph: '⚙' },
+  { to: '/settings',     slug: 'settings', tag: 'SY' },
 ];
 
 export default function Sidebar() {
@@ -38,12 +41,25 @@ export default function Sidebar() {
 
       <SectionLabel>Navigation</SectionLabel>
       {NAV_ITEMS.map((item, i) => (
-        <NavItem key={item.to} {...item} num={String(i + 1).padStart(2, '0')} t={t} />
+        <NavItem
+          key={item.to}
+          to={item.to}
+          slug={item.slug}
+          end={item.end}
+          num={String(i + 1).padStart(2, '0')}
+          t={t}
+        />
       ))}
 
       <SectionLabel className="mt-4">System</SectionLabel>
       {SYS_ITEMS.map((item) => (
-        <NavItem key={item.to} {...item} num={item.glyph} t={t} />
+        <NavItem
+          key={item.to}
+          to={item.to}
+          slug={item.slug}
+          num={item.tag}
+          t={t}
+        />
       ))}
 
       <div className="mt-auto pt-6 px-3">
@@ -70,7 +86,7 @@ function SectionLabel({ children, className = '' }) {
   );
 }
 
-function NavItem({ to, key, num, end, t }) {
+function NavItem({ to, slug, num, end, t }) {
   return (
     <NavLink
       to={to}
@@ -100,7 +116,7 @@ function NavItem({ to, key, num, end, t }) {
           >
             {num}
           </span>
-          <span className="flex-1">{t(`nav.${key}`)}</span>
+          <span className="flex-1">{t(`nav.${slug}`)}</span>
         </>
       )}
     </NavLink>
