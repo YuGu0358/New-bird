@@ -20,6 +20,7 @@ from core.backtest import (
     load_daily_bars,
 )
 from core.broker.base import Broker
+from core.risk import RiskGuard
 from core.strategy.registry import default_registry
 
 
@@ -42,6 +43,7 @@ async def run_backtest(
     start_date: DateType,
     end_date: DateType,
     initial_cash: float,
+    enable_risk_guard: bool = False,
 ) -> BacktestRun:
     await init_database()
 
@@ -68,7 +70,23 @@ async def run_backtest(
         except TypeError:
             return strategy_cls(parsed_params)
 
-    engine = BacktestEngine(config=config, strategy_factory=_factory)
+    risk_guard_factory = None
+    if enable_risk_guard:
+        from app.services import risk_service
+
+        view = await risk_service.get_config_view(session)
+        policies = risk_service.build_policies_from_config(view)
+
+        def _risk_guard_factory(broker: Broker, snapshot_provider):
+            return RiskGuard(broker, policies=policies, snapshot_provider=snapshot_provider)
+
+        risk_guard_factory = _risk_guard_factory
+
+    engine = BacktestEngine(
+        config=config,
+        strategy_factory=_factory,
+        risk_guard_factory=risk_guard_factory,
+    )
 
     started_at = datetime.now(timezone.utc)
     try:

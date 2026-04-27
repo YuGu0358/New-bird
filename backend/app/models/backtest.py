@@ -14,6 +14,7 @@ class BacktestRunRequest(BaseModel):
     start_date: date
     end_date: date
     initial_cash: float = 100_000.0
+    enable_risk_guard: bool = False
 
 
 class BacktestSummaryView(BaseModel):

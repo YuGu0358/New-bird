@@ -110,3 +110,53 @@ async def test_engine_runs_toy_strategy_to_completion() -> None:
     assert round(result.final_cash, 2) <= 9_000.0
     assert len(result.equity_curve) == len(bars_aapl)
     assert result.metrics["total_return"] != 0.0 or result.metrics["max_drawdown"] != 0.0
+
+
+@pytest.mark.asyncio
+async def test_engine_with_risk_guard_blocks_buy() -> None:
+    """Verifies the engine wires a RiskGuard around the broker."""
+    from core.broker.base import Broker
+    from core.risk import RiskGuard, SymbolBlocklistPolicy
+    from app.models import StrategyExecutionParameters
+
+    bars_aapl = _make_bars("AAPL", [100.0, 100.0, 95.0, 96.0])
+    config = BacktestConfig(
+        strategy_name="toy_dip_v1",
+        parameters={"universe_symbols": ["AAPL"]},
+        universe=["AAPL"],
+        start_date=date(2025, 1, 1),
+        end_date=date(2025, 1, 5),
+        initial_cash=10_000.0,
+    )
+    parameters = StrategyExecutionParameters(
+        universe_symbols=["AAPL"],
+        entry_drop_percent=2.0,
+        add_on_drop_percent=2.0,
+        initial_buy_notional=1000.0,
+        add_on_buy_notional=100.0,
+        max_daily_entries=1,
+        max_add_ons=0,
+        take_profit_target=80.0,
+        stop_loss_percent=12.0,
+        max_hold_days=30,
+    )
+
+    def _strategy_factory(broker: Broker) -> Strategy:
+        return _ToyDipStrategy(parameters, broker=broker)
+
+    def _risk_factory(broker: Broker, snapshot_provider) -> Broker:
+        return RiskGuard(
+            broker,
+            policies=[SymbolBlocklistPolicy(symbols=["AAPL"])],
+            snapshot_provider=snapshot_provider,
+        )
+
+    engine = BacktestEngine(
+        config=config,
+        strategy_factory=_strategy_factory,
+        risk_guard_factory=_risk_factory,
+    )
+    result = await engine.run({"AAPL": bars_aapl})
+    # Strategy tries to buy AAPL on the dip, but RiskGuard blocks every buy.
+    assert all(t.symbol != "AAPL" or t.side != "buy" for t in result.trades)
+    assert result.final_cash == pytest.approx(10_000.0, abs=1e-6)

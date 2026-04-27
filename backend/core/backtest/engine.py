@@ -11,10 +11,12 @@ from core.backtest.metrics import compute_metrics
 from core.backtest.portfolio import BacktestPortfolio
 from core.backtest.types import Bar, BacktestConfig, BacktestResult
 from core.broker.base import Broker
+from core.risk.portfolio_snapshot import PortfolioPositionView, PortfolioSnapshot
 from core.strategy.base import Strategy
 from core.strategy.context import StrategyContext
 
 StrategyFactory = Callable[[Broker], Strategy]
+RiskGuardFactory = Callable[[Broker, Callable[[], PortfolioSnapshot]], Broker]
 
 
 class BacktestEngine:
@@ -25,10 +27,12 @@ class BacktestEngine:
         *,
         config: BacktestConfig,
         strategy_factory: StrategyFactory,
+        risk_guard_factory: RiskGuardFactory | None = None,
         logger: logging.Logger | None = None,
     ) -> None:
         self.config = config
         self._strategy_factory = strategy_factory
+        self._risk_guard_factory = risk_guard_factory
         self._logger = logger or logging.getLogger("backtest")
 
     async def run(self, bars_by_symbol: dict[str, list[Bar]]) -> BacktestResult:
@@ -50,6 +54,8 @@ class BacktestEngine:
             current_price_provider=lambda s: current_prices.get(s, 0.0),
             current_time_provider=lambda: sim_now["value"],
         )
+        if self._risk_guard_factory is not None:
+            broker = self._risk_guard_factory(broker, _build_snapshot_provider(portfolio, current_prices))
         strategy = self._strategy_factory(broker)
         ctx = StrategyContext(parameters=strategy.parameters, logger=self._logger)
 
@@ -131,3 +137,25 @@ class BacktestEngine:
                 pnls.append(trade.notional - cost)
                 lots.clear()
         return pnls
+
+
+def _build_snapshot_provider(portfolio, current_prices):
+    def _snapshot() -> PortfolioSnapshot:
+        positions: dict[str, PortfolioPositionView] = {}
+        for symbol, pos in portfolio.positions.items():
+            price = current_prices.get(symbol, pos.average_entry_price)
+            positions[symbol] = PortfolioPositionView(
+                symbol=symbol,
+                qty=pos.qty,
+                average_entry_price=pos.average_entry_price,
+                current_price=price,
+                market_value=pos.qty * price,
+                unrealized_pl=(price - pos.average_entry_price) * pos.qty,
+            )
+        return PortfolioSnapshot(
+            cash=portfolio.cash,
+            equity=portfolio.equity(prices=current_prices),
+            positions=positions,
+            realized_pnl_today=0.0,  # backtest is single-day-agnostic; refine later
+        )
+    return _snapshot

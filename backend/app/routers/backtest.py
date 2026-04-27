@@ -32,6 +32,7 @@ async def run_backtest(
             start_date=request.start_date,
             end_date=request.end_date,
             initial_cash=request.initial_cash,
+            enable_risk_guard=request.enable_risk_guard,
         )
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=f"Unknown strategy: {exc}") from exc
