@@ -21,6 +21,7 @@ from app.routers import bot as bot_router
 from app.routers import health as health_router
 from app.routers import metrics as metrics_router
 from app.routers import monitoring as monitoring_router
+from app.routers import quantlib as quantlib_router
 from app.routers import research as research_router
 from app.routers import risk as risk_router
 from app.routers import settings as settings_router
@@ -84,6 +85,7 @@ if FRONTEND_ASSETS_DIR.exists():
 app.include_router(account_router.router)
 app.include_router(agents_router.router)
 app.include_router(monitoring_router.router)
+app.include_router(quantlib_router.router)
 app.include_router(research_router.router)
 app.include_router(risk_router.router)
 app.include_router(strategies_router.router)

@@ -208,3 +208,30 @@ def test_agents_history_endpoint(client) -> None:
     assert response.status_code == 200
     body = response.json()
     assert "items" in body
+
+
+def test_quantlib_option_price_endpoint(client) -> None:
+    response = client.post("/api/quantlib/option/price", json={
+        "spot": 100, "strike": 100, "rate": 0.05, "volatility": 0.20,
+        "valuation": "2025-01-01", "expiry": "2026-01-01",
+        "right": "call", "style": "european",
+    })
+    assert response.status_code == 200
+    body = response.json()
+    assert body["price"] > 0
+    assert body["right"] == "call"
+
+
+def test_quantlib_var_endpoint(client) -> None:
+    response = client.post("/api/quantlib/var", json={
+        "method": "parametric",
+        "notional": 1_000_000,
+        "mean_return": 0,
+        "std_return": 0.01,
+        "confidence": 0.95,
+        "horizon_days": 1,
+    })
+    assert response.status_code == 200
+    body = response.json()
+    assert body["var"] > 0
+    assert body["cvar"] >= body["var"]

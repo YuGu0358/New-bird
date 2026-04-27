@@ -55,6 +55,17 @@ from app.models.observability import (
     ReadinessResponse,
     StrategyHealthResponse,
 )
+from app.models.quantlib import (
+    BondAnalyticsRequest,
+    BondRiskResponse,
+    BondYieldResponse,
+    OptionGreeksRequest,
+    OptionGreeksResponse,
+    OptionPriceRequest,
+    OptionPriceResponse,
+    VaRRequest,
+    VaRResponse,
+)
 from app.models.research import (
     ChartPoint,
     CompanyProfileResponse,
@@ -118,6 +129,9 @@ __all__ = [
     "BacktestRunsListResponse",
     "BacktestSummaryView",
     "BacktestTradeView",
+    "BondAnalyticsRequest",
+    "BondRiskResponse",
+    "BondYieldResponse",
     "BotStatus",
     "CandidatePoolEntry",
     "ChartPoint",
@@ -129,6 +143,10 @@ __all__ = [
     "HealthResponse",
     "MonitoringOverview",
     "NewsArticle",
+    "OptionGreeksRequest",
+    "OptionGreeksResponse",
+    "OptionPriceRequest",
+    "OptionPriceResponse",
     "OrderRecord",
     "PersonaView",
     "PersonaWeightsView",
@@ -179,5 +197,7 @@ __all__ = [
     "TradeRecord",
     "TrackedSymbolView",
     "TrendSnapshot",
+    "VaRRequest",
+    "VaRResponse",
     "WatchlistUpdateRequest",
 ]
