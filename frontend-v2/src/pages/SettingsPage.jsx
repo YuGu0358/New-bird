@@ -20,6 +20,7 @@ const REQUIRED_KEYS = [
 const OPTIONAL_KEYS = [
   // Optional keys — labels & hints come from i18n via translateKey/hintKey
   { key: 'OPENAI_API_KEY', labelKey: 'settings.labels.openaiApiKey', hintKey: 'settings.labels.openaiHint', required: false },
+  { key: 'FRED_API_KEY', labelKey: 'settings.labels.fredApiKey', hintKey: 'settings.labels.fredHint', required: false },
   { key: 'X_BEARER_TOKEN', labelKey: 'settings.labels.xBearerToken', hintKey: 'settings.labels.xBearerHint', required: false },
   { key: 'NOTIFICATIONS_WEBHOOK_URL', labelKey: 'settings.labels.notificationsWebhook', hintKey: 'settings.labels.notificationsHint', required: false },
   { key: 'SETTINGS_ADMIN_TOKEN', labelKey: 'settings.labels.settingsAdminToken', hintKey: 'settings.labels.settingsAdminTokenHint', required: false },

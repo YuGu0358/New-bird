@@ -412,7 +412,9 @@
       "notificationsWebhook": "Notifications Webhook URL",
       "notificationsHint": "风控事件 + 警告 POST 到此(Slack / Discord / 通用)",
       "settingsAdminToken": "Settings Admin Token",
-      "settingsAdminTokenHint": "保护本设置页(共享/公网部署用)"
+      "settingsAdminTokenHint": "保护本设置页(共享/公网部署用)",
+      "fredApiKey": "FRED API Key",
+      "fredHint": "免费申请: https://fredaccount.stlouisfed.org/apikeys — 仅在使用宏观环境看板(CPI / 收益率曲线 / HY OAS / VIX 等)时需要."
     },
     "sourceLabel": {
       "missing": "未配置",

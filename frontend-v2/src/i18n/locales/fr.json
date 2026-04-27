@@ -412,7 +412,9 @@
       "notificationsWebhook": "URL webhook notifications",
       "notificationsHint": "Les événements risque + alertes sont POST ici (Slack / Discord / générique).",
       "settingsAdminToken": "Jeton admin Paramètres",
-      "settingsAdminTokenHint": "Protège cette page Paramètres sur les déploiements publics."
+      "settingsAdminTokenHint": "Protège cette page Paramètres sur les déploiements publics.",
+      "fredApiKey": "Clé API FRED",
+      "fredHint": "Clé gratuite sur https://fredaccount.stlouisfed.org/apikeys — requise uniquement pour le tableau de bord macro (CPI / courbe des taux / HY OAS / VIX, etc.)."
     },
     "sourceLabel": {
       "missing": "Non configuré",

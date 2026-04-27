@@ -412,7 +412,9 @@
       "notificationsWebhook": "Notifications Webhook URL",
       "notificationsHint": "Risk events + alerts POST here (Slack / Discord / generic).",
       "settingsAdminToken": "Settings Admin Token",
-      "settingsAdminTokenHint": "Protect this Settings page on shared/public deployments."
+      "settingsAdminTokenHint": "Protect this Settings page on shared/public deployments.",
+      "fredApiKey": "FRED API Key",
+      "fredHint": "Free key from https://fredaccount.stlouisfed.org/apikeys — required only if you want the Macro Environment dashboard (CPI / yield curve / HY OAS / VIX / etc.)."
     },
     "sourceLabel": {
       "missing": "Not configured",

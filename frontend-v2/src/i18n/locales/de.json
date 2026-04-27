@@ -412,7 +412,9 @@
       "notificationsWebhook": "Benachrichtigungs-Webhook-URL",
       "notificationsHint": "Risikoereignisse + Warnungen werden hier gepostet (Slack / Discord / generisch).",
       "settingsAdminToken": "Einstellungs-Admin-Token",
-      "settingsAdminTokenHint": "Schützt diese Einstellungsseite auf geteilten/öffentlichen Deployments."
+      "settingsAdminTokenHint": "Schützt diese Einstellungsseite auf geteilten/öffentlichen Deployments.",
+      "fredApiKey": "FRED API Key",
+      "fredHint": "Kostenloser Key bei https://fredaccount.stlouisfed.org/apikeys — wird nur für das Makro-Umfeld-Dashboard (CPI / Zinskurve / HY OAS / VIX usw.) benötigt."
     },
     "sourceLabel": {
       "missing": "Nicht konfiguriert",
