@@ -6,7 +6,7 @@ from fastapi import APIRouter, HTTPException
 from sqlalchemy import desc, select
 
 from app.database import NewsCache
-from app.dependencies import SessionDep, service_error
+from app.dependencies import RequestLang, SessionDep, service_error
 from app.models import (
     CompanyProfileResponse,
     NewsArticle,
@@ -33,45 +33,67 @@ def _normalize_timestamp(value: datetime) -> datetime:
 
 
 @router.get("/news/{symbol}", response_model=NewsArticle)
-async def get_news(symbol: str, session: SessionDep) -> NewsArticle:
+async def get_news(symbol: str, session: SessionDep, lang: RequestLang) -> NewsArticle:
     normalized_symbol = symbol.upper()
-    result = await session.execute(
-        select(NewsCache)
-        .where(NewsCache.symbol == normalized_symbol)
-        .order_by(desc(NewsCache.timestamp), desc(NewsCache.id))
-        .limit(1)
-    )
-    cached_item = result.scalars().first()
+    # The cached row may be in a different language than the caller requested,
+    # so we tag the cache by (symbol, lang). For backward compat we keep the
+    # NewsCache table un-touched and just refetch when lang differs from "en".
+    cache_eligible = lang == "en"
+    cached_item = None
+    if cache_eligible:
+        result = await session.execute(
+            select(NewsCache)
+            .where(NewsCache.symbol == normalized_symbol)
+            .order_by(desc(NewsCache.timestamp), desc(NewsCache.id))
+            .limit(1)
+        )
+        cached_item = result.scalars().first()
 
-    if cached_item is not None:
-        cached_at = _normalize_timestamp(cached_item.timestamp)
-        if datetime.now(timezone.utc) - cached_at <= NEWS_CACHE_TTL:
-            return NewsArticle.model_validate(cached_item)
+        if cached_item is not None:
+            cached_at = _normalize_timestamp(cached_item.timestamp)
+            if datetime.now(timezone.utc) - cached_at <= NEWS_CACHE_TTL:
+                return NewsArticle.model_validate(cached_item)
 
     try:
-        payload = await tavily_service.fetch_news_summary(normalized_symbol)
+        payload = await tavily_service.fetch_news_summary(normalized_symbol, lang=lang)
     except Exception as exc:
         if cached_item is not None:
             return NewsArticle.model_validate(cached_item)
         raise service_error(exc) from exc
 
-    news_item = NewsCache(
+    if cache_eligible:
+        news_item = NewsCache(
+            symbol=payload["symbol"],
+            timestamp=datetime.now(timezone.utc),
+            summary=payload["summary"],
+            source=payload["source"],
+        )
+        session.add(news_item)
+        await session.commit()
+        await session.refresh(news_item)
+        return NewsArticle.model_validate(news_item)
+
+    # Non-English: serve directly without persisting to the (English-only)
+    # NewsCache table — the in-memory cache inside tavily_service handles
+    # repeats per (symbol, lang).
+    return NewsArticle(
         symbol=payload["symbol"],
-        timestamp=datetime.now(timezone.utc),
         summary=payload["summary"],
         source=payload["source"],
+        timestamp=datetime.now(timezone.utc),
     )
-    session.add(news_item)
-    await session.commit()
-    await session.refresh(news_item)
-
-    return NewsArticle.model_validate(news_item)
 
 
 @router.get("/research/{symbol}", response_model=StockResearchReport)
-async def get_stock_research(symbol: str, research_model: str = "mini") -> StockResearchReport:
+async def get_stock_research(
+    symbol: str,
+    lang: RequestLang,
+    research_model: str = "mini",
+) -> StockResearchReport:
     try:
-        payload = await market_research_service.fetch_stock_research(symbol, research_model)
+        payload = await market_research_service.fetch_stock_research(
+            symbol, research_model, lang=lang
+        )
     except Exception as exc:
         raise service_error(exc) from exc
     return StockResearchReport(**payload)
@@ -79,6 +101,7 @@ async def get_stock_research(symbol: str, research_model: str = "mini") -> Stock
 
 @router.get("/tavily/search", response_model=TavilySearchResponse)
 async def search_with_tavily(
+    lang: RequestLang,
     query: str,
     topic: str = "news",
     max_results: int = 6,
@@ -88,6 +111,7 @@ async def search_with_tavily(
             query=query,
             topic=topic,
             max_results=max_results,
+            lang=lang,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -111,9 +135,9 @@ async def get_symbol_chart(
 
 
 @router.get("/company/{symbol}", response_model=CompanyProfileResponse)
-async def get_company_profile(symbol: str) -> CompanyProfileResponse:
+async def get_company_profile(symbol: str, lang: RequestLang) -> CompanyProfileResponse:
     try:
-        payload = await company_profile_service.get_company_profile(symbol)
+        payload = await company_profile_service.get_company_profile(symbol, lang=lang)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:

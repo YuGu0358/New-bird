@@ -5,7 +5,7 @@ from typing import Optional
 
 from fastapi import APIRouter, HTTPException
 
-from app.dependencies import SessionDep, service_error
+from app.dependencies import RequestLang, SessionDep, service_error
 from app.models import (
     AnalysisHistoryResponse,
     AnalysisRequest,
@@ -29,7 +29,11 @@ async def list_personas() -> PersonasResponse:
 
 
 @router.post("/analyze", response_model=AnalysisView)
-async def analyze(request: AnalysisRequest, session: SessionDep) -> AnalysisView:
+async def analyze(
+    request: AnalysisRequest,
+    session: SessionDep,
+    lang: RequestLang,
+) -> AnalysisView:
     try:
         result = await agents_service.analyze(
             session,
@@ -37,6 +41,7 @@ async def analyze(request: AnalysisRequest, session: SessionDep) -> AnalysisView
             symbol=request.symbol,
             question=request.question,
             model=request.model,
+            lang=lang,
         )
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=f"Unknown persona: {exc}") from exc
@@ -48,7 +53,11 @@ async def analyze(request: AnalysisRequest, session: SessionDep) -> AnalysisView
 
 
 @router.post("/council", response_model=CouncilResponse)
-async def council(request: CouncilRequest, session: SessionDep) -> CouncilResponse:
+async def council(
+    request: CouncilRequest,
+    session: SessionDep,
+    lang: RequestLang,
+) -> CouncilResponse:
     try:
         result = await agents_service.council(
             session,
@@ -56,6 +65,7 @@ async def council(request: CouncilRequest, session: SessionDep) -> CouncilRespon
             symbol=request.symbol,
             question=request.question,
             model=request.model,
+            lang=lang,
         )
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=f"Unknown persona: {exc}") from exc

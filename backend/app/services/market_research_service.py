@@ -1,14 +1,20 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
 from app import runtime_settings
 from app.services.network_utils import run_sync_with_retries
+from core.i18n import DEFAULT_LANG, language_name, normalize_lang
+
+logger = logging.getLogger(__name__)
 
 RESEARCH_CACHE_TTL = timedelta(hours=6)
-_research_cache: Dict[Tuple[str, str], Dict[str, Any]] = {}
+# Cache key: (symbol, model, lang) — same report rendered twice in different
+# languages must not collide.
+_research_cache: Dict[Tuple[str, str, str], Dict[str, Any]] = {}
 
 RESEARCH_PROMPT = """Do a comprehensive stock analysis for {ticker} as of {date}:
 - Current stock price and recent price performance
@@ -19,7 +25,25 @@ RESEARCH_PROMPT = """Do a comprehensive stock analysis for {ticker} as of {date}
 - Key risks and opportunities
 - Investment recommendation with reasoning
 Focus on all the recent updates about the company.
+Write the entire response in {language_name}. All narrative fields (summary,
+current_performance, key_insights, recommendation, risk_assessment,
+price_outlook) must be in {language_name}. Keep tickers, numbers, and proper
+nouns unchanged.
 """
+
+_FALLBACK_REASON: Dict[str, str] = {
+    "en": "Deep research could not be completed for {symbol}. {reason}",
+    "zh": "{symbol} 深度研究暂时无法完成。原因：{reason}",
+    "de": "Deep-Research für {symbol} konnte nicht abgeschlossen werden. {reason}",
+    "fr": "L'analyse approfondie de {symbol} n'a pas pu être terminée. {reason}",
+}
+
+_UNAVAILABLE: Dict[str, str] = {
+    "en": "Unavailable",
+    "zh": "暂无数据",
+    "de": "Nicht verfügbar",
+    "fr": "Non disponible",
+}
 
 
 def _create_client():
@@ -100,17 +124,20 @@ def _normalize_source(item: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _fallback_report(symbol: str, reason: str) -> dict[str, Any]:
+def _fallback_report(symbol: str, reason: str, lang: str = DEFAULT_LANG) -> dict[str, Any]:
     now = datetime.now(timezone.utc)
+    target = normalize_lang(lang)
+    summary_template = _FALLBACK_REASON.get(target, _FALLBACK_REASON["en"])
+    unavailable = _UNAVAILABLE.get(target, _UNAVAILABLE["en"])
     return {
         "symbol": symbol,
         "company_name": symbol,
-        "summary": f"Deep research could not be completed for {symbol}. {reason}",
-        "current_performance": "Unavailable",
+        "summary": summary_template.format(symbol=symbol, reason=reason),
+        "current_performance": unavailable,
         "key_insights": [],
-        "recommendation": "Unavailable",
-        "risk_assessment": "Unavailable",
-        "price_outlook": "Unavailable",
+        "recommendation": unavailable,
+        "risk_assessment": unavailable,
+        "price_outlook": unavailable,
         "market_cap": None,
         "pe_ratio": None,
         "sources": [],
@@ -142,13 +169,20 @@ async def _poll_research(
     return response
 
 
-async def fetch_stock_research(symbol: str, research_model: str = "mini") -> dict[str, Any]:
+async def fetch_stock_research(
+    symbol: str,
+    research_model: str = "mini",
+    *,
+    lang: str = DEFAULT_LANG,
+) -> dict[str, Any]:
     normalized_symbol = symbol.upper()
     normalized_model = research_model.lower()
     if normalized_model not in {"mini", "pro"}:
         raise ValueError("research_model must be either 'mini' or 'pro'.")
+    target_lang = normalize_lang(lang)
+    unavailable = _UNAVAILABLE.get(target_lang, _UNAVAILABLE["en"])
 
-    cache_key = (normalized_symbol, normalized_model)
+    cache_key = (normalized_symbol, normalized_model, target_lang)
     cached = _research_cache.get(cache_key)
     if cached is not None:
         generated_at = cached.get("generated_at")
@@ -162,7 +196,11 @@ async def fetch_stock_research(symbol: str, research_model: str = "mini") -> dic
     try:
         response = await run_sync_with_retries(
             client.research,
-            input=RESEARCH_PROMPT.format(ticker=normalized_symbol, date=current_date),
+            input=RESEARCH_PROMPT.format(
+                ticker=normalized_symbol,
+                date=current_date,
+                language_name=language_name(target_lang),
+            ),
             output_schema=_get_stock_report_schema(),
             model=normalized_model,
         )
@@ -180,18 +218,18 @@ async def fetch_stock_research(symbol: str, research_model: str = "mini") -> dic
             "summary": str(content.get("summary", "")).strip()
             or f"Research completed for {normalized_symbol}.",
             "current_performance": str(content.get("current_performance", "")).strip()
-            or "Unavailable",
+            or unavailable,
             "key_insights": [
                 str(item).strip()
                 for item in (content.get("key_insights") or [])
                 if str(item).strip()
             ],
             "recommendation": str(content.get("recommendation", "")).strip()
-            or "Unavailable",
+            or unavailable,
             "risk_assessment": str(content.get("risk_assessment", "")).strip()
-            or "Unavailable",
+            or unavailable,
             "price_outlook": str(content.get("price_outlook", "")).strip()
-            or "Unavailable",
+            or unavailable,
             "market_cap": (
                 float(content["market_cap"])
                 if content.get("market_cap") not in (None, "")
@@ -211,7 +249,8 @@ async def fetch_stock_research(symbol: str, research_model: str = "mini") -> dic
             "research_model": normalized_model,
         }
     except Exception as exc:
-        report = _fallback_report(normalized_symbol, str(exc))
+        logger.debug("research failed for %s (%s): %s", normalized_symbol, target_lang, exc)
+        report = _fallback_report(normalized_symbol, str(exc), lang=target_lang)
 
     _research_cache[cache_key] = report
     return report

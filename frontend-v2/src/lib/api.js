@@ -1,5 +1,11 @@
 // Thin fetch wrapper. The Vite dev server proxies /api → 127.0.0.1:8000.
 // In production builds we serve from same origin, so relative URLs work too.
+//
+// We forward the i18next-selected UI language as `Accept-Language` on every
+// call so the backend can localise LLM-generated text (news summaries,
+// research reports, AI Council verdicts) into en / zh / de / fr.
+
+import i18next from '../i18n/index.js';
 
 export class ApiError extends Error {
   constructor(message, { status, detail } = {}) {
@@ -10,12 +16,20 @@ export class ApiError extends Error {
   }
 }
 
+function currentLang() {
+  // i18next.language can be e.g. "zh-CN" — backend's normalize_lang() collapses
+  // that to "zh", so we don't need to massage it here. Fall back to "en" if
+  // i18next hasn't initialised yet (test runner / SSR).
+  return (i18next && i18next.language) || 'en';
+}
+
 async function request(path, { method = 'GET', body, headers } = {}) {
   const res = await fetch(path, {
     method,
     headers: {
       'Content-Type': 'application/json',
       Accept: 'application/json',
+      'Accept-Language': currentLang(),
       ...(headers || {}),
     },
     body: body !== undefined ? JSON.stringify(body) : undefined,

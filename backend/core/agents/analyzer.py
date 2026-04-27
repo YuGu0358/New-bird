@@ -8,6 +8,7 @@ from typing import Optional
 from core.agents.base import KeyFactor, Persona, PersonaResponse
 from core.agents.context import AnalysisContext
 from core.agents.llm_router import LLMRouter
+from core.i18n import DEFAULT_LANG, language_instruction, normalize_lang
 
 
 VALID_VERDICTS = {"buy", "hold", "sell"}
@@ -29,10 +30,24 @@ class Analyzer:
         persona: Persona,
         ctx: AnalysisContext,
         model: Optional[str] = None,
+        lang: str = DEFAULT_LANG,
     ) -> PersonaResponse:
+        target_lang = normalize_lang(lang)
         user_block = self._compose_user_message(ctx)
+        # Persona system prompts are written in English. We append a one-line
+        # language directive so the JSON keys (verdict / confidence / ...)
+        # stay machine-readable while reasoning_summary, key_factors[].interpretation
+        # and follow_up_questions render in the user's UI language.
+        system_prompt = persona.system_prompt
+        instruction = language_instruction(target_lang)
+        if instruction:
+            system_prompt = (
+                f"{system_prompt}\n\nLanguage policy: {instruction} "
+                "Keep JSON keys and the verdict value (buy/hold/sell) in English; "
+                "only the natural-language fields should be in the target language."
+            )
         llm_response = await self._router.generate(
-            system=persona.system_prompt,
+            system=system_prompt,
             user=user_block,
             model=model,
         )

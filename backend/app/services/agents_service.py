@@ -41,6 +41,7 @@ from core.agents import (
     get_persona,
     list_personas,
 )
+from core.i18n import DEFAULT_LANG, normalize_lang
 
 logger = logging.getLogger(__name__)
 
@@ -251,14 +252,16 @@ async def analyze(
     model: Optional[str] = None,
     builder: Optional[ContextBuilder] = None,
     router: Optional[Any] = None,
+    lang: str = DEFAULT_LANG,
 ) -> dict[str, Any]:
     persona = get_persona(persona_id)
     builder = builder or LiveContextBuilder()
     router = router or OpenAILLMRouter()
     analyzer = Analyzer(router=router)
+    target_lang = normalize_lang(lang)
 
     ctx = await builder.build(symbol, question=question)
-    response = await analyzer.run(persona=persona, ctx=ctx, model=model)
+    response = await analyzer.run(persona=persona, ctx=ctx, model=model, lang=target_lang)
 
     row = AgentAnalysis(
         persona_id=response.persona_id,
@@ -285,6 +288,7 @@ async def council(
     symbol: str,
     question: Optional[str] = None,
     model: Optional[str] = None,
+    lang: str = DEFAULT_LANG,
 ) -> dict[str, Any]:
     """Run multiple personas against the same symbol.
 
@@ -299,11 +303,12 @@ async def council(
     ctx = await builder.build(symbol, question=question)
     router = OpenAILLMRouter()
     analyzer = Analyzer(router=router)
+    target_lang = normalize_lang(lang)
 
     analyses: list[dict[str, Any]] = []
     for pid in persona_ids:
         persona = get_persona(pid)
-        response = await analyzer.run(persona=persona, ctx=ctx, model=model)
+        response = await analyzer.run(persona=persona, ctx=ctx, model=model, lang=target_lang)
         row = AgentAnalysis(
             persona_id=response.persona_id,
             symbol=response.symbol,
