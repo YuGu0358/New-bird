@@ -17,6 +17,7 @@ from app.db.engine import (
     init_database,
 )
 from app.db.tables import (
+    AgentAnalysis,
     BacktestRun,
     BacktestTrade,
     CandidatePoolItem,
@@ -32,6 +33,7 @@ from app.db.tables import (
 )
 
 __all__ = [
+    "AgentAnalysis",
     "AsyncSessionLocal",
     "BacktestRun",
     "BacktestTrade",

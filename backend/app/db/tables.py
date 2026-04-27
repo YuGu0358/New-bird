@@ -246,3 +246,27 @@ class RiskEvent(Base):
     side: Mapped[str] = mapped_column(String(8), nullable=False)
     notional: Mapped[float | None] = mapped_column(Float, nullable=True)
     qty: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+
+class AgentAnalysis(Base):
+    """One persisted analysis per (persona, symbol, timestamp)."""
+
+    __tablename__ = "agent_analyses"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    persona_id: Mapped[str] = mapped_column(String(32), index=True, nullable=False)
+    symbol: Mapped[str] = mapped_column(String(16), index=True, nullable=False)
+    question: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    verdict: Mapped[str] = mapped_column(String(8), nullable=False)
+    confidence: Mapped[float] = mapped_column(Float, nullable=False, default=0.5)
+    reasoning_summary: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    key_factors_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
+    follow_up_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
+    context_json: Mapped[str] = mapped_column(Text, nullable=False, default="{}")
+    model: Mapped[str] = mapped_column(String(64), nullable=False, default="")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+        index=True,
+    )
