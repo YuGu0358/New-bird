@@ -4,6 +4,10 @@ from __future__ import annotations
 
 EXPECTED_ROUTES: set[tuple[str, str]] = {
     ("GET",    "/api/account"),
+    ("GET",    "/api/agents/history"),
+    ("GET",    "/api/agents/personas"),
+    ("POST",   "/api/agents/analyze"),
+    ("POST",   "/api/agents/council"),
     ("GET",    "/api/positions"),
     ("GET",    "/api/trades"),
     ("GET",    "/api/orders"),

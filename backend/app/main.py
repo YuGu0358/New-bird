@@ -14,6 +14,7 @@ from app.database import init_database
 from app.middleware.correlation import CorrelationIdMiddleware
 from app.middleware.metrics import HttpMetricsMiddleware
 from app.routers import account as account_router
+from app.routers import agents as agents_router
 from app.routers import alerts as alerts_router
 from app.routers import backtest as backtest_router
 from app.routers import bot as bot_router
@@ -81,6 +82,7 @@ if FRONTEND_ASSETS_DIR.exists():
 
 
 app.include_router(account_router.router)
+app.include_router(agents_router.router)
 app.include_router(monitoring_router.router)
 app.include_router(research_router.router)
 app.include_router(risk_router.router)

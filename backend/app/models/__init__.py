@@ -16,6 +16,17 @@ from app.models.account import (
     Position,
     TradeRecord,
 )
+from app.models.agents import (
+    AnalysisHistoryResponse,
+    AnalysisRequest,
+    AnalysisView,
+    CouncilRequest,
+    CouncilResponse,
+    KeyFactorView,
+    PersonaView,
+    PersonaWeightsView,
+    PersonasResponse,
+)
 from app.models.alerts import (
     PriceAlertRuleCreateRequest,
     PriceAlertRuleUpdateRequest,
@@ -96,6 +107,9 @@ from app.models.strategies import (
 
 __all__ = [
     "Account",
+    "AnalysisHistoryResponse",
+    "AnalysisRequest",
+    "AnalysisView",
     "AssetUniverseItem",
     "BacktestEquityCurveResponse",
     "BacktestEquityPoint",
@@ -109,10 +123,16 @@ __all__ = [
     "ChartPoint",
     "CompanyProfileResponse",
     "ControlResponse",
+    "CouncilRequest",
+    "CouncilResponse",
+    "KeyFactorView",
     "HealthResponse",
     "MonitoringOverview",
     "NewsArticle",
     "OrderRecord",
+    "PersonaView",
+    "PersonaWeightsView",
+    "PersonasResponse",
     "Position",
     "PriceAlertRuleCreateRequest",
     "PriceAlertRuleUpdateRequest",

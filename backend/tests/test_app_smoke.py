@@ -192,3 +192,19 @@ def test_strategy_health_endpoint(client) -> None:
         "streak_kind", "streak_length", "open_position_count",
     ):
         assert field in body
+
+
+def test_agents_personas_endpoint(client) -> None:
+    response = client.get("/api/agents/personas")
+    assert response.status_code == 200
+    body = response.json()
+    assert "items" in body
+    ids = [p["id"] for p in body["items"]]
+    assert {"buffett", "graham", "lynch", "soros", "burry", "sentinel"} <= set(ids)
+
+
+def test_agents_history_endpoint(client) -> None:
+    response = client.get("/api/agents/history")
+    assert response.status_code == 200
+    body = response.json()
+    assert "items" in body
