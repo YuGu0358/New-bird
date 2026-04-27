@@ -235,3 +235,11 @@ def test_quantlib_var_endpoint(client) -> None:
     body = response.json()
     assert body["var"] > 0
     assert body["cvar"] >= body["var"]
+
+
+def test_code_strategies_endpoint(client) -> None:
+    response = client.get("/api/code/strategies")
+    assert response.status_code == 200
+    body = response.json()
+    assert "items" in body
+    assert isinstance(body["items"], list)

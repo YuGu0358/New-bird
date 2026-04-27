@@ -18,6 +18,7 @@ from app.routers import agents as agents_router
 from app.routers import alerts as alerts_router
 from app.routers import backtest as backtest_router
 from app.routers import bot as bot_router
+from app.routers import code as code_router
 from app.routers import health as health_router
 from app.routers import metrics as metrics_router
 from app.routers import monitoring as monitoring_router
@@ -52,6 +53,18 @@ async def lifespan(app: FastAPI):
     await init_database()
     await price_alerts_service.start_monitor()
     await social_polling_service.start_monitor()
+
+    # Re-register user-uploaded strategies after DB is up.
+    try:
+        from app.database import AsyncSessionLocal
+        from app.services import code_service
+        async with AsyncSessionLocal() as session:
+            await code_service.reload_all_user_strategies(session)
+    except Exception:
+        # Never let user-strategy reload failures block boot.
+        import logging
+        logging.getLogger(__name__).exception("reload_all_user_strategies failed at startup")
+
     try:
         yield
     finally:
@@ -93,6 +106,7 @@ app.include_router(alerts_router.router)
 app.include_router(backtest_router.router)
 app.include_router(social_router.router)
 app.include_router(bot_router.router)
+app.include_router(code_router.router)
 app.include_router(health_router.router)
 app.include_router(metrics_router.router)
 app.include_router(settings_router.router)

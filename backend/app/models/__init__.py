@@ -49,6 +49,12 @@ from app.models.monitoring import (
     TrendSnapshot,
     WatchlistUpdateRequest,
 )
+from app.models.code import (
+    UserStrategyDetail,
+    UserStrategyListResponse,
+    UserStrategyUploadRequest,
+    UserStrategyView,
+)
 from app.models.observability import (
     HealthResponse,
     ReadinessCheck,
@@ -197,6 +203,10 @@ __all__ = [
     "TradeRecord",
     "TrackedSymbolView",
     "TrendSnapshot",
+    "UserStrategyDetail",
+    "UserStrategyListResponse",
+    "UserStrategyUploadRequest",
+    "UserStrategyView",
     "VaRRequest",
     "VaRResponse",
     "WatchlistUpdateRequest",
