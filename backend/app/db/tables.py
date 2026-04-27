@@ -209,3 +209,40 @@ class BacktestTrade(Base):
         DateTime(timezone=True),
         nullable=False,
     )
+
+
+class RiskPolicyConfig(Base):
+    """Singleton row: id=1 holds the active policy configuration JSON."""
+
+    __tablename__ = "risk_policy_configs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    config_json: Mapped[str] = mapped_column(Text, nullable=False, default="{}")
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+    )
+
+
+class RiskEvent(Base):
+    """Audit log: each rejected order produces one row here."""
+
+    __tablename__ = "risk_events"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    occurred_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+        index=True,
+    )
+    policy_name: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    decision: Mapped[str] = mapped_column(String(16), nullable=False)  # "deny" | "allow"
+    reason: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    symbol: Mapped[str] = mapped_column(String(16), nullable=False, index=True)
+    side: Mapped[str] = mapped_column(String(8), nullable=False)
+    notional: Mapped[float | None] = mapped_column(Float, nullable=True)
+    qty: Mapped[float | None] = mapped_column(Float, nullable=True)
