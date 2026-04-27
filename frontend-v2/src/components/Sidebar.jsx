@@ -33,9 +33,9 @@ export default function Sidebar() {
       <div className="px-3 pb-7 mb-6 border-b border-border-subtle flex items-center gap-2.5">
         <span className="w-2 h-2 bg-cyan shadow-glow-cyan" />
         <span
-          className="text-[18px] font-display font-semibold tracking-[0.15em] text-text-primary"
+          className="text-[18px] font-display font-semibold tracking-[0.15em] text-text-primary uppercase"
         >
-          TRADEWELL
+          {t('nav.brand')}
         </span>
       </div>
 

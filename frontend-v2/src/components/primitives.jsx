@@ -1,4 +1,4 @@
-// Shared presentational primitives for the Tradewell Tokyo aesthetic.
+// Shared presentational primitives for the Newbird Tokyo cyberpunk aesthetic.
 //
 // Visual language:
 //   - Pure black void background with subtle grid + noise overlays

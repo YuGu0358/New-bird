@@ -3,7 +3,7 @@
 @tailwind utilities;
 
 /* =============================================================
-   Tradewell Tokyo aesthetic
+   Newbird — Tokyo cyberpunk aesthetic
    - Pure black void with subtle grid + noise overlays
    - Neon cyan #14F1D9 as primary accent
    - Sharp 0-radius corners; corner-cut decorations
@@ -103,7 +103,7 @@
     pointer-events: none;
   }
 
-  /* Top-right corner notch (Tradewell's macro card style) */
+  /* Top-right corner notch (macro card decoration) */
   .card-notch {
     clip-path: polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 0 100%);
   }

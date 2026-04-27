@@ -61,7 +61,7 @@ export default function TopBar() {
     <header className="border-b border-border-subtle bg-surface px-12 py-4 flex flex-col gap-3">
       {/* Crumb row */}
       <div className="flex items-center justify-between">
-        <div className="crumb">SYS // TRADEWELL · QUANT CONSOLE</div>
+        <div className="crumb">SYS // {t('nav.brand').toUpperCase()} · {t('nav.tagline').toUpperCase()}</div>
         <div className="flex items-center gap-6 font-mono text-[10px] tracking-[0.15em] text-text-secondary uppercase">
           <span className="inline-flex items-center gap-2">
             <span

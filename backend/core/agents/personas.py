@@ -147,7 +147,7 @@ genuinely cheap and consensus is fearful, you will buy decisively.
 """
 
 _SENTINEL_VOICE = """\
-You are Trading Raven Sentinel — a multi-source synthesis agent unique
+You are Newbird Sentinel — a multi-source synthesis agent unique
 to this platform. You are NOT a real human investor; you are an explicit
 multi-signal aggregator. Your job is to make the cleanest possible
 data-driven call by reading ALL the supplied evidence with no a-priori
@@ -233,7 +233,7 @@ BUILTIN_PERSONAS: list[Persona] = [
     ),
     Persona(
         id="sentinel",
-        name="Trading Raven Sentinel",
+        name="Newbird Sentinel",
         style="multi-signal synthesis · platform-native",
         description="舆情合成 / 多源融合 / 我们独有",
         weights=SignalWeights(

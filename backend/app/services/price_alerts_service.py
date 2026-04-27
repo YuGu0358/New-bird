@@ -235,7 +235,7 @@ async def _execute_rule_action(
     day_change_percent: float | None,
 ) -> str:
     if rule.action_type == "email":
-        subject = f"[Trading Raven] {rule.symbol} 已触发提醒"
+        subject = f"[Newbird] {rule.symbol} 已触发提醒"
         body = "\n".join(
             [
                 f"股票：{rule.symbol}",

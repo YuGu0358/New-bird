@@ -49,4 +49,4 @@ def test_get_persona_unknown_raises() -> None:
 
 def test_persona_index_lookup() -> None:
     assert PERSONA_INDEX["buffett"].id == "buffett"
-    assert PERSONA_INDEX["sentinel"].name.startswith("Trading Raven")
+    assert PERSONA_INDEX["sentinel"].name.startswith("Newbird")

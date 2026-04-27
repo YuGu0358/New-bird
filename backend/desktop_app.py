@@ -13,7 +13,7 @@ import aiosqlite  # Ensure PyInstaller collects the async SQLite driver.
 import uvicorn
 from dotenv import dotenv_values
 
-APP_NAME = "Trading Raven Platform"
+APP_NAME = "Newbird Platform"
 WINDOW_SIZE = (1480, 980)
 MIN_WINDOW_SIZE = (1220, 820)
 
