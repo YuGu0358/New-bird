@@ -424,6 +424,64 @@ async def test_list_filtered_by_symbol_does_not_match_like_wildcards() -> None:
 
 
 @pytest.mark.asyncio
+async def test_count_entries_matches_list_filters() -> None:
+    """`count_entries` must apply the same WHERE clauses as `list_entries`,
+    so paginated UIs can show "showing N of total" without lying."""
+    from app.services import journal_service
+
+    async with AsyncSessionLocal() as session:
+        await journal_service.create_entry(
+            session, title="bull-nvda", body="x",
+            symbols=["NVDA"], mood="bullish",
+        )
+        await journal_service.create_entry(
+            session, title="bear-nvda", body="y",
+            symbols=["NVDA"], mood="bearish",
+        )
+        await journal_service.create_entry(
+            session, title="bull-tsla", body="earnings up",
+            symbols=["TSLA"], mood="bullish",
+        )
+
+        # Unfiltered: matches all rows.
+        assert await journal_service.count_entries(session) == 3
+
+        # By symbol — exactly the two NVDA rows.
+        assert await journal_service.count_entries(session, symbol="NVDA") == 2
+
+        # By mood — the two bullish rows.
+        assert await journal_service.count_entries(session, mood="bullish") == 2
+
+        # Combined symbol + mood — only the bull-nvda row.
+        assert await journal_service.count_entries(
+            session, symbol="NVDA", mood="bullish"
+        ) == 1
+
+        # Search hits title or body, case-insensitive.
+        assert await journal_service.count_entries(session, search="earnings") == 1
+
+        # No matches — must be 0, not the unfiltered total.
+        assert await journal_service.count_entries(session, symbol="ZZZ") == 0
+
+
+@pytest.mark.asyncio
+async def test_count_entries_ignores_pagination_args() -> None:
+    """`count_entries` deliberately has no `limit`/`offset` — it always
+    returns the total matching the filters. Make that explicit in a test
+    so a future refactor doesn't accidentally apply limit to the count."""
+    from app.services import journal_service
+
+    async with AsyncSessionLocal() as session:
+        for i in range(7):
+            await journal_service.create_entry(session, title=f"row{i}", body="x")
+
+        # The list call would clamp to 5 — count should still be 7.
+        page = await journal_service.list_entries(session, limit=5)
+        assert len(page) == 5
+        assert await journal_service.count_entries(session) == 7
+
+
+@pytest.mark.asyncio
 async def test_list_search_does_not_match_like_wildcards() -> None:
     """Search '%foo' must not match titles/bodies that contain the literal
     word but not the % prefix."""

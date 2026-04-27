@@ -20,6 +20,7 @@ from app.routers import backtest as backtest_router
 from app.routers import bot as bot_router
 from app.routers import code as code_router
 from app.routers import health as health_router
+from app.routers import journal as journal_router
 from app.routers import macro as macro_router
 from app.routers import metrics as metrics_router
 from app.routers import monitoring as monitoring_router
@@ -111,6 +112,7 @@ app.include_router(social_router.router)
 app.include_router(bot_router.router)
 app.include_router(code_router.router)
 app.include_router(health_router.router)
+app.include_router(journal_router.router)
 app.include_router(metrics_router.router)
 app.include_router(settings_router.router)
 app.include_router(strategy_health_router.router)

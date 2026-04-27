@@ -68,6 +68,13 @@ EXPECTED_ROUTES: set[tuple[str, str]] = {
     ("POST",   "/api/bot/stop"),
     ("GET",    "/api/settings/status"),
     ("PUT",    "/api/settings"),
+    # --- Investment journal CRUD + symbol autocomplete ---
+    ("GET",    "/api/journal"),
+    ("POST",   "/api/journal"),
+    ("GET",    "/api/journal/{entry_id}"),
+    ("PATCH",  "/api/journal/{entry_id}"),
+    ("DELETE", "/api/journal/{entry_id}"),
+    ("GET",    "/api/journal/symbols/autocomplete"),
     # --- Tradewell-inspired additions (macro / valuation / options-chain) ---
     ("GET",    "/api/macro"),
     ("POST",   "/api/macro/refresh"),

@@ -134,20 +134,18 @@ def _serialize(row: JournalEntry) -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 
-async def list_entries(
-    session: AsyncSession,
+def _apply_list_filters(
+    stmt,
     *,
-    symbol: str | None = None,
-    mood: str | None = None,
-    search: str | None = None,
-    limit: int = 50,
-    offset: int = 0,
-) -> list[dict[str, Any]]:
-    """List entries newest-first, with optional ANDed filters + pagination."""
-    stmt = select(JournalEntry).order_by(
-        desc(JournalEntry.created_at), desc(JournalEntry.id)
-    )
+    symbol: str | None,
+    mood: str | None,
+    search: str | None,
+):
+    """Apply the standard journal filters (symbol/mood/search) to `stmt`.
 
+    Shared by `list_entries` and `count_entries` so the WHERE clauses stay
+    in lockstep — `total` would be a lie if either side drifted.
+    """
     if symbol:
         token = str(symbol).strip().upper()
         if token:
@@ -176,9 +174,45 @@ async def list_entries(
                 )
             )
 
+    return stmt
+
+
+async def list_entries(
+    session: AsyncSession,
+    *,
+    symbol: str | None = None,
+    mood: str | None = None,
+    search: str | None = None,
+    limit: int = 50,
+    offset: int = 0,
+) -> list[dict[str, Any]]:
+    """List entries newest-first, with optional ANDed filters + pagination."""
+    stmt = select(JournalEntry).order_by(
+        desc(JournalEntry.created_at), desc(JournalEntry.id)
+    )
+    stmt = _apply_list_filters(stmt, symbol=symbol, mood=mood, search=search)
     stmt = stmt.limit(_clamp_limit(limit)).offset(_clamp_offset(offset))
     rows = (await session.execute(stmt)).scalars().all()
     return [_serialize(r) for r in rows]
+
+
+async def count_entries(
+    session: AsyncSession,
+    *,
+    symbol: str | None = None,
+    mood: str | None = None,
+    search: str | None = None,
+) -> int:
+    """Count entries matching the same filters as `list_entries`.
+
+    Used by the router to populate `JournalListResponse.total` so paginated
+    UIs know how many pages exist. Always returns the unfiltered total when
+    no filters are supplied.
+    """
+    stmt = select(func.count()).select_from(JournalEntry)
+    stmt = _apply_list_filters(stmt, symbol=symbol, mood=mood, search=search)
+    result = await session.execute(stmt)
+    return int(result.scalar_one())
 
 
 async def get_entry(session: AsyncSession, entry_id: int) -> dict[str, Any] | None:

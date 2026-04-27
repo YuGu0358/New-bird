@@ -55,6 +55,13 @@ from app.models.code import (
     UserStrategyUploadRequest,
     UserStrategyView,
 )
+from app.models.journal import (
+    JournalAutocompleteResponse,
+    JournalEntryCreateRequest,
+    JournalEntryUpdateRequest,
+    JournalEntryView,
+    JournalListResponse,
+)
 from app.models.observability import (
     HealthResponse,
     ReadinessCheck,
@@ -147,6 +154,11 @@ __all__ = [
     "CouncilResponse",
     "KeyFactorView",
     "HealthResponse",
+    "JournalAutocompleteResponse",
+    "JournalEntryCreateRequest",
+    "JournalEntryUpdateRequest",
+    "JournalEntryView",
+    "JournalListResponse",
     "MonitoringOverview",
     "NewsArticle",
     "OptionGreeksRequest",
