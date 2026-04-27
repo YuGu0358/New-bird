@@ -9,6 +9,7 @@ import {
 } from '../lib/api.js';
 import {
   KpiCard,
+  PageHeader,
   SectionHeader,
   LoadingState,
   ErrorState,
@@ -67,13 +68,15 @@ export default function RiskPage() {
   const todayDenies = countTodayDenies(events);
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-end justify-between">
-        <div>
-          <h1 className="h-page">{t('risk.title')}</h1>
-          <p className="text-body-sm text-steel-200 mt-1">{t('risk.subtitle')}</p>
-        </div>
-      </div>
+    <div className="space-y-8">
+      <PageHeader
+        moduleId={8}
+        title={t('risk.title')}
+        segments={[
+          { label: t('risk.subtitle') },
+          { label: 'P4 · RISKGUARD', accent: true },
+        ]}
+      />
 
       {/* KPIs */}
       <div className="grid grid-cols-4 gap-6">

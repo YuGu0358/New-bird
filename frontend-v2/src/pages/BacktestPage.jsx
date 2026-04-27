@@ -20,6 +20,7 @@ import {
 } from '../lib/api.js';
 import {
   SectionHeader,
+  PageHeader,
   LoadingState,
   ErrorState,
   EmptyState,
@@ -81,13 +82,16 @@ function BacktestList({ onSelect, queryClient }) {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-end justify-between">
-        <div>
-          <h1 className="h-page">{t('backtest.title')}</h1>
-          <p className="text-body-sm text-steel-200 mt-1">{t('backtest.subtitle')}</p>
-        </div>
-      </div>
+    <div className="space-y-8">
+      <PageHeader
+        moduleId={6}
+        title={t('backtest.title')}
+        segments={[
+          { label: t('backtest.subtitle') },
+          { label: 'P3 · ENGINE', accent: true },
+        ]}
+        live={false}
+      />
 
       <div className="grid grid-cols-12 gap-6">
         {/* New backtest form */}

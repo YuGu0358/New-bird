@@ -19,11 +19,13 @@ import {
 } from '../lib/api.js';
 import {
   KpiCard,
+  PageHeader,
   SectionHeader,
   LoadingState,
   ErrorState,
   EmptyState,
   StatusBadge,
+  SignalDot,
 } from '../components/primitives.jsx';
 import {
   fmtUsd,
@@ -61,35 +63,46 @@ export default function DashboardPage() {
   // Synthesize a 30-day equity sparkline from last_equity → equity (placeholder).
   const equityCurve = synthesizeCurve(lastEquity, equity);
 
-  return (
-    <div className="space-y-6">
-      <div className="flex items-end justify-between">
-        <div>
-          <h1 className="h-page">{t('dashboard.title')}</h1>
-          <p className="text-body-sm text-steel-200 mt-1">{t('dashboard.subtitle')}</p>
-        </div>
-      </div>
+  const positionsCount = healthQ.data?.open_position_count ?? 0;
 
-      {/* KPI row */}
-      <div className="grid grid-cols-4 gap-6">
+  return (
+    <div className="space-y-12">
+      <PageHeader
+        moduleId={1}
+        title={t('dashboard.title')}
+        segments={[
+          { label: t('dashboard.subtitle') },
+          { label: `${positionsCount} POSITIONS`, accent: true },
+          { label: 'UPDATED T-0.3S' },
+        ]}
+      />
+
+      {/* KPI row — Tokyo mockup style: 1px gap shared border */}
+      <div className="kpi-row">
         <KpiCard
           label={t('dashboard.kpi.equity')}
           value={fmtUsd(equity)}
           delta={equityDelta}
           deltaLabel={t('topbar.vsPrevClose')}
           loading={accountQ.isLoading}
+          tag={equityDelta != null ? (equityDelta >= 0 ? '+' : '−') : 'L0'}
+          tagTone={equityDelta != null ? (equityDelta >= 0 ? 'pos' : 'neg') : 'cyan'}
         />
         <KpiCard
           label={t('dashboard.kpi.todayPnl')}
           value={fmtSignedUsd(realizedToday)}
           delta={null}
           loading={healthQ.isLoading}
+          tag={realizedToday >= 0 ? '+' : '−'}
+          tagTone={realizedToday >= 0 ? 'pos' : 'neg'}
         />
         <KpiCard
           label={t('dashboard.kpi.openPositions')}
-          value={String(openCount)}
+          value={String(positionsCount)}
           delta={null}
           loading={healthQ.isLoading}
+          tag="L0"
+          tagTone="cyan"
         />
         <KpiCard
           label={t('dashboard.kpi.streak')}
@@ -104,6 +117,8 @@ export default function DashboardPage() {
           }
           delta={null}
           loading={healthQ.isLoading}
+          tag={streakKind === 'win' ? 'WIN' : streakKind === 'loss' ? 'LOSS' : 'NONE'}
+          tagTone={streakKind === 'win' ? 'pos' : streakKind === 'loss' ? 'neg' : 'neutral'}
         />
       </div>
 
@@ -206,12 +221,15 @@ function HoldingsPreview({ t, data, loading, error, retry }) {
     <table className="tbl">
       <thead>
         <tr>
-          <th>Symbol</th>
+          <th style={{ width: 32 }}></th>
+          <th>Ticker</th>
           <th className="tbl-num">Qty</th>
           <th className="tbl-num">Entry</th>
-          <th className="tbl-num">Current</th>
-          <th className="tbl-num">Unrealized PnL</th>
+          <th className="tbl-num">Last</th>
+          <th className="tbl-num">PnL %</th>
+          <th className="tbl-num">PnL $</th>
           <th>Trend (D / W / M)</th>
+          <th>Signal</th>
         </tr>
       </thead>
       <tbody>
@@ -221,25 +239,37 @@ function HoldingsPreview({ t, data, loading, error, retry }) {
           const entry = parseFloat(row.avg_entry_price ?? row.entry_price ?? row.average_entry_price ?? 0) || 0;
           const current = parseFloat(row.current_price ?? row.price ?? entry) || entry;
           const unreal = parseFloat(row.unrealized_pl ?? row.unrealized_profit ?? (current - entry) * qty) || 0;
+          const unrealPct = entry > 0 ? ((current - entry) / entry) * 100 : 0;
           const dPct = parseFloat(row.day_change_percent ?? 0);
           const wPct = parseFloat(row.week_change_percent ?? 0);
           const mPct = parseFloat(row.month_change_percent ?? 0);
+
+          // Map P&L magnitude to signal tone
+          const tone = unrealPct > 0 ? 'ok' : unrealPct < -5 ? 'danger' : unrealPct < 0 ? 'warn' : 'neutral';
+          const signalLabel = tone === 'ok' ? 'NORMAL' : tone === 'warn' ? 'DRAWDOWN' : tone === 'danger' ? 'NEAR LIMIT' : 'IDLE';
+          const signalCls = `signal-label ${tone}`;
+
           return (
             <tr key={`${symbol}-${i}`}>
-              <td className="font-medium text-steel-50">{symbol}</td>
+              <td style={{ paddingLeft: 16 }}><SignalDot tone={tone} /></td>
+              <td className="ticker">{symbol}</td>
               <td className="tbl-num">{qty.toFixed(4)}</td>
               <td className="tbl-num">{fmtUsd(entry)}</td>
               <td className="tbl-num">{fmtUsd(current)}</td>
-              <td className={classNames('tbl-num font-medium', unreal > 0 ? 'text-bull' : unreal < 0 ? 'text-bear' : '')}>
+              <td className={classNames('tbl-num', unrealPct > 0 ? 'pos' : unrealPct < 0 ? 'neg' : '')}>
+                {fmtPct(unrealPct)}
+              </td>
+              <td className={classNames('tbl-num', unreal > 0 ? 'pos' : unreal < 0 ? 'neg' : '')}>
                 {fmtSignedUsd(unreal)}
               </td>
               <td>
-                <div className="flex items-center gap-2 text-caption tabular">
+                <div className="flex items-center gap-3 font-mono text-[10px]">
                   <Trend pct={dPct} label="D" />
                   <Trend pct={wPct} label="W" />
                   <Trend pct={mPct} label="M" />
                 </div>
               </td>
+              <td><span className={signalCls}>● {signalLabel}</span></td>
             </tr>
           );
         })}
@@ -250,11 +280,9 @@ function HoldingsPreview({ t, data, loading, error, retry }) {
 
 function Trend({ pct, label }) {
   const v = Number.isFinite(pct) ? pct : 0;
-  const Icon = v > 0 ? ArrowUpRight : v < 0 ? ArrowDownRight : null;
   return (
-    <span className={classNames('inline-flex items-center gap-0.5', v > 0 ? 'text-bull' : v < 0 ? 'text-bear' : 'text-steel-300')}>
-      {Icon && <Icon size={11} />}
-      <span className="text-steel-300">{label}</span>
+    <span className={classNames('inline-flex items-center gap-1', v > 0 ? 'pos' : v < 0 ? 'neg' : 'text-text-muted')}>
+      <span className="text-text-muted">{label}</span>
       <span>{Number.isFinite(pct) ? fmtPct(pct) : '—'}</span>
     </span>
   );

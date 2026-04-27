@@ -11,6 +11,7 @@ import {
 } from '../lib/api.js';
 import {
   SectionHeader,
+  PageHeader,
   EmptyState,
   ErrorState,
   LoadingState,
@@ -31,25 +32,30 @@ export default function QuantLabPage() {
   const [tab, setTab] = useState('option');
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="h-page">{t('quantlab.title')}</h1>
-        <p className="text-body-sm text-steel-200 mt-1">{t('quantlab.subtitle')}</p>
-      </div>
+    <div className="space-y-8">
+      <PageHeader
+        moduleId={8}
+        title={t('quantlab.title')}
+        segments={[
+          { label: t('quantlab.subtitle') },
+          { label: 'P8 · QUANTLIB', accent: true },
+        ]}
+        live={false}
+      />
 
-      <div className="flex items-center gap-6 border-b border-steel-400 overflow-x-auto">
+      <div className="flex items-center gap-6 border-b border-border-subtle overflow-x-auto">
         {TABS.map((tt) => (
           <button
             key={tt.id}
             className={classNames(
-              'h-10 -mb-px border-b-2 text-body-sm font-medium transition duration-150 inline-flex items-center gap-2 px-1 whitespace-nowrap',
+              'h-10 -mb-px border-b-2 font-mono text-[11px] tracking-[0.15em] uppercase font-medium transition duration-150 inline-flex items-center gap-2 px-2 whitespace-nowrap',
               tab === tt.id
-                ? 'border-steel-500 text-steel-50'
-                : 'border-transparent text-steel-200 hover:text-steel-50'
+                ? 'border-cyan text-cyan'
+                : 'border-transparent text-text-secondary hover:text-text-primary'
             )}
             onClick={() => setTab(tt.id)}
           >
-            <tt.icon size={14} /> {t(`quantlab.tabs.${tt.id}`)}
+            <tt.icon size={12} /> {t(`quantlab.tabs.${tt.id}`)}
           </button>
         ))}
       </div>

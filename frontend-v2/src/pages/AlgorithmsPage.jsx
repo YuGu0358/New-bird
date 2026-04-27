@@ -9,6 +9,7 @@ import {
 } from '../lib/api.js';
 import {
   SectionHeader,
+  PageHeader,
   LoadingState,
   ErrorState,
   EmptyState,
@@ -31,11 +32,16 @@ export default function AlgorithmsPage() {
   });
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="h-page">{t('algorithms.title')}</h1>
-        <p className="text-body-sm text-steel-200 mt-1">{t('algorithms.subtitle')}</p>
-      </div>
+    <div className="space-y-8">
+      <PageHeader
+        moduleId={7}
+        title={t('algorithms.title')}
+        segments={[
+          { label: t('algorithms.subtitle') },
+          { label: 'P2 · FRAMEWORK', accent: true },
+        ]}
+        live={false}
+      />
 
       {/* Registered strategy types (P2 framework) */}
       <div className="card">

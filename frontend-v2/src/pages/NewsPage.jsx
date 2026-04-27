@@ -12,7 +12,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import { SectionHeader, LoadingState, ErrorState, EmptyState } from '../components/primitives.jsx';
+import { SectionHeader, PageHeader, LoadingState, ErrorState, EmptyState } from '../components/primitives.jsx';
 import { fmtUsd, fmtRelativeTime, fmtAbsTime } from '../lib/format.js';
 
 export default function NewsPage() {
@@ -59,13 +59,12 @@ export default function NewsPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-end justify-between">
-        <div>
-          <h1 className="h-page">{t('news.title')}</h1>
-          <p className="text-body-sm text-steel-200 mt-1">{t('news.subtitle')}</p>
-        </div>
-      </div>
+    <div className="space-y-8">
+      <PageHeader
+        moduleId={4}
+        title={t('news.title')}
+        segments={[{ label: t('news.subtitle') }]}
+      />
 
       {/* Symbol switcher */}
       <form onSubmit={commitSymbol} className="card flex items-end gap-3">

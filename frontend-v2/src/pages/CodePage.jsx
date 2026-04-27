@@ -16,6 +16,7 @@ import {
 } from '../lib/api.js';
 import {
   SectionHeader,
+  PageHeader,
   LoadingState,
   ErrorState,
   EmptyState,
@@ -116,11 +117,16 @@ export default function CodePage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="h-page">{t('code.title')}</h1>
-        <p className="text-body-sm text-steel-200 mt-1">{t('code.subtitle')}</p>
-      </div>
+    <div className="space-y-8">
+      <PageHeader
+        moduleId={9}
+        title={t('code.title')}
+        segments={[
+          { label: t('code.subtitle') },
+          { label: 'P9 · SANDBOX', accent: true },
+        ]}
+        live={false}
+      />
 
       <div className="grid grid-cols-12 gap-6">
         {/* Left: editor */}

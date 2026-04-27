@@ -10,6 +10,7 @@ import {
 } from '../lib/api.js';
 import {
   SectionHeader,
+  PageHeader,
   LoadingState,
   ErrorState,
   EmptyState,
@@ -28,21 +29,26 @@ export default function IntelligencePage() {
   const [tab, setTab] = useState('personas');
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="h-page">{t('intelligence.title')}</h1>
-        <p className="text-body-sm text-steel-200 mt-1">{t('intelligence.subtitle')}</p>
-      </div>
+    <div className="space-y-8">
+      <PageHeader
+        moduleId={5}
+        title={t('intelligence.title')}
+        segments={[
+          { label: t('intelligence.subtitle') },
+          { label: 'P7 · OPENAI', accent: true },
+        ]}
+        live={false}
+      />
 
-      <div className="flex items-center gap-6 border-b border-steel-400">
+      <div className="flex items-center gap-6 border-b border-border-subtle">
         {TABS.map((t) => (
           <button
             key={t.id}
             className={classNames(
-              'h-10 -mb-px border-b-2 text-body-sm font-medium transition duration-150 inline-flex items-center gap-2 px-1',
+              'h-10 -mb-px border-b-2 font-mono text-[11px] tracking-[0.15em] uppercase font-medium transition duration-150 inline-flex items-center gap-2 px-2',
               tab === t.id
-                ? 'border-steel-500 text-steel-50'
-                : 'border-transparent text-steel-200 hover:text-steel-50'
+                ? 'border-cyan text-cyan'
+                : 'border-transparent text-text-secondary hover:text-text-primary'
             )}
             onClick={() => setTab(t.id)}
           >

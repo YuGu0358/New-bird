@@ -12,6 +12,7 @@ import {
 } from '../lib/api.js';
 import {
   SectionHeader,
+  PageHeader,
   LoadingState,
   ErrorState,
   EmptyState,
@@ -46,13 +47,12 @@ export default function PortfolioPage() {
   });
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-end justify-between">
-        <div>
-          <h1 className="h-page">{t('portfolio.title')}</h1>
-          <p className="text-body-sm text-steel-200 mt-1">{t('portfolio.subtitle')}</p>
-        </div>
-      </div>
+    <div className="space-y-8">
+      <PageHeader
+        moduleId={3}
+        title={t('portfolio.title')}
+        segments={[{ label: t('portfolio.subtitle') }]}
+      />
 
       {/* Sidebar stats */}
       <div className="grid grid-cols-12 gap-6">
