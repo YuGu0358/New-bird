@@ -12,16 +12,19 @@ from fastapi.staticfiles import StaticFiles
 from core.observability import configure_logging
 from app.database import init_database
 from app.middleware.correlation import CorrelationIdMiddleware
+from app.middleware.metrics import HttpMetricsMiddleware
 from app.routers import account as account_router
 from app.routers import alerts as alerts_router
 from app.routers import backtest as backtest_router
 from app.routers import bot as bot_router
 from app.routers import health as health_router
+from app.routers import metrics as metrics_router
 from app.routers import monitoring as monitoring_router
 from app.routers import research as research_router
 from app.routers import risk as risk_router
 from app.routers import settings as settings_router
 from app.routers import social as social_router
+from app.routers import strategy_health as strategy_health_router
 from app.routers import strategies as strategies_router
 from app.services import (
     bot_controller,
@@ -71,6 +74,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 app.add_middleware(CorrelationIdMiddleware)
+app.add_middleware(HttpMetricsMiddleware)
 
 if FRONTEND_ASSETS_DIR.exists():
     app.mount("/assets", StaticFiles(directory=FRONTEND_ASSETS_DIR), name="assets")
@@ -86,7 +90,9 @@ app.include_router(backtest_router.router)
 app.include_router(social_router.router)
 app.include_router(bot_router.router)
 app.include_router(health_router.router)
+app.include_router(metrics_router.router)
 app.include_router(settings_router.router)
+app.include_router(strategy_health_router.router)
 
 
 def _is_safe_frontend_path(base_dir: Path, requested_path: Path) -> bool:

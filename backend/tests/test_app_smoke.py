@@ -170,3 +170,25 @@ def test_health_readiness(client) -> None:
     assert "ready" in body
     assert "checks" in body
     assert any(c["name"] == "database" for c in body["checks"])
+
+
+def test_metrics_endpoint(client) -> None:
+    # Hit a few endpoints first so counters have non-zero values.
+    client.get("/api/health")
+    client.get("/api/settings/status")
+
+    response = client.get("/metrics")
+    assert response.status_code == 200
+    assert "http_requests_total" in response.text
+    assert "http_request_duration_seconds" in response.text
+
+
+def test_strategy_health_endpoint(client) -> None:
+    response = client.get("/api/strategy/health")
+    assert response.status_code == 200
+    body = response.json()
+    for field in (
+        "active_strategy_name", "realized_pnl_today", "trades_today",
+        "streak_kind", "streak_length", "open_position_count",
+    ):
+        assert field in body
