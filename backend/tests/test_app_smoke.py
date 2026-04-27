@@ -153,3 +153,20 @@ def test_risk_events_endpoint(client) -> None:
     body = response.json()
     assert "items" in body
     assert isinstance(body["items"], list)
+
+
+def test_health_liveness(client) -> None:
+    response = client.get("/api/health")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "ok"
+    assert "timestamp" in body
+
+
+def test_health_readiness(client) -> None:
+    response = client.get("/api/health/ready")
+    assert response.status_code == 200
+    body = response.json()
+    assert "ready" in body
+    assert "checks" in body
+    assert any(c["name"] == "database" for c in body["checks"])
