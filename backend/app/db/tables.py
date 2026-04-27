@@ -270,3 +270,28 @@ class AgentAnalysis(Base):
         default=lambda: datetime.now(timezone.utc),
         index=True,
     )
+
+
+class UserStrategy(Base):
+    """User-uploaded Python strategy code, persisted + reloaded on boot."""
+
+    __tablename__ = "user_strategies"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    slot_name: Mapped[str] = mapped_column(String(64), unique=True, index=True, nullable=False)
+    display_name: Mapped[str] = mapped_column(String(96), nullable=False, default="")
+    description: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    source_code: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="active")  # active|disabled|failed
+    last_error: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+    )

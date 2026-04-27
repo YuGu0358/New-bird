@@ -29,6 +29,7 @@ from app.db.tables import (
     SocialSignalSnapshot,
     StrategyProfile,
     Trade,
+    UserStrategy,
     WatchlistSymbol,
 )
 
@@ -50,6 +51,7 @@ __all__ = [
     "SocialSignalSnapshot",
     "StrategyProfile",
     "Trade",
+    "UserStrategy",
     "WatchlistSymbol",
     "engine",
     "get_session",
