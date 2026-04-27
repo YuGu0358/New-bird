@@ -1,6 +1,7 @@
+import { useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { Play, Square, RefreshCw, ShieldCheck, ShieldOff, AlertCircle } from 'lucide-react';
+import { Play, Square, RefreshCw, AlertCircle } from 'lucide-react';
 import {
   getAccount,
   getStrategyHealth,
@@ -12,6 +13,15 @@ import {
 import { fmtUsd, fmtSignedUsd, deltaClass, classNames } from '../lib/format.js';
 import LanguageSwitcher from './LanguageSwitcher.jsx';
 
+/**
+ * TopBar layout:
+ *
+ *  ┌──────────────────────────────────────────────────────────────────┐
+ *  │ SYS // MODULE.XX · PORTFOLIO       ● LIVE · IBKR-Uxxxx  Time  Day│  ← crumb row
+ *  ├──────────────────────────────────────────────────────────────────┤
+ *  │ [Equity 12,432] [Day P&L +341] [Open 5]  [start bot] [refresh] [lang]
+ *  └──────────────────────────────────────────────────────────────────┘
+ */
 export default function TopBar() {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
@@ -21,8 +31,21 @@ export default function TopBar() {
   const botQ = useQuery({ queryKey: ['bot-status'], queryFn: getBotStatus, refetchInterval: 5_000 });
   const riskQ = useQuery({ queryKey: ['risk-policies'], queryFn: getRiskPolicies, refetchInterval: 60_000 });
 
-  const startMut = useMutation({ mutationFn: startBot, onSuccess: () => queryClient.invalidateQueries({ queryKey: ['bot-status'] }) });
-  const stopMut = useMutation({ mutationFn: stopBot, onSuccess: () => queryClient.invalidateQueries({ queryKey: ['bot-status'] }) });
+  const startMut = useMutation({
+    mutationFn: startBot,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['bot-status'] }),
+  });
+  const stopMut = useMutation({
+    mutationFn: stopBot,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['bot-status'] }),
+  });
+
+  // Live clock
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(id);
+  }, []);
 
   const equity = accountQ.data?.equity;
   const lastEquity = accountQ.data?.last_equity;
@@ -35,62 +58,100 @@ export default function TopBar() {
   const riskEnabled = !!riskQ.data?.enabled;
 
   return (
-    <header className="h-14 px-6 border-b border-steel-400 bg-ink-900 flex items-center justify-between">
-      <div className="flex items-center gap-8">
-        <Metric label={t('topbar.equity')} value={fmtUsd(equity)} delta={equityDelta} loading={accountQ.isLoading} />
-        <Metric
-          label={t('topbar.todayPnl')}
-          value={fmtSignedUsd(realizedToday)}
-          valueColor={realizedToday > 0 ? 'text-bull' : realizedToday < 0 ? 'text-bear' : 'text-steel-50'}
-          loading={healthQ.isLoading}
-        />
-        <Metric label={t('topbar.openPositions')} value={String(healthQ.data?.open_position_count ?? '—')} loading={healthQ.isLoading} />
+    <header className="border-b border-border-subtle bg-surface px-12 py-4 flex flex-col gap-3">
+      {/* Crumb row */}
+      <div className="flex items-center justify-between">
+        <div className="crumb">SYS // TRADEWELL · QUANT CONSOLE</div>
+        <div className="flex items-center gap-6 font-mono text-[10px] tracking-[0.15em] text-text-secondary uppercase">
+          <span className="inline-flex items-center gap-2">
+            <span
+              className={classNames(
+                'w-1.5 h-1.5',
+                isRunning ? 'bg-cyan shadow-glow-cyan animate-pulse' : 'bg-text-muted',
+              )}
+            />
+            <span>{isRunning ? t('topbar.botRunning') : t('topbar.botIdle')}</span>
+          </span>
+          <span>{riskEnabled ? `RISK · ON` : `RISK · OFF`}</span>
+          <span>{now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>
+          <span>{now.toISOString().slice(0, 10)}</span>
+        </div>
       </div>
 
-      <div className="flex items-center gap-3">
-        <RiskBadge enabled={riskEnabled} loading={riskQ.isLoading} t={t} />
-        <BotBadge running={isRunning} loading={botQ.isLoading} t={t} />
-        {isRunning ? (
+      {/* Compact KPI + actions row */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-10">
+          <Metric
+            label={t('topbar.equity')}
+            value={fmtUsd(equity)}
+            delta={equityDelta}
+            loading={accountQ.isLoading}
+          />
+          <Metric
+            label={t('topbar.todayPnl')}
+            value={fmtSignedUsd(realizedToday)}
+            valueColor={
+              realizedToday > 0 ? 'text-profit'
+              : realizedToday < 0 ? 'text-loss'
+              : 'text-text-primary'
+            }
+            loading={healthQ.isLoading}
+          />
+          <Metric
+            label={t('topbar.openPositions')}
+            value={String(healthQ.data?.open_position_count ?? '—')}
+            loading={healthQ.isLoading}
+          />
+        </div>
+
+        <div className="flex items-center gap-2">
+          {isRunning ? (
+            <button
+              className="btn-destructive btn-sm"
+              onClick={() => stopMut.mutate()}
+              disabled={stopMut.isPending}
+            >
+              <Square size={11} /> {t('topbar.stopBot')}
+            </button>
+          ) : (
+            <button
+              className="btn-primary btn-sm"
+              onClick={() => startMut.mutate()}
+              disabled={startMut.isPending}
+            >
+              <Play size={11} /> {t('topbar.startBot')}
+            </button>
+          )}
           <button
-            className="btn-destructive btn-sm"
-            onClick={() => stopMut.mutate()}
-            disabled={stopMut.isPending}
+            className="btn-ghost btn-sm"
+            title={t('topbar.refreshAll')}
+            onClick={() => queryClient.invalidateQueries()}
           >
-            <Square size={14} /> {t('topbar.stopBot')}
+            <RefreshCw size={12} />
           </button>
-        ) : (
-          <button
-            className="btn-primary btn-sm"
-            onClick={() => startMut.mutate()}
-            disabled={startMut.isPending}
-          >
-            <Play size={14} /> {t('topbar.startBot')}
-          </button>
-        )}
-        <button
-          className="btn-ghost btn-sm"
-          title={t('topbar.refreshAll')}
-          onClick={() => queryClient.invalidateQueries()}
-        >
-          <RefreshCw size={14} />
-        </button>
-        <LanguageSwitcher />
+          <LanguageSwitcher />
+        </div>
       </div>
     </header>
   );
 }
 
-function Metric({ label, value, delta, valueColor = 'text-steel-50', loading }) {
+function Metric({ label, value, delta, valueColor = 'text-text-primary', loading }) {
   return (
     <div className="flex flex-col">
-      <span className="h-caption">{label}</span>
-      <div className="flex items-baseline gap-2">
-        <span className={classNames('text-num-md font-semibold tabular', valueColor)}>
-          {loading ? <span className="text-steel-300">…</span> : value}
+      <span className="font-mono text-[10px] tracking-[0.15em] text-text-muted uppercase">{label}</span>
+      <div className="flex items-baseline gap-2 mt-1">
+        <span
+          className={classNames(
+            'font-mono tabular text-[18px] font-medium leading-none',
+            valueColor,
+          )}
+        >
+          {loading ? <span className="text-text-muted">…</span> : value}
         </span>
         {delta != null && (
-          <span className={classNames('text-body-sm tabular font-medium', deltaClass(delta))}>
-            {delta > 0 ? '+' : ''}
+          <span className={classNames('font-mono text-[10px] tabular tracking-tight', deltaClass(delta))}>
+            {delta > 0 ? '▲ +' : delta < 0 ? '▼ ' : ''}
             {delta.toFixed(2)}%
           </span>
         )}
@@ -99,36 +160,12 @@ function Metric({ label, value, delta, valueColor = 'text-steel-50', loading }) 
   );
 }
 
-function BotBadge({ running, loading, t }) {
-  if (loading) return <span className="pill-default">Bot …</span>;
-  return running ? (
-    <span className="pill-bull">
-      <span className="w-1.5 h-1.5 rounded-full bg-bull mr-1.5 animate-pulse" /> {t('topbar.botRunning')}
-    </span>
-  ) : (
-    <span className="pill-default">{t('topbar.botIdle')}</span>
-  );
-}
-
-function RiskBadge({ enabled, loading, t }) {
-  if (loading) return <span className="pill-default">…</span>;
-  return enabled ? (
-    <span className="pill-active inline-flex items-center gap-1.5">
-      <ShieldCheck size={12} /> {t('topbar.riskOn')}
-    </span>
-  ) : (
-    <span className="pill-warn inline-flex items-center gap-1.5">
-      <ShieldOff size={12} /> {t('topbar.riskOff')}
-    </span>
-  );
-}
-
 export function ApiErrorBanner({ error, label }) {
   const { t } = useTranslation();
   if (!error) return null;
   const message = error?.detail?.toString() || error?.message || String(error);
   return (
-    <div className="border border-warn rounded-md bg-warn-tint px-4 py-2 flex items-center gap-2 text-body-sm text-warn">
+    <div className="border border-warn px-4 py-2 flex items-center gap-2 font-mono text-[11px] text-warn tracking-wider uppercase">
       <AlertCircle size={14} /> {label || t('common.errorState')}: {message}
     </div>
   );
