@@ -21,7 +21,7 @@ const navItems = [
   { to: '/markets', label: 'Markets', icon: LineChart },
   { to: '/portfolio', label: 'Portfolio', icon: Wallet },
   { to: '/news', label: 'News', icon: Newspaper },
-  { to: '/intelligence', label: 'AI Council', icon: MessagesSquare, badge: 'P7' },
+  { to: '/intelligence', label: 'AI Council', icon: MessagesSquare },
   { to: '/backtest', label: 'Backtest', icon: FlaskConical },
   { to: '/algo', label: 'Algorithms', icon: GitBranch },
   { to: '/quantlib', label: 'Quant Lab', icon: Calculator, badge: 'P8' },

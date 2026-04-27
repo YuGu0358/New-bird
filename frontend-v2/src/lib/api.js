@@ -117,3 +117,15 @@ export const updateSettings = (body) => request('/api/settings', { method: 'PUT'
 export const getHealth = () => request('/api/health');
 export const getReadiness = () => request('/api/health/ready');
 export const getStrategyHealth = () => request('/api/strategy/health');
+
+// ----------------------------------------------------------- agents (P7)
+export const listPersonas = () => request('/api/agents/personas');
+export const analyzeWithPersona = (body) => request('/api/agents/analyze', { method: 'POST', body });
+export const councilAnalyze = (body) => request('/api/agents/council', { method: 'POST', body });
+export const listAgentHistory = (params = {}) => {
+  const qs = new URLSearchParams();
+  if (params.symbol) qs.set('symbol', params.symbol);
+  if (params.persona_id) qs.set('persona_id', params.persona_id);
+  if (params.limit) qs.set('limit', String(params.limit));
+  return request(`/api/agents/history${qs.toString() ? `?${qs}` : ''}`);
+};
