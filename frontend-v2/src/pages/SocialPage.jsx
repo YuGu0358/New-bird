@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
 import {
   Area,
   AreaChart,
@@ -27,6 +28,7 @@ import {
 import { fmtRelativeTime, fmtPct, classNames } from '../lib/format.js';
 
 export default function SocialPage() {
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const [provider, setProvider] = useState('x');
   const [symbol, setSymbol] = useState('NVDA');
@@ -70,8 +72,8 @@ export default function SocialPage() {
     <div className="space-y-6">
       <div className="flex items-end justify-between">
         <div>
-          <h1 className="h-page">Social Signals</h1>
-          <p className="text-body-sm text-steel-200 mt-1">P5 社媒信号 · X 评分 · 新闻情绪 · 多源融合给出 buy / hold / sell action</p>
+          <h1 className="h-page">{t('social.title')}</h1>
+          <p className="text-body-sm text-steel-200 mt-1">{t('social.subtitle')}</p>
         </div>
         <button
           className="btn-secondary btn-sm"

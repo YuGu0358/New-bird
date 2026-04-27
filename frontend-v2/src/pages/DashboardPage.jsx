@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
 import {
   Area,
   AreaChart,
@@ -33,6 +34,7 @@ import {
 } from '../lib/format.js';
 
 export default function DashboardPage() {
+  const { t } = useTranslation();
   const accountQ = useQuery({ queryKey: ['account'], queryFn: getAccount, refetchInterval: 30_000 });
   const healthQ = useQuery({ queryKey: ['strategy-health'], queryFn: getStrategyHealth, refetchInterval: 30_000 });
   const monitoringQ = useQuery({ queryKey: ['monitoring'], queryFn: getMonitoring, refetchInterval: 30_000 });
@@ -63,38 +65,42 @@ export default function DashboardPage() {
     <div className="space-y-6">
       <div className="flex items-end justify-between">
         <div>
-          <h1 className="h-page">Dashboard</h1>
-          <p className="text-body-sm text-steel-200 mt-1">实时账户 + 持仓 + 候选池 + 风控事件。</p>
+          <h1 className="h-page">{t('dashboard.title')}</h1>
+          <p className="text-body-sm text-steel-200 mt-1">{t('dashboard.subtitle')}</p>
         </div>
       </div>
 
       {/* KPI row */}
       <div className="grid grid-cols-4 gap-6">
         <KpiCard
-          label="Equity"
+          label={t('dashboard.kpi.equity')}
           value={fmtUsd(equity)}
           delta={equityDelta}
-          deltaLabel="vs prev close"
+          deltaLabel={t('topbar.vsPrevClose')}
           loading={accountQ.isLoading}
         />
         <KpiCard
-          label="Today PnL"
+          label={t('dashboard.kpi.todayPnl')}
           value={fmtSignedUsd(realizedToday)}
           delta={null}
           loading={healthQ.isLoading}
         />
         <KpiCard
-          label="Open positions"
+          label={t('dashboard.kpi.openPositions')}
           value={String(openCount)}
           delta={null}
           loading={healthQ.isLoading}
         />
         <KpiCard
-          label="Streak"
+          label={t('dashboard.kpi.streak')}
           value={
             streakLength === 0
               ? '—'
-              : `${streakLength} ${streakKind === 'win' ? '连胜' : streakKind === 'loss' ? '连败' : ''}`
+              : streakKind === 'win'
+                ? t('dashboard.kpi.winStreak', { n: streakLength })
+                : streakKind === 'loss'
+                  ? t('dashboard.kpi.lossStreak', { n: streakLength })
+                  : String(streakLength)
           }
           delta={null}
           loading={healthQ.isLoading}
@@ -104,13 +110,13 @@ export default function DashboardPage() {
       {/* Equity chart */}
       <div className="card">
         <SectionHeader
-          title="净值曲线"
+          title={t('dashboard.equityCurve')}
           subtitle={
             accountQ.isLoading
-              ? 'Loading…'
+              ? t('common.loading')
               : equity != null && lastEquity != null
-                ? `Last close ${fmtUsd(lastEquity)} → now ${fmtUsd(equity)}`
-                : '后端暂无历史曲线 — 显示当日相对前收盘'
+                ? t('dashboard.lastClose', { prev: fmtUsd(lastEquity), curr: fmtUsd(equity) })
+                : t('dashboard.equityCurveHint')
           }
         />
         {accountQ.isError ? (
@@ -150,13 +156,14 @@ export default function DashboardPage() {
       <div className="grid grid-cols-12 gap-6">
         {/* Holdings preview */}
         <div className="col-span-7 card">
-          <SectionHeader title="持仓概览" subtitle="Top 5 by market value" />
-          <HoldingsPreview data={trackedTop} loading={monitoringQ.isLoading} error={monitoringQ.error} retry={monitoringQ.refetch} />
+          <SectionHeader title={t('dashboard.holdings')} subtitle={t('dashboard.holdingsSubtitle')} />
+          <HoldingsPreview t={t} data={trackedTop} loading={monitoringQ.isLoading} error={monitoringQ.error} retry={monitoringQ.refetch} />
         </div>
         {/* Strategy health */}
         <div className="col-span-5 card">
-          <SectionHeader title="策略健康度" />
+          <SectionHeader title={t('dashboard.strategyHealth')} />
           <StrategyHealthSummary
+            t={t}
             loading={healthQ.isLoading}
             error={healthQ.error}
             retry={healthQ.refetch}
@@ -167,33 +174,33 @@ export default function DashboardPage() {
 
         {/* Candidate pool */}
         <div className="col-span-7 card">
-          <SectionHeader title="候选池" subtitle="今日 AI 评分 top 5" />
-          <CandidatePoolPreview data={candidates} loading={monitoringQ.isLoading} />
+          <SectionHeader title={t('dashboard.candidatePool')} subtitle={t('dashboard.candidatePoolSubtitle')} />
+          <CandidatePoolPreview t={t} data={candidates} loading={monitoringQ.isLoading} />
         </div>
         {/* Recent orders */}
         <div className="col-span-5 card">
-          <SectionHeader title="近期订单" />
-          <OrderList orders={recentOrders} loading={ordersQ.isLoading} error={ordersQ.error} retry={ordersQ.refetch} />
+          <SectionHeader title={t('dashboard.recentOrders')} />
+          <OrderList t={t} orders={recentOrders} loading={ordersQ.isLoading} error={ordersQ.error} retry={ordersQ.refetch} />
         </div>
 
         {/* Risk events */}
         <div className="col-span-12 card">
           <SectionHeader
-            title="风控事件流"
-            subtitle="最近 5 条拒单 / 警告"
+            title={t('dashboard.riskFeed')}
+            subtitle={t('dashboard.riskFeedSubtitle')}
           />
-          <RiskFeed events={recentRisk} loading={riskEventsQ.isLoading} error={riskEventsQ.error} retry={riskEventsQ.refetch} />
+          <RiskFeed t={t} events={recentRisk} loading={riskEventsQ.isLoading} error={riskEventsQ.error} retry={riskEventsQ.refetch} />
         </div>
       </div>
     </div>
   );
 }
 
-function HoldingsPreview({ data, loading, error, retry }) {
+function HoldingsPreview({ t, data, loading, error, retry }) {
   if (loading) return <LoadingState rows={4} />;
   if (error) return <ErrorState error={error} onRetry={retry} />;
   if (!data || data.length === 0)
-    return <EmptyState icon={Target} title="无持仓" hint="bot 启动且符合入场条件后会自动建仓。" />;
+    return <EmptyState icon={Target} title={t('dashboard.noPositions')} hint={t('dashboard.noPositionsHint')} />;
 
   return (
     <table className="tbl">
@@ -253,9 +260,9 @@ function Trend({ pct, label }) {
   );
 }
 
-function CandidatePoolPreview({ data, loading }) {
+function CandidatePoolPreview({ t, data, loading }) {
   if (loading) return <LoadingState rows={4} />;
-  if (!data || data.length === 0) return <EmptyState icon={Sparkles} title="今日候选池为空" hint="启动监控刷新或检查 OPENAI_API_KEY。" />;
+  if (!data || data.length === 0) return <EmptyState icon={Sparkles} title={t('dashboard.candidatesEmpty')} hint={t('dashboard.candidatesEmptyHint')} />;
   return (
     <table className="tbl">
       <thead>
@@ -280,10 +287,10 @@ function CandidatePoolPreview({ data, loading }) {
   );
 }
 
-function OrderList({ orders, loading, error, retry }) {
+function OrderList({ t, orders, loading, error, retry }) {
   if (loading) return <LoadingState rows={3} />;
   if (error) return <ErrorState error={error} onRetry={retry} />;
-  if (!orders || orders.length === 0) return <EmptyState icon={FlaskConical} title="今日无订单" />;
+  if (!orders || orders.length === 0) return <EmptyState icon={FlaskConical} title={t('dashboard.noOrdersToday')} />;
   return (
     <ul className="divide-y divide-steel-400">
       {orders.map((o, i) => (
@@ -306,10 +313,10 @@ function OrderList({ orders, loading, error, retry }) {
   );
 }
 
-function RiskFeed({ events, loading, error, retry }) {
+function RiskFeed({ t, events, loading, error, retry }) {
   if (loading) return <LoadingState rows={3} />;
   if (error) return <ErrorState error={error} onRetry={retry} />;
-  if (!events || events.length === 0) return <EmptyState icon={ShieldAlert} title="无风控事件" hint="所有提交的订单都通过了风控。" />;
+  if (!events || events.length === 0) return <EmptyState icon={ShieldAlert} title={t('dashboard.noRiskEvents')} hint={t('dashboard.noRiskEventsHint')} />;
   return (
     <ul className="divide-y divide-steel-400">
       {events.map((e) => (
@@ -332,28 +339,32 @@ function RiskFeed({ events, loading, error, retry }) {
   );
 }
 
-function StrategyHealthSummary({ data, tradesToday, loading, error, retry }) {
+function StrategyHealthSummary({ t, data, tradesToday, loading, error, retry }) {
   if (loading) return <LoadingState rows={3} />;
   if (error) return <ErrorState error={error} onRetry={retry} />;
-  if (!data) return <EmptyState title="无数据" />;
+  if (!data) return <EmptyState title={t('common.noData')} />;
   return (
     <div className="space-y-4">
-      <Row label="活跃策略" value={data.active_strategy_name || '—'} />
-      <Row label="今日交易数" value={String(tradesToday)} />
-      <Row label="胜 / 负" value={`${data.wins_today || 0} / ${data.losses_today || 0}`} />
+      <Row label={t('dashboard.activeStrategy')} value={data.active_strategy_name || '—'} />
+      <Row label={t('dashboard.tradesToday')} value={String(tradesToday)} />
+      <Row label={t('dashboard.winsLosses')} value={`${data.wins_today || 0} / ${data.losses_today || 0}`} />
       <Row
-        label="连胜 / 连败"
+        label={t('dashboard.winLossStreak')}
         value={
           data.streak_length === 0
             ? '—'
-            : `${data.streak_length} ${data.streak_kind === 'win' ? '胜' : data.streak_kind === 'loss' ? '负' : ''}`
+            : data.streak_kind === 'win'
+              ? t('dashboard.kpi.winStreak', { n: data.streak_length })
+              : data.streak_kind === 'loss'
+                ? t('dashboard.kpi.lossStreak', { n: data.streak_length })
+                : String(data.streak_length)
         }
         valueClass={
           data.streak_kind === 'win' ? 'text-bull' : data.streak_kind === 'loss' ? 'text-bear' : 'text-steel-50'
         }
       />
       <Row
-        label="最近一次成交"
+        label={t('dashboard.lastTrade')}
         value={data.last_trade_at ? fmtRelativeTime(data.last_trade_at) : '—'}
       />
     </div>

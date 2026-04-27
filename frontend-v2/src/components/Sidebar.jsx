@@ -1,4 +1,5 @@
 import { NavLink } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import {
   GaugeCircle,
   LineChart,
@@ -16,33 +17,34 @@ import {
 } from 'lucide-react';
 import { classNames } from '../lib/format.js';
 
-const navItems = [
-  { to: '/', label: 'Dashboard', icon: GaugeCircle, end: true },
-  { to: '/markets', label: 'Markets', icon: LineChart },
-  { to: '/portfolio', label: 'Portfolio', icon: Wallet },
-  { to: '/news', label: 'News', icon: Newspaper },
-  { to: '/intelligence', label: 'AI Council', icon: MessagesSquare },
-  { to: '/backtest', label: 'Backtest', icon: FlaskConical },
-  { to: '/algo', label: 'Algorithms', icon: GitBranch },
-  { to: '/quantlib', label: 'Quant Lab', icon: Calculator, badge: 'P8' },
-  { to: '/risk', label: 'Risk', icon: ShieldAlert },
-  { to: '/social', label: 'Social', icon: Radar },
-  { to: '/code', label: 'Code', icon: Code2, badge: 'P9' },
-  { to: '/settings', label: 'Settings', icon: Settings2 },
+const NAV_ITEMS = [
+  { to: '/',             key: 'dashboard',    icon: GaugeCircle,    end: true },
+  { to: '/markets',      key: 'markets',      icon: LineChart },
+  { to: '/portfolio',    key: 'portfolio',    icon: Wallet },
+  { to: '/news',         key: 'news',         icon: Newspaper },
+  { to: '/intelligence', key: 'intelligence', icon: MessagesSquare },
+  { to: '/backtest',     key: 'backtest',     icon: FlaskConical },
+  { to: '/algo',         key: 'algorithms',   icon: GitBranch },
+  { to: '/quantlib',     key: 'quantlab',     icon: Calculator },
+  { to: '/risk',         key: 'risk',         icon: ShieldAlert },
+  { to: '/social',       key: 'social',       icon: Radar },
+  { to: '/code',         key: 'code',         icon: Code2 },
+  { to: '/settings',     key: 'settings',     icon: Settings2 },
 ];
 
 export default function Sidebar() {
+  const { t } = useTranslation();
   return (
     <aside className="w-60 shrink-0 border-r border-steel-400 bg-ink-900 flex flex-col">
       <div className="h-14 px-5 flex items-center gap-2.5 border-b border-steel-400">
         <RavenMark />
         <div className="leading-tight">
-          <div className="text-[15px] font-semibold text-steel-50 tracking-wide">Trading Raven</div>
-          <div className="text-caption text-steel-200">Quant Console</div>
+          <div className="text-[15px] font-semibold text-steel-50 tracking-wide">{t('nav.brand')}</div>
+          <div className="text-caption text-steel-200">{t('nav.tagline')}</div>
         </div>
       </div>
       <nav className="flex-1 py-3 px-2 space-y-0.5 overflow-y-auto">
-        {navItems.map(({ to, label, icon: Icon, end, badge }) => (
+        {NAV_ITEMS.map(({ to, key, icon: Icon, end }) => (
           <NavLink
             key={to}
             to={to}
@@ -57,17 +59,12 @@ export default function Sidebar() {
             }
           >
             <Icon size={16} strokeWidth={1.75} />
-            <span className="text-body-sm font-medium flex-1">{label}</span>
-            {badge && (
-              <span className="text-[9px] uppercase tracking-wider text-steel-300 font-semibold border border-steel-400 rounded-sm px-1 py-px">
-                {badge}
-              </span>
-            )}
+            <span className="text-body-sm font-medium flex-1">{t(`nav.${key}`)}</span>
           </NavLink>
         ))}
       </nav>
       <div className="px-4 py-3 border-t border-steel-400 text-caption text-steel-300 flex items-center gap-1.5">
-        <Activity size={12} className="text-bull" /> v0.1.0 · backend P0–P5
+        <Activity size={12} className="text-bull" /> v0.1.0 · {t('nav.phaseStatus')}
       </div>
     </aside>
   );

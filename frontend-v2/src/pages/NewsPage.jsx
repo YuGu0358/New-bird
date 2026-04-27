@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
 import { Search as SearchIcon, ExternalLink, Newspaper, FileText, Building2 } from 'lucide-react';
 import { getNews, getResearch, getCompany, tavilySearch, getChart } from '../lib/api.js';
 import {
@@ -15,6 +16,7 @@ import { SectionHeader, LoadingState, ErrorState, EmptyState } from '../componen
 import { fmtUsd, fmtRelativeTime, fmtAbsTime } from '../lib/format.js';
 
 export default function NewsPage() {
+  const { t } = useTranslation();
   const [symbol, setSymbol] = useState('NVDA');
   const [draft, setDraft] = useState('NVDA');
   const [query, setQuery] = useState('');
@@ -60,8 +62,8 @@ export default function NewsPage() {
     <div className="space-y-6">
       <div className="flex items-end justify-between">
         <div>
-          <h1 className="h-page">News & Research</h1>
-          <p className="text-body-sm text-steel-200 mt-1">Tavily 新闻 + 公司画像 + 价格趋势 + 自由查询。</p>
+          <h1 className="h-page">{t('news.title')}</h1>
+          <p className="text-body-sm text-steel-200 mt-1">{t('news.subtitle')}</p>
         </div>
       </div>
 

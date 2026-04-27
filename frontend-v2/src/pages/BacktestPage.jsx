@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
 import {
   Area,
   AreaChart,
@@ -50,6 +51,7 @@ export default function BacktestPage() {
 }
 
 function BacktestList({ onSelect, queryClient }) {
+  const { t } = useTranslation();
   const runsQ = useQuery({ queryKey: ['backtest-runs'], queryFn: listBacktestRuns, refetchInterval: 15_000 });
   const registeredQ = useQuery({ queryKey: ['registered-strategies'], queryFn: listRegisteredStrategies });
 
@@ -82,8 +84,8 @@ function BacktestList({ onSelect, queryClient }) {
     <div className="space-y-6">
       <div className="flex items-end justify-between">
         <div>
-          <h1 className="h-page">Backtest</h1>
-          <p className="text-body-sm text-steel-200 mt-1">P3 引擎 · 同一 Strategy ABC 实盘+回测共用。</p>
+          <h1 className="h-page">{t('backtest.title')}</h1>
+          <p className="text-body-sm text-steel-200 mt-1">{t('backtest.subtitle')}</p>
         </div>
       </div>
 

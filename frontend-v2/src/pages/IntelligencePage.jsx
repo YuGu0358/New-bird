@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
 import { Sparkles, Users, History, Send, Check } from 'lucide-react';
 import {
   listPersonas,
@@ -23,15 +24,14 @@ const TABS = [
 ];
 
 export default function IntelligencePage() {
+  const { t } = useTranslation();
   const [tab, setTab] = useState('personas');
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="h-page">AI Council</h1>
-        <p className="text-body-sm text-steel-200 mt-1">
-          5 大师 + 1 Sentinel · 投资风格化分析(P7)· LLM 走 OpenAI · 上下文融合 P0–P5 全部数据
-        </p>
+        <h1 className="h-page">{t('intelligence.title')}</h1>
+        <p className="text-body-sm text-steel-200 mt-1">{t('intelligence.subtitle')}</p>
       </div>
 
       <div className="flex items-center gap-6 border-b border-steel-400">

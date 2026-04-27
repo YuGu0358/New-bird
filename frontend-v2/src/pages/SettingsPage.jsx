@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
 import { Save, Eye, EyeOff, CheckCircle2, AlertTriangle } from 'lucide-react';
 import {
   getSettingsStatus,
@@ -24,6 +25,7 @@ const OPTIONAL_KEYS = [
 ];
 
 export default function SettingsPage() {
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const statusQ = useQuery({ queryKey: ['settings-status'], queryFn: getSettingsStatus, refetchInterval: 30_000 });
   const readyQ = useQuery({ queryKey: ['readiness'], queryFn: getReadiness, refetchInterval: 30_000 });
@@ -65,8 +67,8 @@ export default function SettingsPage() {
     <div className="space-y-6">
       <div className="flex items-end justify-between">
         <div>
-          <h1 className="h-page">Settings</h1>
-          <p className="text-body-sm text-steel-200 mt-1">运行时密钥与系统状态。敏感值保存后不再回显。</p>
+          <h1 className="h-page">{t('settings.title')}</h1>
+          <p className="text-body-sm text-steel-200 mt-1">{t('settings.subtitle')}</p>
         </div>
         <ReadinessSummary status={status} ready={readyQ.data} />
       </div>

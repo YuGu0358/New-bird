@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
 import { Save, ShieldAlert, X } from 'lucide-react';
 import {
   getRiskPolicies,
@@ -17,6 +18,7 @@ import { ApiErrorBanner } from '../components/TopBar.jsx';
 import { fmtUsd, fmtRelativeTime, classNames } from '../lib/format.js';
 
 export default function RiskPage() {
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const policiesQ = useQuery({ queryKey: ['risk-policies'], queryFn: getRiskPolicies, refetchInterval: 30_000 });
   const eventsQ = useQuery({ queryKey: ['risk-events'], queryFn: listRiskEvents, refetchInterval: 15_000 });
@@ -68,8 +70,8 @@ export default function RiskPage() {
     <div className="space-y-6">
       <div className="flex items-end justify-between">
         <div>
-          <h1 className="h-page">Risk</h1>
-          <p className="text-body-sm text-steel-200 mt-1">P4 RiskGuard · 5 类政策 · 拦截 buy 不拦 sell · 事件持久化</p>
+          <h1 className="h-page">{t('risk.title')}</h1>
+          <p className="text-body-sm text-steel-200 mt-1">{t('risk.subtitle')}</p>
         </div>
       </div>
 

@@ -1,4 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
 import { Power, Trash2, GitBranch, BookOpen } from 'lucide-react';
 import {
   listStrategies,
@@ -15,6 +16,7 @@ import {
 import { fmtRelativeTime, classNames } from '../lib/format.js';
 
 export default function AlgorithmsPage() {
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const registeredQ = useQuery({ queryKey: ['registered-strategies'], queryFn: listRegisteredStrategies });
   const libraryQ = useQuery({ queryKey: ['strategies'], queryFn: listStrategies, refetchInterval: 30_000 });
@@ -31,8 +33,8 @@ export default function AlgorithmsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="h-page">Algorithms</h1>
-        <p className="text-body-sm text-steel-200 mt-1">P2 策略框架 · 注册策略类型 + 用户策略库。</p>
+        <h1 className="h-page">{t('algorithms.title')}</h1>
+        <p className="text-body-sm text-steel-200 mt-1">{t('algorithms.subtitle')}</p>
       </div>
 
       {/* Registered strategy types (P2 framework) */}

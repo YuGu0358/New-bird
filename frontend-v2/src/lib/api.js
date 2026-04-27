@@ -118,6 +118,20 @@ export const getHealth = () => request('/api/health');
 export const getReadiness = () => request('/api/health/ready');
 export const getStrategyHealth = () => request('/api/strategy/health');
 
+// ----------------------------------------------------------- quantlib (P8)
+export const optionPrice = (body) => request('/api/quantlib/option/price', { method: 'POST', body });
+export const optionGreeks = (body) => request('/api/quantlib/option/greeks', { method: 'POST', body });
+export const bondYield = (body) => request('/api/quantlib/bond/yield', { method: 'POST', body });
+export const bondRisk = (body) => request('/api/quantlib/bond/risk', { method: 'POST', body });
+export const valueAtRisk = (body) => request('/api/quantlib/var', { method: 'POST', body });
+
+// ----------------------------------------------------------- code editor (P9)
+export const listUserStrategies = () => request('/api/code/strategies');
+export const uploadUserStrategy = (body) => request('/api/code/upload', { method: 'POST', body });
+export const getUserStrategySource = (id) => request(`/api/code/strategies/${id}/source`);
+export const reloadUserStrategy = (id) => request(`/api/code/strategies/${id}/reload`, { method: 'POST' });
+export const deleteUserStrategy = (id) => request(`/api/code/strategies/${id}`, { method: 'DELETE' });
+
 // ----------------------------------------------------------- agents (P7)
 export const listPersonas = () => request('/api/agents/personas');
 export const analyzeWithPersona = (body) => request('/api/agents/analyze', { method: 'POST', body });

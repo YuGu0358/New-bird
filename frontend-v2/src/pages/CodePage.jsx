@@ -1,105 +1,272 @@
-import { Code2, Upload, Play, ShieldCheck, Database } from 'lucide-react';
-import { SectionHeader } from '../components/primitives.jsx';
+import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import CodeMirror from '@uiw/react-codemirror';
+import { python } from '@codemirror/lang-python';
+import { oneDark } from '@codemirror/theme-one-dark';
+import {
+  Code2, Upload, Trash2, RefreshCw, FileCode, Sparkles, AlertTriangle,
+} from 'lucide-react';
+import {
+  listUserStrategies,
+  uploadUserStrategy,
+  getUserStrategySource,
+  reloadUserStrategy,
+  deleteUserStrategy,
+} from '../lib/api.js';
+import {
+  SectionHeader,
+  LoadingState,
+  ErrorState,
+  EmptyState,
+  StatusBadge,
+} from '../components/primitives.jsx';
+import { ApiErrorBanner } from '../components/TopBar.jsx';
+import { fmtRelativeTime, classNames } from '../lib/format.js';
 
-export default function CodePage() {
-  return (
-    <div className="space-y-6">
-      <div className="flex items-end justify-between">
-        <div>
-          <h1 className="h-page">Code Editor</h1>
-          <p className="text-body-sm text-steel-200 mt-1">自己写 Python 策略 · 沙箱运行 · 注册到 strategy registry(P9)</p>
-        </div>
-        <span className="pill-warn">Coming in P9</span>
-      </div>
 
-      <div className="card">
-        <SectionHeader title="工作流" />
-        <div className="grid grid-cols-4 gap-4">
-          <Step icon={Code2} num={1} title="写代码">
-            浏览器内 Monaco editor,继承 <code className="font-mono text-accent-silver">core.strategy.Strategy</code> ABC
-          </Step>
-          <Step icon={Upload} num={2} title="上传 + 校验">
-            后端 AST 静态扫描 → 检查必要方法 + 拒绝危险 import (os, subprocess, requests)
-          </Step>
-          <Step icon={Play} num={3} title="沙箱回测">
-            一键跑 P3 backtest engine,看是否能正常订阅 universe + 处理 bar
-          </Step>
-          <Step icon={Database} num={4} title="注册激活">
-            通过 sandbox 验证后,代码持久化到 user_strategies 表 + 通过装饰器注入 registry
-          </Step>
-        </div>
-      </div>
+const STARTER_TEMPLATE = `from __future__ import annotations
+from datetime import datetime
 
-      <div className="card">
-        <SectionHeader title="安全考虑" />
-        <ul className="text-body-sm text-steel-100 space-y-2">
-          <li className="flex items-start gap-2">
-            <ShieldCheck size={14} className="text-bull mt-0.5 shrink-0" />
-            子进程执行 + 资源限制(CPU 时间 / 内存上限 / 文件句柄数)
-          </li>
-          <li className="flex items-start gap-2">
-            <ShieldCheck size={14} className="text-bull mt-0.5 shrink-0" />
-            白名单 import:numpy / pandas / 我们自己的 core.* 模块 / 数学库
-          </li>
-          <li className="flex items-start gap-2">
-            <ShieldCheck size={14} className="text-bull mt-0.5 shrink-0" />
-            禁止网络 / 文件系统 / 外部进程调用
-          </li>
-          <li className="flex items-start gap-2">
-            <ShieldCheck size={14} className="text-bull mt-0.5 shrink-0" />
-            执行超时(默认 60 秒,可在 Settings 配)
-          </li>
-        </ul>
-      </div>
-
-      <div className="card-dense bg-ink-900 border-dashed">
-        <div className="text-caption text-steel-200 mb-2">示例代码(P9 编辑器开头会预填)</div>
-        <pre className="font-mono text-[12px] text-steel-100 overflow-auto leading-relaxed">{`from core.strategy import Strategy, register_strategy
+from core.strategy import Strategy, register_strategy
 from app.models import StrategyExecutionParameters
 
 
-@register_strategy("my_first_strategy")
+@register_strategy("__SLOT_NAME__")
 class MyStrategy(Strategy):
-    description = "Buy on -3% drop, sell on +5% gain."
+    description = "Buy on -3% drop, hold."
 
     @classmethod
     def parameters_schema(cls):
         return StrategyExecutionParameters
 
-    def universe(self):
+    def __init__(self, parameters, *, broker=None) -> None:
+        super().__init__(parameters)
+        self._broker = broker
+
+    def universe(self) -> list[str]:
         return list(self.parameters.universe_symbols)
 
-    async def on_start(self, ctx):
-        pass
+    async def on_start(self, ctx) -> None:
+        return None
 
-    async def on_periodic_sync(self, ctx, now):
-        pass
+    async def on_periodic_sync(self, ctx, now: datetime) -> None:
+        return None
 
     async def on_tick(self, ctx, *, symbol, price, previous_close, timestamp=None):
         if previous_close <= 0:
             return
         drop = (price - previous_close) / previous_close
-        if drop <= -0.03:
-            await ctx.broker.submit_order(
+        if drop <= -0.03 and self._broker is not None:
+            await self._broker.submit_order(
                 symbol=symbol, side="buy", notional=1000.0,
             )
-`}</pre>
+`;
+
+
+export default function CodePage() {
+  const { t } = useTranslation();
+  const queryClient = useQueryClient();
+
+  const [slotName, setSlotName] = useState('user_my_strategy_v1');
+  const [displayName, setDisplayName] = useState('My strategy');
+  const [description, setDescription] = useState('');
+  const [source, setSource] = useState(STARTER_TEMPLATE.replace('__SLOT_NAME__', 'user_my_strategy_v1'));
+
+  const listQ = useQuery({ queryKey: ['user-strategies'], queryFn: listUserStrategies, refetchInterval: 30_000 });
+
+  const uploadMut = useMutation({
+    mutationFn: uploadUserStrategy,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['user-strategies'] }),
+  });
+  const reloadMut = useMutation({
+    mutationFn: reloadUserStrategy,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['user-strategies'] }),
+  });
+  const deleteMut = useMutation({
+    mutationFn: deleteUserStrategy,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['user-strategies'] }),
+  });
+
+  function submit(e) {
+    e.preventDefault();
+    if (!slotName.trim() || !source.trim()) return;
+    uploadMut.mutate({
+      slot_name: slotName.trim(),
+      display_name: displayName.trim(),
+      description: description.trim(),
+      source_code: source,
+    });
+  }
+
+  function insertStarter() {
+    setSource(STARTER_TEMPLATE.replace('__SLOT_NAME__', slotName.trim() || 'user_my_strategy_v1'));
+  }
+
+  async function loadIntoEditor(item) {
+    try {
+      const detail = await getUserStrategySource(item.id);
+      setSlotName(detail.slot_name);
+      setDisplayName(detail.display_name);
+      setDescription(detail.description);
+      setSource(detail.source_code);
+    } catch (e) {
+      console.error('Failed to load source:', e);
+    }
+  }
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h1 className="h-page">{t('code.title')}</h1>
+        <p className="text-body-sm text-steel-200 mt-1">{t('code.subtitle')}</p>
+      </div>
+
+      <div className="grid grid-cols-12 gap-6">
+        {/* Left: editor */}
+        <form onSubmit={submit} className="col-span-8 card space-y-4">
+          <SectionHeader title={t('code.newUpload')} action={
+            <button type="button" className="btn-secondary btn-sm" onClick={insertStarter}>
+              <Sparkles size={12} /> {t('code.starterTemplate')}
+            </button>
+          } />
+
+          <div className="grid grid-cols-3 gap-4">
+            <div>
+              <label className="h-caption block mb-2">{t('code.slotName')}</label>
+              <input className="input font-mono" value={slotName} onChange={(e) => setSlotName(e.target.value)} required />
+              <p className="text-caption text-steel-300 mt-1">{t('code.slotNameHint')}</p>
+            </div>
+            <div>
+              <label className="h-caption block mb-2">{t('code.displayName')}</label>
+              <input className="input" value={displayName} onChange={(e) => setDisplayName(e.target.value)} />
+              <p className="text-caption text-steel-300 mt-1">{t('code.displayNameHint')}</p>
+            </div>
+            <div>
+              <label className="h-caption block mb-2">{t('code.descriptionField')}</label>
+              <input className="input" value={description} onChange={(e) => setDescription(e.target.value)} />
+              <p className="text-caption text-steel-300 mt-1">{t('code.descriptionHint')}</p>
+            </div>
+          </div>
+
+          <div>
+            <label className="h-caption block mb-2">{t('code.sourceCode')}</label>
+            <div className="border border-steel-400 rounded-md overflow-hidden">
+              <CodeMirror
+                value={source}
+                height="540px"
+                theme={oneDark}
+                extensions={[python()]}
+                onChange={setSource}
+                basicSetup={{
+                  lineNumbers: true,
+                  foldGutter: true,
+                  highlightActiveLine: true,
+                  bracketMatching: true,
+                  closeBrackets: true,
+                  autocompletion: true,
+                  indentOnInput: true,
+                }}
+              />
+            </div>
+            <p className="text-caption text-steel-300 mt-2">{t('code.sourceHint')}</p>
+          </div>
+
+          {uploadMut.isError && <ApiErrorBanner error={uploadMut.error} label={t('code.uploadFailed')} />}
+          {uploadMut.isSuccess && (
+            <div className="border border-bull/40 rounded-md bg-bull-tint px-3 py-2 text-body-sm text-bull">
+              ✓ {t('code.uploadSuccess')}
+            </div>
+          )}
+
+          <button type="submit" className="btn-primary" disabled={uploadMut.isPending || !slotName.trim() || !source.trim()}>
+            <Upload size={14} /> {uploadMut.isPending ? t('code.uploading') : t('code.uploadButton')}
+          </button>
+        </form>
+
+        {/* Right: list of uploads */}
+        <div className="col-span-4 card">
+          <SectionHeader
+            title={t('code.uploadedList')}
+            subtitle={t('code.uploadedSubtitle', { count: listQ.data?.items?.length ?? 0 })}
+          />
+          <UploadedList
+            q={listQ}
+            t={t}
+            onLoad={loadIntoEditor}
+            onReload={(id) => reloadMut.mutate(id)}
+            onDelete={(item) => {
+              if (confirm(t('code.deleteConfirm', { name: item.slot_name }))) {
+                deleteMut.mutate(item.id);
+              }
+            }}
+            reloading={reloadMut.isPending}
+            deleting={deleteMut.isPending}
+          />
+        </div>
       </div>
     </div>
   );
 }
 
-function Step({ icon: Icon, num, title, children }) {
+
+function UploadedList({ q, t, onLoad, onReload, onDelete, reloading, deleting }) {
+  if (q.isLoading) return <LoadingState rows={3} />;
+  if (q.isError) return <ErrorState error={q.error} onRetry={q.refetch} />;
+  const items = q.data?.items || [];
+  if (items.length === 0) return <EmptyState icon={Code2} title={t('code.uploadedEmpty')} hint={t('code.uploadedEmptyHint')} />;
+
   return (
-    <div className="card-dense">
-      <div className="flex items-center gap-2 mb-2">
-        <span className="w-6 h-6 rounded-full bg-steel-500 text-ink-950 text-caption font-bold flex items-center justify-center">
-          {num}
-        </span>
-        <Icon size={16} className="text-steel-500" strokeWidth={1.75} />
-      </div>
-      <div className="text-body font-semibold text-steel-50 mb-1">{title}</div>
-      <div className="text-body-sm text-steel-100 leading-relaxed">{children}</div>
-    </div>
+    <ul className="space-y-3 max-h-[640px] overflow-auto pr-1">
+      {items.map((it) => (
+        <li key={it.id} className="card-dense">
+          <div className="flex items-start justify-between gap-2 mb-1">
+            <div className="min-w-0 flex-1">
+              <div className="font-mono text-caption text-accent-silver truncate">{it.slot_name}</div>
+              <div className="text-body font-semibold text-steel-50 truncate">{it.display_name || it.slot_name}</div>
+            </div>
+            <StrategyStatusBadge status={it.status} t={t} />
+          </div>
+          {it.description && (
+            <p className="text-caption text-steel-200 mb-2 line-clamp-2">{it.description}</p>
+          )}
+          {it.last_error && (
+            <div className="border border-bear/40 rounded bg-bear-tint/40 px-2 py-1.5 mb-2 text-caption text-bear flex items-start gap-1.5">
+              <AlertTriangle size={11} className="shrink-0 mt-0.5" />
+              <div>
+                <div className="font-medium">{t('code.lastError')}:</div>
+                <div className="text-bear/90 break-all">{it.last_error}</div>
+              </div>
+            </div>
+          )}
+          <div className="text-caption text-steel-300 mb-2">{fmtRelativeTime(it.updated_at)}</div>
+          <div className="flex gap-1.5 flex-wrap">
+            <button className="btn-secondary btn-sm" onClick={() => onLoad(it)} title={t('code.loadIntoEditor')}>
+              <FileCode size={11} /> {t('code.loadIntoEditor')}
+            </button>
+            <button className="btn-ghost btn-sm" onClick={() => onReload(it.id)} disabled={reloading} title={t('code.reload')}>
+              <RefreshCw size={11} className={reloading ? 'animate-spin' : ''} />
+            </button>
+            <button className="btn-destructive btn-sm" onClick={() => onDelete(it)} disabled={deleting} title={t('code.delete')}>
+              <Trash2 size={11} />
+            </button>
+          </div>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+
+function StrategyStatusBadge({ status, t }) {
+  const map = {
+    active: 'pill-bull',
+    failed: 'pill-bear',
+    disabled: 'pill-default',
+  };
+  return (
+    <span className={classNames(map[status] || 'pill-default', 'shrink-0')}>
+      {t(`code.registryStatus.${status}`, status)}
+    </span>
   );
 }

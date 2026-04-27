@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
 import { Plus, X, RefreshCw, Search as SearchIcon, ArrowUpRight, ArrowDownRight } from 'lucide-react';
 import {
   getMonitoring,
@@ -17,6 +18,7 @@ import {
 import { fmtUsd, fmtPct, fmtSignedUsd, classNames } from '../lib/format.js';
 
 export default function MarketsPage() {
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const [searchTerm, setSearchTerm] = useState('');
   const monitoringQ = useQuery({ queryKey: ['monitoring'], queryFn: getMonitoring, refetchInterval: 30_000 });
@@ -52,15 +54,15 @@ export default function MarketsPage() {
     <div className="space-y-6">
       <div className="flex items-end justify-between">
         <div>
-          <h1 className="h-page">Markets</h1>
-          <p className="text-body-sm text-steel-200 mt-1">监控总览 + universe 搜索 + watchlist。后端 P0 监控层 + P0 候选池一览。</p>
+          <h1 className="h-page">{t('markets.title')}</h1>
+          <p className="text-body-sm text-steel-200 mt-1">{t('markets.subtitle')}</p>
         </div>
         <button
           className="btn-secondary btn-sm"
           onClick={() => refreshMut.mutate()}
           disabled={refreshMut.isPending}
         >
-          <RefreshCw size={14} className={refreshMut.isPending ? 'animate-spin' : ''} /> 强制刷新
+          <RefreshCw size={14} className={refreshMut.isPending ? 'animate-spin' : ''} /> {t('markets.forceRefresh')}
         </button>
       </div>
 
