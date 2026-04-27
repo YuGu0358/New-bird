@@ -103,6 +103,7 @@ function PersonaCard({ persona, selected, onSelect, compact = false }) {
 // ---------------------------------------------------------- Single Persona
 
 function SinglePersonaTab() {
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const personasQ = useQuery({ queryKey: ['agent-personas'], queryFn: listPersonas });
 
