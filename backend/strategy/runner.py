@@ -7,8 +7,10 @@ from datetime import date, datetime, timezone
 import strategies  # noqa: F401  -- triggers @register_strategy decorators
 
 from app.database import init_database
+from app.services import alpaca_service as _alpaca_service
 from app.services import polygon_service, strategy_profiles_service
 
+from core.risk.portfolio_snapshot import PortfolioPositionView, PortfolioSnapshot
 from core.strategy.context import StrategyContext
 from core.strategy.registry import default_registry
 
@@ -26,15 +28,74 @@ QUOTE_POLL_INTERVAL_SECONDS = 5
 DEFAULT_STRATEGY_NAME = "strategy_b_v1"
 
 
+async def _live_portfolio_snapshot() -> PortfolioSnapshot:
+    try:
+        account = await _alpaca_service.get_account()
+    except Exception:
+        account = {}
+    try:
+        positions = await _alpaca_service.list_positions()
+    except Exception:
+        positions = []
+
+    pos_views: dict[str, PortfolioPositionView] = {}
+    for p in positions:
+        symbol = str(p.get("symbol", "")).upper()
+        if not symbol:
+            continue
+        try:
+            qty = float(p.get("qty", 0) or 0)
+            entry = float(p.get("avg_entry_price", p.get("entry_price", 0)) or 0)
+            current = float(p.get("current_price", entry) or entry)
+            mv = float(p.get("market_value", qty * current) or qty * current)
+            upl = float(p.get("unrealized_pl", (current - entry) * qty) or 0)
+        except (TypeError, ValueError):
+            continue
+        pos_views[symbol] = PortfolioPositionView(
+            symbol=symbol,
+            qty=qty,
+            average_entry_price=entry,
+            current_price=current,
+            market_value=mv,
+            unrealized_pl=upl,
+        )
+
+    cash = float(account.get("cash", 0) or 0)
+    equity = float(account.get("equity", cash) or cash)
+    return PortfolioSnapshot(
+        cash=cash,
+        equity=equity,
+        positions=pos_views,
+        realized_pnl_today=0.0,  # Phase 5 wires this up via trade-history aggregation.
+    )
+
+
 async def _build_active_strategy():
     """Resolve the active strategy class + parameters from the profiles service."""
+    from app.database import AsyncSessionLocal
+    from app.services import risk_service
+
+    from core.broker import AlpacaBroker
+    from core.risk import RiskGuard
+
     strategy_display_name, parameters = await strategy_profiles_service.get_active_strategy_execution_profile()
     strategy_cls = default_registry.get(DEFAULT_STRATEGY_NAME)
-    strategy = strategy_cls(parameters)
+
+    # Load risk config from DB and wrap broker.
+    base_broker = AlpacaBroker()
+    async with AsyncSessionLocal() as session:
+        risk_view = await risk_service.get_config_view(session)
+    if risk_view.get("enabled"):
+        policies = risk_service.build_policies_from_config(risk_view)
+        if policies:
+            base_broker = RiskGuard(base_broker, policies=policies, snapshot_provider=_live_portfolio_snapshot)
+
+    strategy = strategy_cls(parameters, broker=base_broker)
     logger.info(
-        "Loaded strategy %s (display=%r) with universe size %d",
+        "Loaded strategy %s (display=%r, risk-policies=%d) with universe size %d",
         DEFAULT_STRATEGY_NAME,
         strategy_display_name,
+        len(risk_service.build_policies_from_config(risk_view)) if risk_view.get("enabled") else 0,
         len(strategy.universe()),
     )
     return strategy
