@@ -316,3 +316,33 @@ class MacroThresholdOverride(Base):
         default=lambda: datetime.now(timezone.utc),
         onupdate=lambda: datetime.now(timezone.utc),
     )
+
+
+class JournalEntry(Base):
+    """User-authored investment journal entry (markdown body + symbol tags + mood).
+
+    `mood` is stored as a plain string; the service layer enforces the
+    enum (bullish|bearish|neutral|watching). Same convention as other
+    enum-like string columns in this module (e.g.
+    `SocialSignalSnapshot.action`) — keeps the DB schema flexible.
+    """
+
+    __tablename__ = "journal_entries"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    title: Mapped[str] = mapped_column(String(120), nullable=False, default="")
+    body: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    symbols: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    mood: Mapped[str] = mapped_column(String(16), nullable=False, default="neutral")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+        index=True,
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+    )
