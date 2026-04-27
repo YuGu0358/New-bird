@@ -80,59 +80,59 @@ export default function NewsPage() {
             />
           </div>
         </div>
-        <button type="submit" className="btn-primary">查询</button>
+        <button type="submit" className="btn-primary">{t('news.querySymbol')}</button>
       </form>
 
       {/* Chart */}
       <div className="card">
-        <SectionHeader title={`${symbol} 价格趋势`} subtitle="过去 1 个月 close" />
-        <ChartView q={chartQ} />
+        <SectionHeader title={t('news.priceTrend', { symbol })} subtitle={t('news.priceTrendSubtitle')} />
+        <ChartView q={chartQ} t={t} />
       </div>
 
       {/* Three-column research */}
       <div className="grid grid-cols-12 gap-6">
         <div className="col-span-4 card">
-          <SectionHeader title="公司画像" />
-          <CompanyView q={companyQ} />
+          <SectionHeader title={t('news.companyProfile')} />
+          <CompanyView q={companyQ} t={t} />
         </div>
         <div className="col-span-4 card">
-          <SectionHeader title="新闻摘要" subtitle="Tavily" />
-          <NewsView q={newsQ} />
+          <SectionHeader title={t('news.newsSummary')} subtitle="Tavily" />
+          <NewsView q={newsQ} t={t} />
         </div>
         <div className="col-span-4 card">
-          <SectionHeader title="研究简报" />
-          <ResearchView q={researchQ} />
+          <SectionHeader title={t('news.researchBrief')} />
+          <ResearchView q={researchQ} t={t} />
         </div>
       </div>
 
       {/* Free Tavily search */}
       <div className="card">
-        <SectionHeader title="自由检索 (Tavily)" subtitle="任意关键词 — 例如 'NVDA earnings beat'" />
+        <SectionHeader title={t('news.freeSearch')} subtitle={t('news.freeSearchSubtitle')} />
         <form onSubmit={commitQuery} className="flex gap-3 mb-4">
           <input
             className="input flex-1 max-w-2xl"
-            placeholder="搜索内容…"
+            placeholder={t('news.searchContent')}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
           <button type="submit" className="btn-primary" disabled={!query.trim()}>
-            搜索
+            {t('common.search')}
           </button>
         </form>
-        <TavilyResults q={tavilyQ} />
+        <TavilyResults q={tavilyQ} t={t} />
       </div>
     </div>
   );
 }
 
-function ChartView({ q }) {
-  if (q.isLoading) return <LoadingState rows={4} label="Loading chart…" />;
+function ChartView({ q, t }) {
+  if (q.isLoading) return <LoadingState rows={4} label={t('news.loadingChart')} />;
   if (q.isError) return <ErrorState error={q.error} onRetry={q.refetch} />;
   const points = (q.data?.points || q.data?.bars || []).map((p) => ({
     t: p.date || p.timestamp || p.t,
     v: parseFloat(p.close ?? p.price ?? p.v ?? 0),
   }));
-  if (points.length === 0) return <EmptyState title="暂无价格数据" />;
+  if (points.length === 0) return <EmptyState title={t('news.noPriceData')} />;
   return (
     <div className="h-72">
       <ResponsiveContainer width="100%" height="100%">
@@ -157,57 +157,57 @@ function ChartView({ q }) {
   );
 }
 
-function CompanyView({ q }) {
+function CompanyView({ q, t }) {
   if (q.isLoading) return <LoadingState rows={3} />;
   if (q.isError) return <ErrorState error={q.error} onRetry={q.refetch} />;
   const d = q.data || {};
-  if (!d.symbol && !d.company_name) return <EmptyState icon={Building2} title="无公司画像" />;
+  if (!d.symbol && !d.company_name) return <EmptyState icon={Building2} title={t('news.noProfile')} />;
   return (
     <div className="space-y-3">
       <div>
-        <div className="text-body font-semibold text-steel-50">{d.company_name || d.name || d.symbol}</div>
-        <div className="text-caption text-steel-200">{d.symbol} · {d.sector || ''} · {d.industry || ''}</div>
+        <div className="text-body font-semibold text-text-primary">{d.company_name || d.name || d.symbol}</div>
+        <div className="text-caption text-text-secondary">{d.symbol} · {d.sector || ''} · {d.industry || ''}</div>
       </div>
-      <p className="text-body-sm text-steel-100 leading-relaxed">{d.business_summary || d.summary || '—'}</p>
-      <div className="text-caption text-steel-300">
-        生成时间: {d.generated_at ? fmtRelativeTime(d.generated_at) : '—'}
-      </div>
-    </div>
-  );
-}
-
-function NewsView({ q }) {
-  if (q.isLoading) return <LoadingState rows={3} />;
-  if (q.isError) return <ErrorState error={q.error} onRetry={q.refetch} />;
-  const d = q.data || {};
-  if (!d.summary) return <EmptyState icon={Newspaper} title="无新闻摘要" />;
-  return (
-    <div className="space-y-3">
-      <p className="text-body-sm text-steel-100 leading-relaxed">{d.summary}</p>
-      <div className="text-caption text-steel-300">
-        Source: {d.source || 'Tavily'} · {d.timestamp ? fmtRelativeTime(d.timestamp) : ''}
+      <p className="text-body-sm text-text-primary leading-relaxed">{d.business_summary || d.summary || '—'}</p>
+      <div className="text-caption text-text-muted">
+        {t('news.generatedAt')}: {d.generated_at ? fmtRelativeTime(d.generated_at) : '—'}
       </div>
     </div>
   );
 }
 
-function ResearchView({ q }) {
+function NewsView({ q, t }) {
   if (q.isLoading) return <LoadingState rows={3} />;
   if (q.isError) return <ErrorState error={q.error} onRetry={q.refetch} />;
   const d = q.data || {};
-  if (!d.report && !d.summary) return <EmptyState icon={FileText} title="无研究简报" />;
+  if (!d.summary) return <EmptyState icon={Newspaper} title={t('news.noNews')} />;
   return (
     <div className="space-y-3">
-      <p className="text-body-sm text-steel-100 leading-relaxed whitespace-pre-wrap">
+      <p className="text-body-sm text-text-primary leading-relaxed">{d.summary}</p>
+      <div className="text-caption text-text-muted">
+        {t('news.source')}: {d.source || 'Tavily'} · {d.timestamp ? fmtRelativeTime(d.timestamp) : ''}
+      </div>
+    </div>
+  );
+}
+
+function ResearchView({ q, t }) {
+  if (q.isLoading) return <LoadingState rows={3} />;
+  if (q.isError) return <ErrorState error={q.error} onRetry={q.refetch} />;
+  const d = q.data || {};
+  if (!d.report && !d.summary) return <EmptyState icon={FileText} title={t('news.noResearch')} />;
+  return (
+    <div className="space-y-3">
+      <p className="text-body-sm text-text-primary leading-relaxed whitespace-pre-wrap">
         {d.report || d.summary}
       </p>
     </div>
   );
 }
 
-function TavilyResults({ q }) {
+function TavilyResults({ q, t }) {
   if (q.isIdle || (!q.isLoading && !q.data)) {
-    return <div className="text-body-sm text-steel-200">输入查询语句后按搜索。</div>;
+    return <div className="text-body-sm text-text-secondary">{t('news.searchContent')}</div>;
   }
   if (q.isLoading) return <LoadingState rows={4} />;
   if (q.isError) return <ErrorState error={q.error} onRetry={q.refetch} />;
@@ -215,13 +215,13 @@ function TavilyResults({ q }) {
   return (
     <div className="space-y-4">
       {q.data?.answer && (
-        <div className="rounded-md bg-ink-900 border border-steel-400 p-4">
-          <div className="h-caption mb-2">答案</div>
-          <p className="text-body-sm text-steel-100 leading-relaxed">{q.data.answer}</p>
+        <div className="bg-surface border border-border-subtle p-4">
+          <div className="h-caption mb-2">{t('news.answer')}</div>
+          <p className="text-body-sm text-text-primary leading-relaxed">{q.data.answer}</p>
         </div>
       )}
       <div className="space-y-2">
-        {sources.length === 0 && <div className="text-caption text-steel-200">无结果</div>}
+        {sources.length === 0 && <div className="text-caption text-text-secondary">{t('common.noData')}</div>}
         {sources.map((s, i) => (
           <a
             key={i}

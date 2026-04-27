@@ -91,10 +91,10 @@ export default function SocialPage() {
 
       {/* KPIs */}
       <div className="grid grid-cols-4 gap-6">
-        <KpiCard label="历史信号总数" value={String(signals.length)} delta={null} />
-        <KpiCard label="今日 buy" value={String(todayCounts.buy || 0)} delta={null} />
-        <KpiCard label="今日 sell" value={String(todayCounts.sell || 0)} delta={null} />
-        <KpiCard label="提供者" value={(providersQ.data || []).map((p) => p.name).join(' / ') || '—'} delta={null} />
+        <KpiCard label={t('social.kpi.totalSignals')} value={String(signals.length)} delta={null} />
+        <KpiCard label={t('social.kpi.todayBuys')} value={String(todayCounts.buy || 0)} delta={null} />
+        <KpiCard label={t('social.kpi.todaySells')} value={String(todayCounts.sell || 0)} delta={null} />
+        <KpiCard label={t('social.kpi.providers')} value={(providersQ.data || []).map((p) => p.name).join(' / ') || '—'} delta={null} />
       </div>
 
       {/* Selected symbol detail */}
@@ -118,18 +118,18 @@ export default function SocialPage() {
             />
           </div>
         </div>
-        <button type="submit" className="btn-primary">查询</button>
+        <button type="submit" className="btn-primary">{t('social.queryButton')}</button>
       </form>
 
       {/* Score detail */}
       <div className="grid grid-cols-12 gap-6">
         <div className="col-span-7 card">
           <SectionHeader
-            title={`${symbol} 评分历史`}
-            subtitle="social_score / market_score / final_weight 时间序列"
+            title={t('social.scoreHistory', { symbol })}
+            subtitle={t('social.scoreHistorySubtitle')}
           />
           {symbolHistory.length === 0 ? (
-            <EmptyState icon={Radar} title={`${symbol} 暂无评分历史`} hint="先点上面的 '触发评分' 按钮。" />
+            <EmptyState icon={Radar} title={t('social.noScoreHistory')} hint={t('social.noScoreHistoryHint')} />
           ) : (
             <div className="h-72">
               <ResponsiveContainer width="100%" height="100%">
@@ -161,28 +161,28 @@ export default function SocialPage() {
         </div>
 
         <div className="col-span-5 card">
-          <SectionHeader title="最新评分快照" />
+          <SectionHeader title={t('social.latestSnapshot')} />
           <ScoreSnapshot q={scoreQ} />
         </div>
       </div>
 
       {/* Recent signals across all symbols */}
       <div className="card">
-        <SectionHeader title="所有 symbol 最新信号" subtitle="P5 social_signal_snapshots 最新 50 条" />
+        <SectionHeader title={t('social.allSignalsTitle')} subtitle={t('social.allSignalsSubtitle')} />
         <SignalsTable q={signalsQ} onSelect={(sym) => { setDraft(sym); setSymbol(sym); }} />
       </div>
 
       {/* Free social search */}
       <div className="card">
-        <SectionHeader title="自由搜索社媒帖子" subtitle="走 P0 的 /api/social/search,直接打到 provider" />
+        <SectionHeader title={t('social.freeSearchTitle')} subtitle={t('social.freeSearchSubtitle')} />
         <form onSubmit={commitSearch} className="flex gap-3 mb-4">
           <input
             className="input flex-1 max-w-2xl"
-            placeholder="例如:NVDA earnings beat OR NVDA AI"
+            placeholder="NVDA earnings beat OR NVDA AI"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
           />
-          <button type="submit" className="btn-primary" disabled={!searchQuery.trim()}>搜索</button>
+          <button type="submit" className="btn-primary" disabled={!searchQuery.trim()}>{t('common.search')}</button>
         </form>
         <SearchResults q={searchQ} />
       </div>
@@ -191,10 +191,11 @@ export default function SocialPage() {
 }
 
 function ScoreSnapshot({ q }) {
+  const { t } = useTranslation();
   if (q.isLoading) return <LoadingState rows={3} />;
   if (q.isError) return <ErrorState error={q.error} onRetry={q.refetch} />;
   const d = q.data;
-  if (!d) return <EmptyState title="暂无评分" />;
+  if (!d) return <EmptyState title={t('social.noScore')} />;
   const action = (d.action || '').toLowerCase();
   const actionPill =
     action === 'buy' ? 'pill-bull' :
@@ -234,10 +235,11 @@ function Stat({ label, value, valueClass = 'text-steel-100' }) {
 }
 
 function SignalsTable({ q, onSelect }) {
+  const { t } = useTranslation();
   if (q.isLoading) return <LoadingState rows={5} />;
   if (q.isError) return <ErrorState error={q.error} onRetry={q.refetch} />;
   const items = q.data || [];
-  if (items.length === 0) return <EmptyState icon={Radar} title="暂无信号" />;
+  if (items.length === 0) return <EmptyState icon={Radar} title={t('social.noSignalsYet')} />;
   return (
     <table className="tbl">
       <thead>
@@ -282,11 +284,12 @@ function SignalsTable({ q, onSelect }) {
 }
 
 function SearchResults({ q }) {
-  if (!q.data && !q.isLoading) return <div className="text-body-sm text-steel-200">输入查询后按搜索。</div>;
+  const { t } = useTranslation();
+  if (!q.data && !q.isLoading) return <div className="text-body-sm text-text-secondary">{t('news.searchContent')}</div>;
   if (q.isLoading) return <LoadingState rows={3} />;
   if (q.isError) return <ErrorState error={q.error} onRetry={q.refetch} />;
   const posts = q.data?.posts || q.data?.items || [];
-  if (posts.length === 0) return <EmptyState title="无帖子" />;
+  if (posts.length === 0) return <EmptyState title={t('social.noPosts')} />;
 
   return (
     <div className="space-y-3">

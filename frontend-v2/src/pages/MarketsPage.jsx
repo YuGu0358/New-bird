@@ -71,14 +71,14 @@ export default function MarketsPage() {
       {/* Search universe + add watchlist */}
       <div className="card">
         <SectionHeader
-          title="Universe 搜索 + Watchlist"
+          title={t('markets.universeSearch')}
           subtitle={`Watchlist: ${watchlist.length} symbol${watchlist.length === 1 ? '' : 's'}`}
         />
         <div className="relative max-w-md">
           <SearchIcon size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-steel-200" />
           <input
             className="input pl-9"
-            placeholder="搜索 symbol(NVDA / SPY / AAPL …)"
+            placeholder={t('markets.searchPlaceholder')}
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value.toUpperCase())}
           />
@@ -86,11 +86,11 @@ export default function MarketsPage() {
         {searchTerm.length >= 1 && (
           <div className="mt-3">
             {universeQ.isLoading ? (
-              <div className="text-caption text-steel-200">搜索中…</div>
+              <div className="text-caption text-text-secondary">{t('markets.searching')}</div>
             ) : universeQ.isError ? (
               <ErrorState error={universeQ.error} />
             ) : (universeQ.data || []).length === 0 ? (
-              <div className="text-caption text-steel-200">无结果</div>
+              <div className="text-caption text-text-secondary">{t('markets.noResults')}</div>
             ) : (
               <ul className="space-y-1 max-h-60 overflow-auto border border-steel-400 rounded-md divide-y divide-steel-400">
                 {(universeQ.data || []).map((row) => (
@@ -104,7 +104,7 @@ export default function MarketsPage() {
                       onClick={() => addMut.mutate(row.symbol)}
                       disabled={watchlist.includes(row.symbol) || addMut.isPending}
                     >
-                      <Plus size={14} /> {watchlist.includes(row.symbol) ? '已加入' : '加入 watchlist'}
+                      <Plus size={14} /> {watchlist.includes(row.symbol) ? t('markets.alreadyAdded') : t('markets.addToWatchlist')}
                     </button>
                   </li>
                 ))}
@@ -114,7 +114,7 @@ export default function MarketsPage() {
         )}
         <div className="mt-4 flex flex-wrap gap-2">
           {watchlist.length === 0 ? (
-            <span className="text-caption text-steel-200">watchlist 是空的 — 上面搜索后点击加入。</span>
+            <span className="text-caption text-text-secondary">{t('markets.watchlistEmpty')}</span>
           ) : (
             watchlist.map((s) => (
               <span key={s} className="pill-active inline-flex items-center gap-1.5">
@@ -130,13 +130,13 @@ export default function MarketsPage() {
 
       {/* Tracked symbols (positions + watchlist + candidate pool merged) */}
       <div className="card">
-        <SectionHeader title="Tracked symbols" subtitle="持仓 + watchlist + 候选池 合并视图" />
+        <SectionHeader title={t('markets.trackedTitle')} subtitle={t('markets.trackedSubtitle')} />
         {monitoringQ.isLoading ? (
           <LoadingState rows={6} />
         ) : monitoringQ.isError ? (
           <ErrorState error={monitoringQ.error} onRetry={monitoringQ.refetch} />
         ) : tracked.length === 0 ? (
-          <EmptyState title="无可监控 symbol" hint="加 watchlist、生成候选池、或建仓后这里会有数据。" />
+          <EmptyState title={t('markets.noTracked')} hint={t('markets.noTrackedHint')} />
         ) : (
           <table className="tbl">
             <thead>
@@ -162,9 +162,9 @@ export default function MarketsPage() {
       {/* Two-col bottom: positions + candidate pool */}
       <div className="grid grid-cols-2 gap-6">
         <div className="card">
-          <SectionHeader title="活跃持仓" subtitle={`${positions.length} 个 symbol`} />
+          <SectionHeader title={t('markets.activePositions')} subtitle={`${positions.length}`} />
           {positions.length === 0 ? (
-            <EmptyState title="无持仓" />
+            <EmptyState title={t('dashboard.noPositions')} />
           ) : (
             <table className="tbl">
               <thead>
@@ -194,9 +194,9 @@ export default function MarketsPage() {
           )}
         </div>
         <div className="card">
-          <SectionHeader title="今日候选池" subtitle="AI 终选 + 评分" />
+          <SectionHeader title={t('markets.candidatePoolToday')} subtitle={t('markets.candidatePoolSubtitle')} />
           {candidates.length === 0 ? (
-            <EmptyState title="今日候选池为空" hint="bot 启动 + market_open 后自动生成。" />
+            <EmptyState title={t('dashboard.candidatesEmpty')} hint={t('markets.candidatesEmptyHint')} />
           ) : (
             <table className="tbl">
               <thead>

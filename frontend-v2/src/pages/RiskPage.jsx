@@ -81,92 +81,88 @@ export default function RiskPage() {
       {/* KPIs */}
       <div className="grid grid-cols-4 gap-6">
         <KpiCard label="Risk enabled" value={draft.enabled ? 'ON' : 'OFF'} delta={null} />
-        <KpiCard label="今日拒单数" value={String(todayDenies)} delta={null} />
-        <KpiCard label="活跃政策数" value={String(countActivePolicies(draft))} delta={null} />
-        <KpiCard
-          label="历史事件总数"
-          value={String(events.length)}
-          delta={null}
-        />
+        <KpiCard label={t('risk.kpi.deniesToday')} value={String(todayDenies)} delta={null} />
+        <KpiCard label={t('risk.kpi.activePolicies')} value={String(countActivePolicies(draft))} delta={null} />
+        <KpiCard label={t('risk.kpi.totalEvents')} value={String(events.length)} delta={null} />
       </div>
 
       {/* Policy form */}
       <form onSubmit={submit} className="card space-y-5">
-        <SectionHeader title="政策配置" subtitle="保存后自动下发到运行时(下次 _build_active_strategy 生效)" />
+        <SectionHeader title={t('risk.policyConfig')} subtitle={t('risk.policyConfigSubtitle')} />
 
         <label className="flex items-center gap-2 cursor-pointer">
           <input
             type="checkbox"
-            className="w-4 h-4 accent-steel-500"
+            className="w-4 h-4 accent-cyan"
             checked={!!draft.enabled}
             onChange={(e) => set('enabled', e.target.checked)}
           />
-          <span className="text-body font-medium text-steel-50">全局启用 RiskGuard</span>
+          <span className="text-body font-medium text-text-primary">{t('risk.enableGlobal')}</span>
         </label>
 
         <div className="grid grid-cols-2 gap-5">
           <PolicyField
-            label="单 symbol 最大持仓 (USD)"
-            hint="MaxPositionSizePolicy · 该 symbol 已有持仓 + 新订单超过此值则拒"
+            label={t('risk.fields.maxPositionSize')}
+            hint={t('risk.fields.maxPositionSizeHint')}
             value={draft.max_position_size_usd ?? ''}
             onChange={(v) => set('max_position_size_usd', v)}
-            placeholder="例如 5000"
+            placeholder="5000"
             type="number"
           />
           <PolicyField
-            label="总敞口比例上限 (0–1)"
-            hint="MaxTotalExposurePolicy · 所有持仓 / equity"
+            label={t('risk.fields.maxTotalExposure')}
+            hint={t('risk.fields.maxTotalExposureHint')}
             value={draft.max_total_exposure_pct ?? ''}
             onChange={(v) => set('max_total_exposure_pct', v)}
-            placeholder="例如 0.5 = 50%"
+            placeholder="0.5"
             type="number"
             step="0.05"
           />
           <PolicyField
-            label="并发持仓 symbol 数上限"
-            hint="MaxOpenPositionsPolicy · 加仓不计入"
+            label={t('risk.fields.maxOpenPositions')}
+            hint={t('risk.fields.maxOpenPositionsHint')}
             value={draft.max_open_positions ?? ''}
             onChange={(v) => set('max_open_positions', v)}
-            placeholder="例如 5"
+            placeholder="5"
             type="number"
           />
           <PolicyField
-            label="单日亏损熔断 (USD,正数)"
-            hint="MaxDailyLossPolicy · 当日 realized PnL ≤ -值 时禁止 buy"
+            label={t('risk.fields.maxDailyLoss')}
+            hint={t('risk.fields.maxDailyLossHint')}
             value={draft.max_daily_loss_usd ?? ''}
             onChange={(v) => set('max_daily_loss_usd', v)}
-            placeholder="例如 500"
+            placeholder="500"
             type="number"
           />
         </div>
 
         <div>
-          <label className="h-caption block mb-2">符号黑名单 (逗号 / 空格分隔)</label>
+          <label className="h-caption block mb-2">{t('risk.fields.blocklist')}</label>
           <input
             className="input font-mono"
             placeholder="GME, AMC, BBBYQ"
             value={blocklistDraft}
             onChange={(e) => setBlocklistDraft(e.target.value)}
           />
-          <p className="text-caption text-steel-300 mt-1">SymbolBlocklistPolicy · 任何方向(buy / sell)都拒</p>
+          <p className="text-caption text-text-muted mt-1">{t('risk.fields.blocklistHint')}</p>
         </div>
 
-        {saveMut.isError && <ApiErrorBanner error={saveMut.error} label="保存失败" />}
+        {saveMut.isError && <ApiErrorBanner error={saveMut.error} label={t('risk.saveFailed')} />}
         {saveMut.isSuccess && (
-          <div className="border border-bull/40 rounded-md bg-bull-tint px-3 py-2 text-body-sm text-bull">
-            ✓ 已保存,新 buy 订单将受新规则约束
+          <div className="border border-profit/40 bg-profit-tint px-3 py-2 text-body-sm text-profit">
+            ✓ {t('risk.saveSuccess')}
           </div>
         )}
 
         <button type="submit" className="btn-primary" disabled={saveMut.isPending}>
-          <Save size={14} /> 保存政策
+          <Save size={14} /> {t('risk.savePolicy')}
         </button>
       </form>
 
       {/* Events */}
       <div className="card">
-        <SectionHeader title="事件流" subtitle={`最近 ${events.length} 条拒单 / 警告`} />
-        <EventsList q={eventsQ} />
+        <SectionHeader title={t('risk.events')} subtitle={t('risk.eventsSubtitle', { count: events.length })} />
+        <EventsList q={eventsQ} t={t} />
       </div>
     </div>
   );
@@ -189,11 +185,11 @@ function PolicyField({ label, hint, value, onChange, type = 'text', step, placeh
   );
 }
 
-function EventsList({ q }) {
+function EventsList({ q, t }) {
   if (q.isLoading) return <LoadingState rows={4} />;
   if (q.isError) return <ErrorState error={q.error} onRetry={q.refetch} />;
   const items = q.data?.items || [];
-  if (items.length === 0) return <EmptyState icon={ShieldAlert} title="暂无事件" hint="所有提交的订单都通过了风控。" />;
+  if (items.length === 0) return <EmptyState icon={ShieldAlert} title={t('risk.noEvents')} hint={t('risk.noEventsHint')} />;
 
   return (
     <table className="tbl">

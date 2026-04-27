@@ -12,16 +12,17 @@ import { ApiErrorBanner } from '../components/TopBar.jsx';
 import { fmtRelativeTime } from '../lib/format.js';
 
 const REQUIRED_KEYS = [
-  { key: 'ALPACA_API_KEY', label: 'Alpaca API Key', required: true },
-  { key: 'ALPACA_SECRET_KEY', label: 'Alpaca Secret Key', required: true },
-  { key: 'POLYGON_API_KEY', label: 'Polygon API Key', required: true },
-  { key: 'TAVILY_API_KEY', label: 'Tavily API Key', required: true },
+  { key: 'ALPACA_API_KEY', labelKey: 'settings.labels.alpacaApiKey', required: true },
+  { key: 'ALPACA_SECRET_KEY', labelKey: 'settings.labels.alpacaSecretKey', required: true },
+  { key: 'POLYGON_API_KEY', labelKey: 'settings.labels.polygonApiKey', required: true },
+  { key: 'TAVILY_API_KEY', labelKey: 'settings.labels.tavilyApiKey', required: true },
 ];
 const OPTIONAL_KEYS = [
-  { key: 'OPENAI_API_KEY', label: 'OpenAI API Key', required: false, hint: '启用候选池 AI 终选 + 中文摘要' },
-  { key: 'X_BEARER_TOKEN', label: 'X (Twitter) Bearer Token', required: false, hint: '启用社媒信号' },
-  { key: 'NOTIFICATIONS_WEBHOOK_URL', label: 'Notifications Webhook URL', required: false, hint: '风控事件 webhook' },
-  { key: 'SETTINGS_ADMIN_TOKEN', label: 'Settings Admin Token', required: false, hint: '保护本页更新' },
+  // Optional keys — labels & hints come from i18n via translateKey/hintKey
+  { key: 'OPENAI_API_KEY', labelKey: 'settings.labels.openaiApiKey', hintKey: 'settings.labels.openaiHint', required: false },
+  { key: 'X_BEARER_TOKEN', labelKey: 'settings.labels.xBearerToken', hintKey: 'settings.labels.xBearerHint', required: false },
+  { key: 'NOTIFICATIONS_WEBHOOK_URL', labelKey: 'settings.labels.notificationsWebhook', hintKey: 'settings.labels.notificationsHint', required: false },
+  { key: 'SETTINGS_ADMIN_TOKEN', labelKey: 'settings.labels.settingsAdminToken', hintKey: 'settings.labels.settingsAdminTokenHint', required: false },
 ];
 
 export default function SettingsPage() {
@@ -77,17 +78,18 @@ export default function SettingsPage() {
         <ReadinessSummary status={status} ready={readyQ.data} />
       </div>
 
-      {saveMut.isError && <ApiErrorBanner error={saveMut.error} label="保存失败" />}
+      {saveMut.isError && <ApiErrorBanner error={saveMut.error} label={t('common.saveFailed')} />}
       {saveMut.isSuccess && (
-        <div className="border border-bull/40 rounded-md bg-bull-tint px-4 py-2 text-body-sm text-bull flex items-center gap-2">
-          <CheckCircle2 size={14} /> 已保存,已下发到运行时。
+        <div className="border border-profit/40 bg-profit-tint px-4 py-2 text-body-sm text-profit flex items-center gap-2">
+          <CheckCircle2 size={14} /> {t('settings.savedOk')}
         </div>
       )}
 
       <form onSubmit={submit} className="space-y-6">
         <KeyGroup
-          title="必填密钥"
-          subtitle="缺任意一个 Dashboard 都无法返回真实数据"
+          t={t}
+          title={t('settings.requiredKeys')}
+          subtitle={t('settings.requiredHint')}
           fields={REQUIRED_KEYS}
           itemMap={itemMap}
           draft={draft}
@@ -96,8 +98,9 @@ export default function SettingsPage() {
           onReveal={toggleReveal}
         />
         <KeyGroup
-          title="可选密钥"
-          subtitle="启用对应高级功能"
+          t={t}
+          title={t('settings.optionalKeys')}
+          subtitle={t('settings.optionalHint')}
           fields={OPTIONAL_KEYS}
           itemMap={itemMap}
           draft={draft}
@@ -107,11 +110,11 @@ export default function SettingsPage() {
         />
 
         <div className="card">
-          <SectionHeader title="管理员令牌" subtitle="保存任何修改时必须随附,如果你部署到了公网" />
+          <SectionHeader title={t('settings.adminToken')} subtitle={t('settings.adminTokenHint')} />
           <input
             type="password"
             className="input max-w-md"
-            placeholder="留空表示部署没启 admin token"
+            placeholder={t('settings.adminTokenPlaceholder')}
             value={adminToken}
             onChange={(e) => setAdminToken(e.target.value)}
           />
@@ -123,10 +126,10 @@ export default function SettingsPage() {
             className="btn-primary"
             disabled={saveMut.isPending || Object.keys(draft).length === 0}
           >
-            <Save size={14} /> 保存修改
+            <Save size={14} /> {t('settings.saveButton')}
           </button>
-          <span className="text-body-sm text-steel-200">
-            {Object.keys(draft).length} 个字段待保存
+          <span className="text-body-sm text-text-secondary">
+            {t('settings.fieldsPending', { count: Object.keys(draft).length })}
           </span>
         </div>
       </form>
@@ -134,21 +137,23 @@ export default function SettingsPage() {
   );
 }
 
-function KeyGroup({ title, subtitle, fields, itemMap, draft, revealed, onSet, onReveal }) {
+function KeyGroup({ t, title, subtitle, fields, itemMap, draft, revealed, onSet, onReveal }) {
   return (
     <div className="card">
       <SectionHeader title={title} subtitle={subtitle} />
       <div className="space-y-3">
-        {fields.map(({ key, label, hint }) => {
+        {fields.map(({ key, labelKey, hintKey }) => {
           const item = itemMap[key] || {};
           const draftValue = draft[key] ?? '';
           const isRevealed = !!revealed[key];
+          const label = labelKey ? t(labelKey) : key;
+          const hint = hintKey ? t(hintKey) : '';
           return (
             <div key={key} className="grid grid-cols-12 gap-4 items-start py-2">
               <div className="col-span-3">
-                <div className="text-body font-medium text-steel-50">{label}</div>
-                <div className="text-caption text-steel-200 mt-1">{key}</div>
-                {hint && <div className="text-body-sm text-steel-200 mt-1">{hint}</div>}
+                <div className="text-body font-medium text-text-primary">{label}</div>
+                <div className="text-caption text-text-secondary mt-1 font-mono">{key}</div>
+                {hint && <div className="text-body-sm text-text-secondary mt-1">{hint}</div>}
               </div>
               <div className="col-span-7">
                 <div className="relative">
@@ -156,12 +161,12 @@ function KeyGroup({ title, subtitle, fields, itemMap, draft, revealed, onSet, on
                     className="input pr-10 font-mono text-body-sm"
                     type={isRevealed ? 'text' : 'password'}
                     value={draftValue}
-                    placeholder={item.has_value ? '已配置(****)— 输入新值覆盖' : '未配置'}
+                    placeholder={item.has_value ? '••••••••' : t('settings.sourceLabel.missing')}
                     onChange={(e) => onSet(key, e.target.value)}
                   />
                   <button
                     type="button"
-                    className="absolute right-2 top-1/2 -translate-y-1/2 text-steel-200 hover:text-steel-50"
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-text-secondary hover:text-text-primary"
                     onClick={() => onReveal(key)}
                     tabIndex={-1}
                   >
@@ -170,7 +175,7 @@ function KeyGroup({ title, subtitle, fields, itemMap, draft, revealed, onSet, on
                 </div>
               </div>
               <div className="col-span-2 flex justify-end pt-1.5">
-                <SourceBadge has={item.has_value} source={item.source} />
+                <SourceBadge has={item.has_value} source={item.source} t={t} />
               </div>
             </div>
           );
@@ -180,21 +185,23 @@ function KeyGroup({ title, subtitle, fields, itemMap, draft, revealed, onSet, on
   );
 }
 
-function SourceBadge({ has, source }) {
-  if (!has) return <span className="pill-default">未配置</span>;
+function SourceBadge({ has, source, t }) {
+  if (!has) return <span className="pill-default">{t('settings.sourceLabel.missing')}</span>;
   const map = { env: 'pill-default', stored: 'pill-bull', default: 'pill-default' };
-  return <span className={map[source] || 'pill-default'}>{source || 'set'}</span>;
+  const label = t(`settings.sourceLabel.${source}`, source || 'set');
+  return <span className={map[source] || 'pill-default'}>{label}</span>;
 }
 
 function ReadinessSummary({ status, ready }) {
+  const { t } = useTranslation();
   const isReady = !!status.is_ready && ready?.ready !== false;
   return (
     <div className="text-right">
       <div className="flex items-center gap-2 justify-end">
         {isReady ? (
-          <span className="pill-bull inline-flex items-center gap-1.5"><CheckCircle2 size={12} /> Ready</span>
+          <span className="pill-bull inline-flex items-center gap-1.5"><CheckCircle2 size={12} /> {t('settings.ready')}</span>
         ) : (
-          <span className="pill-warn inline-flex items-center gap-1.5"><AlertTriangle size={12} /> 未就绪</span>
+          <span className="pill-warn inline-flex items-center gap-1.5"><AlertTriangle size={12} /> {t('settings.notReady')}</span>
         )}
       </div>
       {ready?.checks?.length > 0 && (

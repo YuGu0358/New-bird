@@ -1,6 +1,16 @@
 {
   "common": {
     "loading": "Loading…",
+    "running": "Running…",
+    "querying": "Querying…",
+    "thinking": "Thinking…",
+    "submitted": "Submitted",
+    "exclusive": "Native",
+    "ask": "Ask",
+    "send": "Send",
+    "notFoundTitle": "Lost in the noise.",
+    "notFoundHint": "404 — this route does not exist or has not been built yet.",
+    "backToDashboard": "Back to Dashboard",
     "save": "Save",
     "submit": "Submit",
     "cancel": "Cancel",

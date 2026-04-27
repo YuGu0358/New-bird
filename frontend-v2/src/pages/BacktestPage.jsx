@@ -96,16 +96,16 @@ function BacktestList({ onSelect, queryClient }) {
       <div className="grid grid-cols-12 gap-6">
         {/* New backtest form */}
         <form onSubmit={submit} className="col-span-5 card space-y-4">
-          <SectionHeader title="新建回测" />
-          {runMut.isError && <ApiErrorBanner error={runMut.error} label="回测失败" />}
+          <SectionHeader title={t('backtest.newRun')} />
+          {runMut.isError && <ApiErrorBanner error={runMut.error} label={t('backtest.runFailed')} />}
           {runMut.isSuccess && (
-            <div className="border border-bull/40 rounded-md bg-bull-tint px-3 py-2 text-body-sm text-bull">
-              ✓ 已提交 — run #{runMut.data?.id}
+            <div className="border border-profit/40 bg-profit-tint px-3 py-2 text-body-sm text-profit">
+              ✓ {t('backtest.runSubmitted', { id: runMut.data?.id })}
             </div>
           )}
 
           <div>
-            <label className="h-caption block mb-2">策略类型</label>
+            <label className="h-caption block mb-2">{t('backtest.strategyType')}</label>
             <select className="select" value={strategyName} onChange={(e) => setStrategyName(e.target.value)}>
               {(registeredQ.data?.items || []).map((s) => (
                 <option key={s.name} value={s.name}>
@@ -119,23 +119,23 @@ function BacktestList({ onSelect, queryClient }) {
           </div>
 
           <div>
-            <label className="h-caption block mb-2">Universe (逗号分隔)</label>
+            <label className="h-caption block mb-2">{t('backtest.universe')}</label>
             <input className="input" value={universe} onChange={(e) => setUniverse(e.target.value.toUpperCase())} />
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="h-caption block mb-2">起始日期</label>
+              <label className="h-caption block mb-2">{t('backtest.startDate')}</label>
               <input className="input" type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
             </div>
             <div>
-              <label className="h-caption block mb-2">结束日期</label>
+              <label className="h-caption block mb-2">{t('backtest.endDate')}</label>
               <input className="input" type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
             </div>
           </div>
 
           <div>
-            <label className="h-caption block mb-2">初始资金 (USD)</label>
+            <label className="h-caption block mb-2">{t('backtest.initialCash')}</label>
             <input
               className="input tabular"
               type="number"
@@ -148,11 +148,11 @@ function BacktestList({ onSelect, queryClient }) {
           <label className="flex items-center gap-2 cursor-pointer">
             <input
               type="checkbox"
-              className="w-4 h-4 accent-steel-500"
+              className="w-4 h-4 accent-cyan"
               checked={enableRisk}
               onChange={(e) => setEnableRisk(e.target.checked)}
             />
-            <span className="text-body-sm text-steel-100">启用风控政策(P4 RiskGuard)</span>
+            <span className="text-body-sm text-text-primary">{t('backtest.enableRiskGuard')}</span>
           </label>
 
           <button
@@ -160,42 +160,40 @@ function BacktestList({ onSelect, queryClient }) {
             className="btn-primary w-full"
             disabled={runMut.isPending}
           >
-            <Play size={14} /> {runMut.isPending ? 'Running…' : '运行回测'}
+            <Play size={14} /> {runMut.isPending ? t('backtest.running') : t('backtest.runBacktest')}
           </button>
-          <p className="text-caption text-steel-300">
-            后端会同步阻塞跑完(yfinance 数据下载 + 模拟交易)。大区间可能需要几十秒。
-          </p>
+          <p className="text-caption text-text-muted">{t('backtest.runHint')}</p>
         </form>
 
         {/* Runs list */}
         <div className="col-span-7 card">
-          <SectionHeader title="回测历史" subtitle={`最近 ${runsQ.data?.items?.length ?? 0} 次`} />
-          <RunsList q={runsQ} onSelect={onSelect} />
+          <SectionHeader title={t('backtest.history')} subtitle={t('backtest.historyCount', { count: runsQ.data?.items?.length ?? 0 })} />
+          <RunsList q={runsQ} onSelect={onSelect} t={t} />
         </div>
       </div>
     </div>
   );
 }
 
-function RunsList({ q, onSelect }) {
+function RunsList({ q, onSelect, t }) {
   if (q.isLoading) return <LoadingState rows={5} />;
   if (q.isError) return <ErrorState error={q.error} onRetry={q.refetch} />;
   const items = q.data?.items || [];
-  if (items.length === 0) return <EmptyState icon={FlaskConical} title="还没跑过回测" hint="左侧表单提交一次。" />;
+  if (items.length === 0) return <EmptyState icon={FlaskConical} title={t('backtest.noBacktests')} hint={t('backtest.noBacktestsHint')} />;
 
   return (
     <table className="tbl">
       <thead>
         <tr>
           <th>ID</th>
-          <th>策略</th>
-          <th>区间</th>
-          <th className="tbl-num">Initial</th>
-          <th className="tbl-num">Final equity</th>
-          <th className="tbl-num">Sharpe</th>
-          <th className="tbl-num">Max DD</th>
-          <th>Status</th>
-          <th>Time</th>
+          <th>{t('backtest.strategyType')}</th>
+          <th>{t('common.time')}</th>
+          <th className="tbl-num">{t('backtest.initialCash')}</th>
+          <th className="tbl-num">{t('backtest.metrics.finalEquity')}</th>
+          <th className="tbl-num">{t('backtest.metrics.sharpe')}</th>
+          <th className="tbl-num">{t('backtest.metrics.maxDrawdown')}</th>
+          <th>{t('common.status')}</th>
+          <th>{t('common.time')}</th>
         </tr>
       </thead>
       <tbody>
@@ -225,6 +223,7 @@ function RunsList({ q, onSelect }) {
 }
 
 function BacktestDetail({ runId, onBack }) {
+  const { t } = useTranslation();
   const detailQ = useQuery({ queryKey: ['backtest-run', runId], queryFn: () => getBacktestRun(runId) });
   const curveQ = useQuery({ queryKey: ['backtest-equity', runId], queryFn: () => getBacktestEquityCurve(runId) });
 
@@ -240,32 +239,32 @@ function BacktestDetail({ runId, onBack }) {
     <div className="space-y-6">
       <div className="flex items-center gap-3">
         <button className="btn-secondary btn-sm" onClick={onBack}>
-          <ArrowLeft size={14} /> 返回列表
+          <ArrowLeft size={14} /> {t('backtest.back')}
         </button>
-        <h1 className="h-page">Backtest #{runId}</h1>
+        <h1 className="h-page">{t('backtest.title')} #{runId}</h1>
         <StatusBadge status={summary.status} />
       </div>
-      <div className="text-body-sm text-steel-200">
-        {summary.strategy_name} · {summary.start_date} → {summary.end_date} · 初始 {fmtUsd(summary.initial_cash)}
+      <div className="text-body-sm text-text-secondary font-mono">
+        {summary.strategy_name} · {summary.start_date} → {summary.end_date} · {fmtUsd(summary.initial_cash)}
       </div>
 
       {/* Metrics row */}
       <div className="grid grid-cols-4 gap-6">
-        <KpiCard label="Final equity" value={fmtUsd(summary.final_equity)} delta={null} />
-        <KpiCard label="Total return" value={fmtPct((metrics.total_return || 0) * 100)} delta={null} />
-        <KpiCard label="Sharpe" value={(metrics.sharpe || 0).toFixed(2)} delta={null} />
-        <KpiCard label="Max drawdown" value={fmtPct((metrics.max_drawdown || 0) * 100)} delta={null} />
-        <KpiCard label="Sortino" value={(metrics.sortino || 0).toFixed(2)} delta={null} />
-        <KpiCard label="Calmar" value={(metrics.calmar || 0).toFixed(2)} delta={null} />
-        <KpiCard label="Win rate" value={fmtPct((metrics.win_rate || 0) * 100, { withSign: false })} delta={null} />
-        <KpiCard label="Profit factor" value={(metrics.profit_factor || 0).toFixed(2)} delta={null} />
+        <KpiCard label={t('backtest.metrics.finalEquity')} value={fmtUsd(summary.final_equity)} delta={null} />
+        <KpiCard label={t('backtest.metrics.totalReturn')} value={fmtPct((metrics.total_return || 0) * 100)} delta={null} />
+        <KpiCard label={t('backtest.metrics.sharpe')} value={(metrics.sharpe || 0).toFixed(2)} delta={null} />
+        <KpiCard label={t('backtest.metrics.maxDrawdown')} value={fmtPct((metrics.max_drawdown || 0) * 100)} delta={null} />
+        <KpiCard label={t('backtest.metrics.sortino')} value={(metrics.sortino || 0).toFixed(2)} delta={null} />
+        <KpiCard label={t('backtest.metrics.calmar')} value={(metrics.calmar || 0).toFixed(2)} delta={null} />
+        <KpiCard label={t('backtest.metrics.winRate')} value={fmtPct((metrics.win_rate || 0) * 100, { withSign: false })} delta={null} />
+        <KpiCard label={t('backtest.metrics.profitFactor')} value={(metrics.profit_factor || 0).toFixed(2)} delta={null} />
       </div>
 
       {/* Equity curve */}
       <div className="card">
-        <SectionHeader title="净值曲线" subtitle={`${points.length} 个数据点`} />
+        <SectionHeader title={t('backtest.equityCurve')} subtitle={t('backtest.equityCurvePoints', { n: points.length })} />
         {points.length === 0 ? (
-          <EmptyState title="无 equity curve" />
+          <EmptyState title={t('backtest.noEquityCurve')} />
         ) : (
           <div className="h-72">
             <ResponsiveContainer width="100%" height="100%">
@@ -292,20 +291,20 @@ function BacktestDetail({ runId, onBack }) {
 
       {/* Trades */}
       <div className="card">
-        <SectionHeader title="成交明细" subtitle={`${trades.length} 条`} />
+        <SectionHeader title={t('backtest.trades')} subtitle={t('backtest.tradesCount', { n: trades.length })} />
         {trades.length === 0 ? (
-          <EmptyState title="无成交" />
+          <EmptyState title={t('backtest.noTrades')} />
         ) : (
           <table className="tbl tbl-dense">
             <thead>
               <tr>
-                <th>Time</th>
-                <th>Symbol</th>
-                <th>Side</th>
-                <th className="tbl-num">Qty</th>
-                <th className="tbl-num">Price</th>
-                <th className="tbl-num">Notional</th>
-                <th>Reason</th>
+                <th>{t('common.time')}</th>
+                <th>{t('common.symbol')}</th>
+                <th>{t('portfolio.columns.type')}</th>
+                <th className="tbl-num">{t('common.qty')}</th>
+                <th className="tbl-num">{t('common.price')}</th>
+                <th className="tbl-num">{t('quantlab.fields.notional')}</th>
+                <th>{t('portfolio.columns.reason')}</th>
               </tr>
             </thead>
             <tbody>

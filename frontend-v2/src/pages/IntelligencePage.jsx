@@ -67,6 +67,7 @@ export default function IntelligencePage() {
 // ---------------------------------------------------------- Persona card
 
 function PersonaCard({ persona, selected, onSelect, compact = false }) {
+  const { t } = useTranslation();
   const isOurs = persona.id === 'sentinel';
   return (
     <button
@@ -81,7 +82,7 @@ function PersonaCard({ persona, selected, onSelect, compact = false }) {
       {selected && <Check size={14} className="absolute top-2 right-2 text-steel-500" />}
       <div className="flex items-start justify-between mb-1">
         <div className="font-mono text-caption text-accent-silver">{persona.id}</div>
-        {isOurs && !compact && <span className="pill-social">独家</span>}
+        {isOurs && !compact && <span className="pill-social">{t('intelligence.ours')}</span>}
       </div>
       <div className="text-body font-semibold text-steel-50 mb-1">
         {compact ? persona.name.split(' ')[0] : persona.name}
@@ -127,7 +128,7 @@ function SinglePersonaTab() {
   return (
     <div className="grid grid-cols-12 gap-6">
       <form onSubmit={submit} className="col-span-7 card space-y-5">
-        <SectionHeader title="选 Persona + Symbol" subtitle="LLM 会综合 P0–P5 全部上下文给出风格化判断" />
+        <SectionHeader title={t('intelligence.pickPersona')} subtitle={t('intelligence.pickPersonaSubtitle')} />
 
         {personasQ.isLoading ? (
           <LoadingState rows={2} />
@@ -147,7 +148,7 @@ function SinglePersonaTab() {
         )}
 
         <div>
-          <label className="h-caption block mb-2">Symbol</label>
+          <label className="h-caption block mb-2">{t('common.symbol')}</label>
           <input
             className="input uppercase max-w-xs"
             value={symbol}
@@ -156,16 +157,16 @@ function SinglePersonaTab() {
         </div>
 
         <div>
-          <label className="h-caption block mb-2">问题(可选)</label>
+          <label className="h-caption block mb-2">{t('intelligence.questionOptional')}</label>
           <textarea
             className="input h-20"
-            placeholder="例如:Should I add to my position given the recent earnings?"
+            placeholder={t('intelligence.questionPlaceholder')}
             value={question}
             onChange={(e) => setQuestion(e.target.value)}
           />
         </div>
 
-        {analyzeMut.isError && <ApiErrorBanner error={analyzeMut.error} label="分析失败" />}
+        {analyzeMut.isError && <ApiErrorBanner error={analyzeMut.error} label={t('intelligence.analyzing')} />}
 
         <div className="flex items-center gap-3">
           <button
@@ -173,24 +174,22 @@ function SinglePersonaTab() {
             className="btn-primary"
             disabled={analyzeMut.isPending || !symbol.trim()}
           >
-            <Send size={14} /> {analyzeMut.isPending ? '分析中…' : '运行分析'}
+            <Send size={14} /> {analyzeMut.isPending ? t('intelligence.analyzing') : t('intelligence.runAnalysis')}
           </button>
-          <span className="text-caption text-steel-300">
-            需要 Settings 里的 OPENAI_API_KEY · 每次约 1500-3000 tokens(gpt-4o-mini)
-          </span>
+          <span className="text-caption text-text-muted">{t('intelligence.tokenHint')}</span>
         </div>
       </form>
 
       <div className="col-span-5">
         {analyzeMut.isPending && (
           <div className="card">
-            <LoadingState rows={4} label="LLM 思考中…" />
+            <LoadingState rows={4} label={t('common.thinking')} />
           </div>
         )}
         {analyzeMut.data && <AnalysisResultCard analysis={analyzeMut.data} />}
         {!analyzeMut.data && !analyzeMut.isPending && (
           <div className="card">
-            <EmptyState icon={Sparkles} title="尚未运行" hint="左侧选 persona + symbol 后提交。" />
+            <EmptyState icon={Sparkles} title={t('intelligence.notRunYet')} hint={t('intelligence.notRunYetHint')} />
           </div>
         )}
       </div>
@@ -201,6 +200,7 @@ function SinglePersonaTab() {
 // ---------------------------------------------------------- Council
 
 function CouncilTab() {
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const personasQ = useQuery({ queryKey: ['agent-personas'], queryFn: listPersonas });
 
@@ -236,8 +236,8 @@ function CouncilTab() {
     <div className="space-y-6">
       <form onSubmit={submit} className="card space-y-4">
         <SectionHeader
-          title="Council 模式"
-          subtitle="一次问 N 个 persona,看共识 / 分歧 — 上下文构建一次,LLM 调用 N 次"
+          title={t('intelligence.councilMode')}
+          subtitle={t('intelligence.councilSubtitle')}
         />
 
         {personasQ.isLoading ? (
@@ -258,7 +258,7 @@ function CouncilTab() {
 
         <div className="grid grid-cols-3 gap-4">
           <div>
-            <label className="h-caption block mb-2">Symbol</label>
+            <label className="h-caption block mb-2">{t('common.symbol')}</label>
             <input
               className="input uppercase"
               value={symbol}
@@ -266,17 +266,17 @@ function CouncilTab() {
             />
           </div>
           <div className="col-span-2">
-            <label className="h-caption block mb-2">问题(可选)</label>
+            <label className="h-caption block mb-2">{t('intelligence.questionOptional')}</label>
             <input
               className="input"
-              placeholder="What's the long-term thesis here?"
+              placeholder={t('intelligence.questionPlaceholder')}
               value={question}
               onChange={(e) => setQuestion(e.target.value)}
             />
           </div>
         </div>
 
-        {councilMut.isError && <ApiErrorBanner error={councilMut.error} label="Council 失败" />}
+        {councilMut.isError && <ApiErrorBanner error={councilMut.error} label={t('intelligence.councilMode')} />}
 
         <div className="flex items-center gap-3">
           <button
@@ -284,17 +284,15 @@ function CouncilTab() {
             className="btn-primary"
             disabled={councilMut.isPending || selected.length === 0}
           >
-            <Users size={14} /> {councilMut.isPending ? '运行中…' : `召集 ${selected.length} 位 persona`}
+            <Users size={14} /> {councilMut.isPending ? t('common.running') : t('intelligence.summon', { count: selected.length })}
           </button>
-          <span className="text-caption text-steel-300">
-            将持久化 {selected.length} 条历史 · 估算约 {selected.length * 2000} tokens
-          </span>
+          <span className="text-caption text-text-muted">{t('intelligence.tokenEstimate', { count: selected.length, tokens: selected.length * 2000 })}</span>
         </div>
       </form>
 
       {councilMut.isPending && (
         <div className="card">
-          <LoadingState rows={6} label="所有 persona 思考中…" />
+          <LoadingState rows={6} label={t('intelligence.thinking')} />
         </div>
       )}
 
@@ -302,7 +300,7 @@ function CouncilTab() {
         <>
           {consensus && (
             <div className="card">
-              <SectionHeader title="共识 / 分歧" />
+              <SectionHeader title={t('intelligence.consensus')} />
               <div className="grid grid-cols-3 gap-4">
                 <Tile label="Buy" value={consensus.buy} color="text-bull" />
                 <Tile label="Hold" value={consensus.hold} color="text-steel-100" />
@@ -340,6 +338,7 @@ function computeConsensus(analyses) {
 // ---------------------------------------------------------- History
 
 function HistoryTab() {
+  const { t } = useTranslation();
   const [symbolFilter, setSymbolFilter] = useState('');
   const historyQ = useQuery({
     queryKey: ['agent-history', symbolFilter],
@@ -349,29 +348,29 @@ function HistoryTab() {
 
   return (
     <div className="card">
-      <SectionHeader title="历史分析" subtitle="所有 personas + 所有 symbols 的过往运行" />
+      <SectionHeader title={t('intelligence.history')} subtitle={t('intelligence.historySubtitle')} />
       <div className="flex gap-3 items-end mb-4">
         <div className="max-w-xs flex-1">
-          <label className="h-caption block mb-2">Symbol filter (留空显示全部)</label>
+          <label className="h-caption block mb-2">{t('intelligence.filterSymbol')}</label>
           <input
             className="input uppercase"
             value={symbolFilter}
             onChange={(e) => setSymbolFilter(e.target.value.toUpperCase())}
-            placeholder="NVDA / 留空"
+            placeholder="NVDA"
           />
         </div>
       </div>
-      <HistoryList q={historyQ} />
+      <HistoryList q={historyQ} t={t} />
     </div>
   );
 }
 
-function HistoryList({ q }) {
+function HistoryList({ q, t }) {
   if (q.isLoading) return <LoadingState rows={5} />;
   if (q.isError) return <ErrorState error={q.error} onRetry={q.refetch} />;
   const items = q.data?.items || [];
   if (items.length === 0)
-    return <EmptyState icon={History} title="暂无历史" hint="先在 Personas / Council tab 跑一次。" />;
+    return <EmptyState icon={History} title={t('intelligence.noHistory')} hint={t('intelligence.noHistoryHint')} />;
 
   return (
     <div className="space-y-3">
@@ -398,6 +397,7 @@ function HistoryList({ q }) {
 // ---------------------------------------------------------- Result card
 
 function AnalysisResultCard({ analysis, compact = false }) {
+  const { t } = useTranslation();
   return (
     <div className="card">
       <div className="flex items-start justify-between mb-3">
@@ -409,19 +409,20 @@ function AnalysisResultCard({ analysis, compact = false }) {
       </div>
       <p className="text-body text-steel-100 leading-relaxed mb-4">{analysis.reasoning_summary}</p>
       <AnalysisDetail a={analysis} compact={compact} />
-      <div className="text-caption text-steel-300 mt-3">
-        {fmtRelativeTime(analysis.created_at)} · model {analysis.model || '—'}
+      <div className="text-caption text-text-muted mt-3">
+        {fmtRelativeTime(analysis.created_at)} · {analysis.model || '—'}
       </div>
     </div>
   );
 }
 
 function AnalysisDetail({ a, compact = false }) {
+  const { t } = useTranslation();
   return (
     <div className="space-y-3">
       {a.key_factors?.length > 0 && (
         <div>
-          <div className="h-caption mb-2">Key factors</div>
+          <div className="h-caption mb-2">{t('intelligence.keyFactors')}</div>
           <ul className="space-y-1.5">
             {a.key_factors.map((kf, i) => (
               <li key={i} className="flex items-start gap-2 text-body-sm">
@@ -429,12 +430,12 @@ function AnalysisDetail({ a, compact = false }) {
                   className={classNames(
                     'shrink-0 mt-0.5',
                     kf.signal === 'social' ? 'pill-social' :
-                    kf.signal === 'fundamentals' ? 'pill-active' :
+                    kf.signal === 'fundamentals' ? 'pill-cyan' :
                     kf.signal === 'technical' ? 'pill-warn' : 'pill-default'
                   )}
                 >{kf.signal}</span>
-                <span className="text-steel-100">{kf.interpretation}</span>
-                <span className="ml-auto text-caption text-steel-300 tabular shrink-0">
+                <span className="text-text-primary">{kf.interpretation}</span>
+                <span className="ml-auto text-caption text-text-muted tabular shrink-0">
                   w={(kf.weight || 0).toFixed(2)}
                 </span>
               </li>
@@ -445,26 +446,27 @@ function AnalysisDetail({ a, compact = false }) {
 
       {!compact && a.follow_up_questions?.length > 0 && (
         <div>
-          <div className="h-caption mb-2">Follow-up</div>
-          <ul className="list-disc list-inside text-body-sm text-steel-100 space-y-1">
+          <div className="h-caption mb-2">{t('intelligence.followUp')}</div>
+          <ul className="list-disc list-inside text-body-sm text-text-primary space-y-1">
             {a.follow_up_questions.map((q, i) => <li key={i}>{q}</li>)}
           </ul>
         </div>
       )}
 
       {a.question && (
-        <div className="text-caption text-steel-300 italic">提问: {a.question}</div>
+        <div className="text-caption text-text-muted italic">{t('intelligence.userQuestion')}: {a.question}</div>
       )}
     </div>
   );
 }
 
 function VerdictPill({ verdict, confidence }) {
+  const { t } = useTranslation();
   const cls = verdict === 'buy' ? 'pill-bull' : verdict === 'sell' ? 'pill-bear' : 'pill-default';
   return (
     <div className="text-right shrink-0">
       <span className={cls}>{verdict?.toUpperCase()}</span>
-      <div className="text-caption text-steel-300 mt-1 tabular">conf {(confidence || 0).toFixed(2)}</div>
+      <div className="text-caption text-text-muted mt-1 tabular">{t('intelligence.confidence')} {(confidence || 0).toFixed(2)}</div>
     </div>
   );
 }

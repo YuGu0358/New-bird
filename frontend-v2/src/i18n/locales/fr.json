@@ -1,6 +1,16 @@
 {
   "common": {
     "loading": "Chargement…",
+    "running": "En cours…",
+    "querying": "Requête…",
+    "thinking": "Réflexion…",
+    "submitted": "Soumis",
+    "exclusive": "Exclusif",
+    "ask": "Interroger",
+    "send": "Envoyer",
+    "notFoundTitle": "Perdu dans le bruit.",
+    "notFoundHint": "404 — Cette route n'existe pas ou n'est pas encore construite.",
+    "backToDashboard": "Retour au Tableau de bord",
     "save": "Enregistrer",
     "submit": "Soumettre",
     "cancel": "Annuler",

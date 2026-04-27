@@ -1,6 +1,16 @@
 {
   "common": {
     "loading": "Lade…",
+    "running": "Läuft…",
+    "querying": "Abfrage…",
+    "thinking": "Berechne…",
+    "submitted": "Eingereicht",
+    "exclusive": "Hauseigen",
+    "ask": "Fragen",
+    "send": "Senden",
+    "notFoundTitle": "Im Rauschen verloren.",
+    "notFoundHint": "404 — Diese Route existiert nicht oder ist noch nicht gebaut.",
+    "backToDashboard": "Zurück zum Dashboard",
     "save": "Speichern",
     "submit": "Senden",
     "cancel": "Abbrechen",

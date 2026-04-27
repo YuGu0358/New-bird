@@ -46,38 +46,40 @@ export default function AlgorithmsPage() {
       {/* Registered strategy types (P2 framework) */}
       <div className="card">
         <SectionHeader
-          title="注册的策略类型"
-          subtitle="@register_strategy 装饰器注入的所有 Strategy 子类"
+          title={t('algorithms.registeredTitle')}
+          subtitle={t('algorithms.registeredSubtitle')}
         />
-        <RegisteredGrid q={registeredQ} />
+        <RegisteredGrid q={registeredQ} t={t} />
       </div>
 
       {/* User strategy library */}
       <div className="card">
         <SectionHeader
-          title="我的策略库"
-          subtitle={`${libraryQ.data?.items?.length ?? 0} 条 · 最多 ${libraryQ.data?.max_slots ?? 5} 条`}
+          title={t('algorithms.myLibrary')}
+          subtitle={t('algorithms.myLibrarySubtitle', {
+            count: libraryQ.data?.items?.length ?? 0,
+            max: libraryQ.data?.max_slots ?? 5,
+          })}
         />
         <StrategyLibrary
           q={libraryQ}
+          t={t}
           onActivate={(id) => activateMut.mutate(id)}
           onDelete={(id) => deleteMut.mutate(id)}
           activating={activateMut.isPending}
           deleting={deleteMut.isPending}
         />
-        <p className="text-caption text-steel-300 mt-4">
-          创建 / 编辑流程使用 OpenAI 解析自然语言描述,后端 P2 通过 registry 校验参数 schema。前端编辑器在 P9 Code 里实现。
-        </p>
+        <p className="text-caption text-text-muted mt-4">{t('algorithms.uploadHint')}</p>
       </div>
     </div>
   );
 }
 
-function RegisteredGrid({ q }) {
+function RegisteredGrid({ q, t }) {
   if (q.isLoading) return <LoadingState rows={2} />;
   if (q.isError) return <ErrorState error={q.error} onRetry={q.refetch} />;
   const items = q.data?.items || [];
-  if (items.length === 0) return <EmptyState icon={BookOpen} title="registry 为空" />;
+  if (items.length === 0) return <EmptyState icon={BookOpen} title={t('algorithms.registryEmpty')} />;
 
   return (
     <div className="grid grid-cols-2 gap-4">
@@ -92,8 +94,8 @@ function RegisteredGrid({ q }) {
           </div>
           <p className="text-body-sm text-steel-100 leading-relaxed mb-3">{s.description}</p>
           <details className="text-caption">
-            <summary className="cursor-pointer text-steel-200 hover:text-steel-50">参数 schema</summary>
-            <pre className="mt-2 p-3 bg-ink-900 border border-steel-400 rounded font-mono text-[11px] text-steel-200 overflow-auto max-h-48">
+            <summary className="cursor-pointer text-text-secondary hover:text-text-primary">{t('algorithms.schemaToggle')}</summary>
+            <pre className="mt-2 p-3 bg-void border border-border-subtle font-mono text-[11px] text-text-secondary overflow-auto max-h-48">
               {JSON.stringify(extractProperties(s.parameters_schema), null, 2)}
             </pre>
           </details>
@@ -108,32 +110,32 @@ function extractProperties(schema) {
   return schema.properties || schema;
 }
 
-function StrategyLibrary({ q, onActivate, onDelete, activating, deleting }) {
+function StrategyLibrary({ q, t, onActivate, onDelete, activating, deleting }) {
   if (q.isLoading) return <LoadingState rows={3} />;
   if (q.isError) return <ErrorState error={q.error} onRetry={q.refetch} />;
   const items = q.data?.items || [];
-  if (items.length === 0) return <EmptyState icon={GitBranch} title="策略库是空的" hint="将来在 Code 编辑器里上传策略 (P9)。" />;
+  if (items.length === 0) return <EmptyState icon={GitBranch} title={t('algorithms.libraryEmpty')} hint={t('algorithms.libraryEmptyHint')} />;
 
   return (
     <table className="tbl">
       <thead>
         <tr>
-          <th>名称</th>
-          <th>描述</th>
-          <th>状态</th>
-          <th>更新</th>
-          <th className="text-right">操作</th>
+          <th>{t('common.name')}</th>
+          <th>{t('common.description')}</th>
+          <th>{t('common.status')}</th>
+          <th>{t('common.time')}</th>
+          <th className="text-right">{t('common.actions')}</th>
         </tr>
       </thead>
       <tbody>
         {items.map((s) => (
           <tr key={s.id}>
-            <td className="font-medium text-steel-50">{s.name}</td>
-            <td className="text-steel-200 max-w-md truncate">{s.normalized_strategy || s.raw_description}</td>
+            <td className="font-medium text-text-primary">{s.name}</td>
+            <td className="text-text-secondary max-w-md truncate">{s.normalized_strategy || s.raw_description}</td>
             <td>
-              {s.is_active ? <span className="pill-active">active</span> : <span className="pill-default">idle</span>}
+              {s.is_active ? <span className="pill-cyan">{t('algorithms.active')}</span> : <span className="pill-default">{t('algorithms.idle')}</span>}
             </td>
-            <td className="text-caption text-steel-200">{fmtRelativeTime(s.updated_at)}</td>
+            <td className="text-caption text-text-secondary">{fmtRelativeTime(s.updated_at)}</td>
             <td className="text-right">
               <div className="inline-flex gap-2">
                 {!s.is_active && (
@@ -141,20 +143,20 @@ function StrategyLibrary({ q, onActivate, onDelete, activating, deleting }) {
                     className="btn-secondary btn-sm"
                     onClick={() => onActivate(s.id)}
                     disabled={activating}
-                    title="激活"
+                    title={t('algorithms.activate')}
                   >
-                    <Power size={12} /> 激活
+                    <Power size={12} /> {t('algorithms.activate')}
                   </button>
                 )}
                 <button
                   className={classNames('btn-sm', s.is_active ? 'btn-ghost' : 'btn-destructive')}
                   onClick={() => {
-                    if (confirm(`确认删除策略 "${s.name}" ?`)) onDelete(s.id);
+                    if (confirm(t('algorithms.removeConfirm', { name: s.name }))) onDelete(s.id);
                   }}
                   disabled={deleting || s.is_active}
-                  title={s.is_active ? '激活中不能删' : '删除'}
+                  title={s.is_active ? t('algorithms.activeCannotDelete') : t('algorithms.remove')}
                 >
-                  <Trash2 size={12} /> 删除
+                  <Trash2 size={12} /> {t('algorithms.remove')}
                 </button>
               </div>
             </td>

@@ -81,7 +81,7 @@ export default function PortfolioPage() {
                     onClick={() => closeMut.mutate()}
                     disabled={closeMut.isPending}
                   >
-                    <Square size={12} /> 全部清仓
+                    <Square size={12} /> {t('portfolio.closeAll')}
                   </button>
                 )}
                 {tab === 'orders' && (
@@ -100,7 +100,7 @@ export default function PortfolioPage() {
                       onClick={() => cancelMut.mutate()}
                       disabled={cancelMut.isPending}
                     >
-                      <XCircle size={12} /> 撤所有挂单
+                      <XCircle size={12} /> {t('portfolio.cancelAll')}
                     </button>
                   </>
                 )}
@@ -115,7 +115,7 @@ export default function PortfolioPage() {
 
         <aside className="col-span-3 space-y-4">
           <SidebarStat
-            label="今日已实现 PnL"
+            label={t('portfolio.todayRealizedPnl')}
             value={fmtSignedUsd(healthQ.data?.realized_pnl_today ?? 0)}
             valueClass={
               healthQ.data?.realized_pnl_today > 0
@@ -125,32 +125,34 @@ export default function PortfolioPage() {
                   : 'text-steel-50'
             }
           />
-          <SidebarStat label="今日交易数" value={String(healthQ.data?.trades_today ?? 0)} />
+          <SidebarStat label={t('portfolio.todayTrades')} value={String(healthQ.data?.trades_today ?? 0)} />
           <SidebarStat
-            label="今日 胜 / 负"
+            label={t('portfolio.todayWinsLosses')}
             value={`${healthQ.data?.wins_today ?? 0} / ${healthQ.data?.losses_today ?? 0}`}
           />
           <SidebarStat
-            label="连胜 / 连败"
+            label={t('portfolio.winLossStreak')}
             value={
               !healthQ.data?.streak_length
                 ? '—'
-                : `${healthQ.data.streak_length} ${healthQ.data.streak_kind === 'win' ? '胜' : '负'}`
+                : healthQ.data.streak_kind === 'win'
+                  ? t('dashboard.kpi.winStreak', { n: healthQ.data.streak_length })
+                  : t('dashboard.kpi.lossStreak', { n: healthQ.data.streak_length })
             }
             valueClass={
               healthQ.data?.streak_kind === 'win'
-                ? 'text-bull'
+                ? 'text-profit'
                 : healthQ.data?.streak_kind === 'loss'
-                  ? 'text-bear'
-                  : 'text-steel-50'
+                  ? 'text-loss'
+                  : 'text-text-primary'
             }
           />
           <SidebarStat
-            label="最近成交"
+            label={t('portfolio.lastTrade')}
             value={healthQ.data?.last_trade_at ? fmtRelativeTime(healthQ.data.last_trade_at) : '—'}
           />
           <SidebarStat
-            label="活跃策略"
+            label={t('portfolio.activeStrategy')}
             value={healthQ.data?.active_strategy_name || '—'}
             small
           />
@@ -172,9 +174,10 @@ function SidebarStat({ label, value, valueClass = 'text-steel-50', small = false
 }
 
 function PositionsTable({ q }) {
+  const { t } = useTranslation();
   if (q.isLoading) return <LoadingState rows={5} />;
   if (q.isError) return <ErrorState error={q.error} onRetry={q.refetch} />;
-  if (!q.data || q.data.length === 0) return <EmptyState title="无持仓" />;
+  if (!q.data || q.data.length === 0) return <EmptyState title={t('portfolio.noPositions')} />;
 
   return (
     <table className="tbl">
@@ -219,9 +222,10 @@ function PositionsTable({ q }) {
 }
 
 function OrdersTable({ q }) {
+  const { t } = useTranslation();
   if (q.isLoading) return <LoadingState rows={5} />;
   if (q.isError) return <ErrorState error={q.error} onRetry={q.refetch} />;
-  if (!q.data || q.data.length === 0) return <EmptyState title="无订单" />;
+  if (!q.data || q.data.length === 0) return <EmptyState title={t('portfolio.noOrders')} />;
 
   return (
     <table className="tbl">
@@ -260,9 +264,10 @@ function OrdersTable({ q }) {
 }
 
 function TradesTable({ q }) {
+  const { t } = useTranslation();
   if (q.isLoading) return <LoadingState rows={5} />;
   if (q.isError) return <ErrorState error={q.error} onRetry={q.refetch} />;
-  if (!q.data || q.data.length === 0) return <EmptyState title="无历史交易" hint="P5 的 PnL 聚合从这张表读数据。" />;
+  if (!q.data || q.data.length === 0) return <EmptyState title={t('portfolio.noTrades')} hint={t('portfolio.noTradesHint')} />;
 
   return (
     <table className="tbl">

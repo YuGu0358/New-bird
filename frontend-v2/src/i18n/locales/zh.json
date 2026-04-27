@@ -1,6 +1,16 @@
 {
   "common": {
     "loading": "加载中…",
+    "running": "运行中…",
+    "querying": "查询中…",
+    "thinking": "推理中…",
+    "submitted": "已提交",
+    "exclusive": "独家",
+    "ask": "提问",
+    "send": "发送",
+    "notFoundTitle": "迷失在噪声里",
+    "notFoundHint": "404 — 此路径不存在或尚未实现。",
+    "backToDashboard": "返回总览",
     "save": "保存",
     "submit": "提交",
     "cancel": "取消",
