@@ -86,6 +86,23 @@ async def update_config(
         }
     )
     await session.commit()
+
+    # Fire-and-forget notification; never blocks the caller.
+    try:
+        from app.services import notifications_service
+
+        await notifications_service.dispatch_risk_event(
+            policy_name=policy_name,
+            decision=decision,
+            reason=reason,
+            symbol=symbol,
+            side=side,
+            notional=notional,
+            qty=qty,
+        )
+    except Exception:
+        # Already silenced inside dispatch_risk_event, but defense in depth.
+        pass
     await session.refresh(config)
     return _config_to_view(config)
 
