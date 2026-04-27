@@ -152,10 +152,22 @@ def _build_snapshot_provider(portfolio, current_prices):
                 market_value=pos.qty * price,
                 unrealized_pl=(price - pos.average_entry_price) * pos.qty,
             )
+
+        # Realized PnL during this backtest run: simple FIFO across closed trades.
+        realized = 0.0
+        open_lots: dict[str, list[float]] = {}  # cost-basis stack per symbol
+        for trade in portfolio.trades:
+            if trade.side == "buy":
+                open_lots.setdefault(trade.symbol, []).append(trade.notional)
+            elif trade.side == "sell":
+                cost = sum(open_lots.get(trade.symbol, []))
+                realized += trade.notional - cost
+                open_lots[trade.symbol] = []
+
         return PortfolioSnapshot(
             cash=portfolio.cash,
             equity=portfolio.equity(prices=current_prices),
             positions=positions,
-            realized_pnl_today=0.0,  # backtest is single-day-agnostic; refine later
+            realized_pnl_today=realized,
         )
     return _snapshot

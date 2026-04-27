@@ -62,11 +62,23 @@ async def _live_portfolio_snapshot() -> PortfolioSnapshot:
 
     cash = float(account.get("cash", 0) or 0)
     equity = float(account.get("equity", cash) or cash)
+
+    realized_today = 0.0
+    try:
+        from app.database import AsyncSessionLocal
+        from app.services import pnl_service
+
+        async with AsyncSessionLocal() as session:
+            realized_today = await pnl_service.realized_pnl_today(session)
+    except Exception:
+        # PnL lookup failure must not block trading - fall back to 0.
+        realized_today = 0.0
+
     return PortfolioSnapshot(
         cash=cash,
         equity=equity,
         positions=pos_views,
-        realized_pnl_today=0.0,  # Phase 5 wires this up via trade-history aggregation.
+        realized_pnl_today=realized_today,
     )
 
 
