@@ -9,11 +9,14 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
+from core.observability import configure_logging
 from app.database import init_database
+from app.middleware.correlation import CorrelationIdMiddleware
 from app.routers import account as account_router
 from app.routers import alerts as alerts_router
 from app.routers import backtest as backtest_router
 from app.routers import bot as bot_router
+from app.routers import health as health_router
 from app.routers import monitoring as monitoring_router
 from app.routers import research as research_router
 from app.routers import risk as risk_router
@@ -52,6 +55,8 @@ async def lifespan(app: FastAPI):
         await bot_controller.shutdown_bot()
 
 
+configure_logging()
+
 app = FastAPI(
     title="Personal Automated Trading Platform",
     version="1.0.0",
@@ -65,6 +70,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.add_middleware(CorrelationIdMiddleware)
 
 if FRONTEND_ASSETS_DIR.exists():
     app.mount("/assets", StaticFiles(directory=FRONTEND_ASSETS_DIR), name="assets")
@@ -79,6 +85,7 @@ app.include_router(alerts_router.router)
 app.include_router(backtest_router.router)
 app.include_router(social_router.router)
 app.include_router(bot_router.router)
+app.include_router(health_router.router)
 app.include_router(settings_router.router)
 
 
