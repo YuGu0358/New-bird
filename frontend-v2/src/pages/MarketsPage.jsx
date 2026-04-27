@@ -249,17 +249,32 @@ export default function MarketsPage() {
 
 function TrackedRow({ row }) {
   const symbol = row.symbol;
-  const last = parseFloat(row.last_price ?? row.current_price ?? 0);
-  const d = parseFloat(row.day_change_percent ?? row.day_change ?? 0);
-  const w = parseFloat(row.week_change_percent ?? 0);
-  const m = parseFloat(row.month_change_percent ?? 0);
+  // Backend nests price + changes under `trend`. Fall back to top-level
+  // fields for older builds.
+  const trend = row.trend || {};
+  const last = parseFloat(trend.current_price ?? row.last_price ?? row.current_price ?? 0);
+  const d = parseFloat(trend.day_change_percent ?? row.day_change_percent ?? row.day_change ?? 0);
+  const w = parseFloat(trend.week_change_percent ?? row.week_change_percent ?? 0);
+  const m = parseFloat(trend.month_change_percent ?? row.month_change_percent ?? 0);
   const positionQty = parseFloat(row.position_qty ?? row.qty ?? 0);
-  const source = row.source || (positionQty > 0 ? 'position' : 'watchlist');
+
+  // Map Chinese tag list from backend (自选 / 候选 / 持仓) to a single source.
+  const tags = Array.isArray(row.tags) ? row.tags : [];
+  const sourceTone =
+    tags.includes('持仓') || positionQty > 0 ? 'position' :
+    tags.includes('候选') ? 'candidate' :
+    tags.includes('自选') ? 'watchlist' :
+    (row.source || 'watchlist');
+  const sourceLabel = sourceTone.toUpperCase();
 
   return (
     <tr>
-      <td className="font-medium text-steel-50">{symbol}</td>
-      <td><span className={source === 'position' ? 'pill-bull' : source === 'candidate' ? 'pill-warn' : 'pill-default'}>{source}</span></td>
+      <td className="ticker text-text-primary">{symbol}</td>
+      <td>
+        <span className={sourceTone === 'position' ? 'pill-bull' : sourceTone === 'candidate' ? 'pill-warn' : 'pill-default'}>
+          {sourceLabel}
+        </span>
+      </td>
       <td className="tbl-num">{last > 0 ? fmtUsd(last) : '—'}</td>
       <PercentCell value={d} />
       <PercentCell value={w} />
