@@ -57,7 +57,7 @@ export default function SettingsPage() {
     saveMut.mutate(payload);
   }
 
-  if (statusQ.isLoading) return <LoadingState rows={6} label="Loading settings…" />;
+  if (statusQ.isLoading) return <LoadingState rows={6} />;
   if (statusQ.isError) return <ErrorState error={statusQ.error} onRetry={statusQ.refetch} />;
 
   const status = statusQ.data || {};

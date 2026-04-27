@@ -141,13 +141,13 @@ export default function MarketsPage() {
           <table className="tbl">
             <thead>
               <tr>
-                <th>Symbol</th>
-                <th>Source</th>
-                <th className="tbl-num">Last</th>
+                <th>{t('common.symbol')}</th>
+                <th>{t('markets.columns.source')}</th>
+                <th className="tbl-num">{t('markets.columns.last')}</th>
                 <th className="tbl-num">D %</th>
                 <th className="tbl-num">W %</th>
                 <th className="tbl-num">M %</th>
-                <th className="tbl-num">Position</th>
+                <th className="tbl-num">{t('markets.columns.position')}</th>
               </tr>
             </thead>
             <tbody>
@@ -169,10 +169,10 @@ export default function MarketsPage() {
             <table className="tbl">
               <thead>
                 <tr>
-                  <th>Symbol</th>
-                  <th className="tbl-num">Qty</th>
-                  <th className="tbl-num">Mkt value</th>
-                  <th className="tbl-num">Unreal PnL</th>
+                  <th>{t('common.symbol')}</th>
+                  <th className="tbl-num">{t('common.qty')}</th>
+                  <th className="tbl-num">{t('markets.columns.marketValue')}</th>
+                  <th className="tbl-num">{t('markets.columns.unrealizedPnl')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -201,9 +201,9 @@ export default function MarketsPage() {
             <table className="tbl">
               <thead>
                 <tr>
-                  <th>Symbol</th>
-                  <th>Cat.</th>
-                  <th className="tbl-num">Score</th>
+                  <th>{t('common.symbol')}</th>
+                  <th>{t('markets.columns.category')}</th>
+                  <th className="tbl-num">{t('markets.columns.score')}</th>
                 </tr>
               </thead>
               <tbody>

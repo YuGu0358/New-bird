@@ -1,4 +1,5 @@
 // Shared presentational primitives for the Newbird Tokyo cyberpunk aesthetic.
+import { useTranslation } from 'react-i18next';
 //
 // Visual language:
 //   - Pure black void background with subtle grid + noise overlays
@@ -140,11 +141,12 @@ export function Sparkline({ data, positive = true }) {
 
 /* ---------------------------------------------------------- Loading / Empty / Error */
 
-export function LoadingState({ rows = 3, label = 'Loading…' }) {
+export function LoadingState({ rows = 3, label }) {
+  const { t } = useTranslation();
   return (
     <div className="space-y-3">
       <div className="flex items-center gap-2 font-mono text-[11px] text-text-muted tracking-[0.15em] uppercase">
-        <Loader2 size={12} className="animate-spin" /> {label}
+        <Loader2 size={12} className="animate-spin" /> {label || t('common.loading')}
       </div>
       {Array.from({ length: rows }).map((_, i) => (
         <div key={i} className="h-9 bg-elevated animate-pulse" />
@@ -164,17 +166,18 @@ export function EmptyState({ icon: Icon = Inbox, title, hint }) {
 }
 
 export function ErrorState({ error, onRetry }) {
+  const { t } = useTranslation();
   const message = error?.detail?.toString() || error?.message || String(error);
   return (
     <div className="border border-loss/40 bg-loss-tint p-4 flex items-start gap-3">
       <ServerCrash size={16} className="text-loss shrink-0 mt-0.5" />
       <div className="flex-1 min-w-0">
-        <div className="font-mono text-[11px] text-loss tracking-[0.15em] uppercase">DATA SOURCE FAULT</div>
+        <div className="font-mono text-[11px] text-loss tracking-[0.15em] uppercase">{t('common.dataSourceFault')}</div>
         <div className="text-body-sm text-text-secondary mt-1.5 break-all">{message}</div>
       </div>
       {onRetry && (
         <button className="btn-secondary btn-sm shrink-0" onClick={onRetry}>
-          retry
+          {t('common.retry')}
         </button>
       )}
     </div>

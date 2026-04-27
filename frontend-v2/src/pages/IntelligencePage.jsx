@@ -302,9 +302,9 @@ function CouncilTab() {
             <div className="card">
               <SectionHeader title={t('intelligence.consensus')} />
               <div className="grid grid-cols-3 gap-4">
-                <Tile label="Buy" value={consensus.buy} color="text-bull" />
-                <Tile label="Hold" value={consensus.hold} color="text-steel-100" />
-                <Tile label="Sell" value={consensus.sell} color="text-bear" />
+                <Tile label={t('common.buy')} value={consensus.buy} color="text-profit" />
+                <Tile label={t('common.hold')} value={consensus.hold} color="text-text-primary" />
+                <Tile label={t('common.sell')} value={consensus.sell} color="text-loss" />
               </div>
             </div>
           )}

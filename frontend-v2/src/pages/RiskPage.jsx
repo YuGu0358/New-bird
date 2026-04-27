@@ -60,7 +60,7 @@ export default function RiskPage() {
     });
   }
 
-  if (policiesQ.isLoading) return <LoadingState rows={6} label="Loading risk policies…" />;
+  if (policiesQ.isLoading) return <LoadingState rows={6} />;
   if (policiesQ.isError) return <ErrorState error={policiesQ.error} onRetry={policiesQ.refetch} />;
   if (!draft) return null;
 
@@ -80,7 +80,7 @@ export default function RiskPage() {
 
       {/* KPIs */}
       <div className="grid grid-cols-4 gap-6">
-        <KpiCard label="Risk enabled" value={draft.enabled ? 'ON' : 'OFF'} delta={null} />
+        <KpiCard label={t('risk.kpi.enabled')} value={draft.enabled ? 'ON' : 'OFF'} delta={null} />
         <KpiCard label={t('risk.kpi.deniesToday')} value={String(todayDenies)} delta={null} />
         <KpiCard label={t('risk.kpi.activePolicies')} value={String(countActivePolicies(draft))} delta={null} />
         <KpiCard label={t('risk.kpi.totalEvents')} value={String(events.length)} delta={null} />
@@ -195,12 +195,12 @@ function EventsList({ q, t }) {
     <table className="tbl">
       <thead>
         <tr>
-          <th>Time</th>
-          <th>Policy</th>
-          <th>Decision</th>
-          <th>Symbol / Side</th>
-          <th className="tbl-num">Notional / Qty</th>
-          <th>Reason</th>
+          <th>{t('common.time')}</th>
+          <th>{t('common.policy')}</th>
+          <th>{t('common.decision')}</th>
+          <th>{t('common.symbol')} / {t('common.side')}</th>
+          <th className="tbl-num">{t('quantlab.fields.notional')} / {t('common.qty')}</th>
+          <th>{t('common.reason')}</th>
         </tr>
       </thead>
       <tbody>

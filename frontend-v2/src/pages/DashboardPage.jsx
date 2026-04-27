@@ -222,14 +222,14 @@ function HoldingsPreview({ t, data, loading, error, retry }) {
       <thead>
         <tr>
           <th style={{ width: 32 }}></th>
-          <th>Ticker</th>
-          <th className="tbl-num">Qty</th>
-          <th className="tbl-num">Entry</th>
-          <th className="tbl-num">Last</th>
-          <th className="tbl-num">PnL %</th>
-          <th className="tbl-num">PnL $</th>
-          <th>Trend (D / W / M)</th>
-          <th>Signal</th>
+          <th>{t('common.ticker')}</th>
+          <th className="tbl-num">{t('common.qty')}</th>
+          <th className="tbl-num">{t('portfolio.columns.entry')}</th>
+          <th className="tbl-num">{t('markets.columns.last')}</th>
+          <th className="tbl-num">{t('portfolio.columns.unrealPct')}</th>
+          <th className="tbl-num">{t('markets.columns.unrealizedPnl')}</th>
+          <th>{t('common.trend')}</th>
+          <th>{t('common.signal')}</th>
         </tr>
       </thead>
       <tbody>
@@ -295,10 +295,10 @@ function CandidatePoolPreview({ t, data, loading }) {
     <table className="tbl">
       <thead>
         <tr>
-          <th>Symbol</th>
-          <th>Category</th>
-          <th className="tbl-num">Score</th>
-          <th>Reason</th>
+          <th>{t('common.symbol')}</th>
+          <th>{t('common.category')}</th>
+          <th className="tbl-num">{t('common.score')}</th>
+          <th>{t('common.reason')}</th>
         </tr>
       </thead>
       <tbody>

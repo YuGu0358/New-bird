@@ -209,10 +209,10 @@ function ScoreSnapshot({ q }) {
         <span className={actionPill}>{d.action || 'hold'}</span>
         <span className="pill-default">confidence: {d.confidence_label || d.confidence?.toFixed?.(2) || '—'}</span>
       </div>
-      <Stat label="Social score" value={Number(d.social_score).toFixed(3)} />
-      <Stat label="Market score" value={Number(d.market_score).toFixed(3)} />
-      <Stat label="Final weight" value={Number(d.final_weight).toFixed(3)} valueClass="text-steel-50 font-semibold" />
-      <Stat label="Snapshot at" value={fmtRelativeTime(d.snapshot_at)} />
+      <Stat label={t('common.socialScore')} value={Number(d.social_score).toFixed(3)} />
+      <Stat label={t('common.marketScore')} value={Number(d.market_score).toFixed(3)} />
+      <Stat label={t('common.finalWeight')} value={Number(d.final_weight).toFixed(3)} valueClass="text-text-primary font-semibold" />
+      <Stat label={t('common.snapshotAt')} value={fmtRelativeTime(d.snapshot_at)} />
       {d.reasons?.length > 0 && (
         <div>
           <div className="h-caption mb-1">Reasons</div>
@@ -244,14 +244,14 @@ function SignalsTable({ q, onSelect }) {
     <table className="tbl">
       <thead>
         <tr>
-          <th>Time</th>
-          <th>Symbol</th>
-          <th>Action</th>
-          <th>Confidence</th>
-          <th className="tbl-num">Social</th>
-          <th className="tbl-num">Market</th>
-          <th className="tbl-num">Final</th>
-          <th>Executed</th>
+          <th>{t('common.time')}</th>
+          <th>{t('common.symbol')}</th>
+          <th>{t('common.action')}</th>
+          <th>{t('common.confidence')}</th>
+          <th className="tbl-num">{t('common.socialScore')}</th>
+          <th className="tbl-num">{t('common.marketScore')}</th>
+          <th className="tbl-num">{t('common.finalWeight')}</th>
+          <th>{t('common.executed')}</th>
         </tr>
       </thead>
       <tbody>

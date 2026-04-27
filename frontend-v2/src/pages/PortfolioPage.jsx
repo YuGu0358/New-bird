@@ -183,13 +183,13 @@ function PositionsTable({ q }) {
     <table className="tbl">
       <thead>
         <tr>
-          <th>Symbol</th>
-          <th className="tbl-num">Qty</th>
-          <th className="tbl-num">Avg entry</th>
-          <th className="tbl-num">Current</th>
-          <th className="tbl-num">Mkt value</th>
-          <th className="tbl-num">Unreal PnL</th>
-          <th className="tbl-num">Unreal %</th>
+          <th>{t('common.symbol')}</th>
+          <th className="tbl-num">{t('common.qty')}</th>
+          <th className="tbl-num">{t('portfolio.columns.avgEntry')}</th>
+          <th className="tbl-num">{t('portfolio.columns.current')}</th>
+          <th className="tbl-num">{t('markets.columns.marketValue')}</th>
+          <th className="tbl-num">{t('markets.columns.unrealizedPnl')}</th>
+          <th className="tbl-num">{t('portfolio.columns.unrealPct')}</th>
         </tr>
       </thead>
       <tbody>
@@ -231,14 +231,14 @@ function OrdersTable({ q }) {
     <table className="tbl">
       <thead>
         <tr>
-          <th>Time</th>
-          <th>Symbol</th>
-          <th>Side</th>
-          <th>Type</th>
-          <th className="tbl-num">Qty</th>
-          <th className="tbl-num">Notional</th>
-          <th className="tbl-num">Filled px</th>
-          <th>Status</th>
+          <th>{t('common.time')}</th>
+          <th>{t('common.symbol')}</th>
+          <th>{t('common.side')}</th>
+          <th>{t('common.type')}</th>
+          <th className="tbl-num">{t('common.qty')}</th>
+          <th className="tbl-num">{t('quantlab.fields.notional')}</th>
+          <th className="tbl-num">{t('portfolio.columns.filledPx')}</th>
+          <th>{t('common.status')}</th>
         </tr>
       </thead>
       <tbody>
@@ -273,13 +273,13 @@ function TradesTable({ q }) {
     <table className="tbl">
       <thead>
         <tr>
-          <th>Exit time</th>
-          <th>Symbol</th>
-          <th className="tbl-num">Qty</th>
-          <th className="tbl-num">Entry</th>
-          <th className="tbl-num">Exit</th>
-          <th className="tbl-num">Net PnL</th>
-          <th>Reason</th>
+          <th>{t('portfolio.columns.exitTime')}</th>
+          <th>{t('common.symbol')}</th>
+          <th className="tbl-num">{t('common.qty')}</th>
+          <th className="tbl-num">{t('portfolio.columns.entry')}</th>
+          <th className="tbl-num">{t('portfolio.columns.exit')}</th>
+          <th className="tbl-num">{t('portfolio.columns.netPnl')}</th>
+          <th>{t('portfolio.columns.reason')}</th>
         </tr>
       </thead>
       <tbody>

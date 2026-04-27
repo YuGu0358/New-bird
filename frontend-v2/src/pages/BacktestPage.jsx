@@ -227,7 +227,7 @@ function BacktestDetail({ runId, onBack }) {
   const detailQ = useQuery({ queryKey: ['backtest-run', runId], queryFn: () => getBacktestRun(runId) });
   const curveQ = useQuery({ queryKey: ['backtest-equity', runId], queryFn: () => getBacktestEquityCurve(runId) });
 
-  if (detailQ.isLoading) return <LoadingState rows={6} label="Loading run…" />;
+  if (detailQ.isLoading) return <LoadingState rows={6} />;
   if (detailQ.isError) return <ErrorState error={detailQ.error} onRetry={detailQ.refetch} />;
   const summary = detailQ.data?.summary || {};
   const trades = detailQ.data?.trades || [];
