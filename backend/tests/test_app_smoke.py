@@ -137,3 +137,19 @@ def test_backtest_runs_list_responds(client) -> None:
     body = response.json()
     assert "items" in body
     assert isinstance(body["items"], list)
+
+
+def test_risk_policies_endpoint(client) -> None:
+    response = client.get("/api/risk/policies")
+    assert response.status_code == 200
+    body = response.json()
+    assert "enabled" in body
+    assert "blocklist" in body
+
+
+def test_risk_events_endpoint(client) -> None:
+    response = client.get("/api/risk/events")
+    assert response.status_code == 200
+    body = response.json()
+    assert "items" in body
+    assert isinstance(body["items"], list)

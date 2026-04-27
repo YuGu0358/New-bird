@@ -48,6 +48,12 @@ from app.models.research import (
     TavilySearchResponse,
     TavilySearchSource,
 )
+from app.models.risk import (
+    RiskEventsResponse,
+    RiskEventView,
+    RiskPolicyConfigUpdateRequest,
+    RiskPolicyConfigView,
+)
 from app.models.settings import (
     RuntimeSettingItem,
     RuntimeSettingsStatus,
@@ -109,6 +115,10 @@ __all__ = [
     "RegisteredStrategiesResponse",
     "RegisteredStrategyEntry",
     "ResearchSource",
+    "RiskEventView",
+    "RiskEventsResponse",
+    "RiskPolicyConfigUpdateRequest",
+    "RiskPolicyConfigView",
     "RuntimeSettingItem",
     "RuntimeSettingsStatus",
     "SettingsUpdateRequest",

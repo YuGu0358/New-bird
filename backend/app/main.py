@@ -16,6 +16,7 @@ from app.routers import backtest as backtest_router
 from app.routers import bot as bot_router
 from app.routers import monitoring as monitoring_router
 from app.routers import research as research_router
+from app.routers import risk as risk_router
 from app.routers import settings as settings_router
 from app.routers import social as social_router
 from app.routers import strategies as strategies_router
@@ -72,6 +73,7 @@ if FRONTEND_ASSETS_DIR.exists():
 app.include_router(account_router.router)
 app.include_router(monitoring_router.router)
 app.include_router(research_router.router)
+app.include_router(risk_router.router)
 app.include_router(strategies_router.router)
 app.include_router(alerts_router.router)
 app.include_router(backtest_router.router)
