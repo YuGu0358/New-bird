@@ -52,7 +52,8 @@ export default function SettingsPage() {
   }
   function submit(e) {
     e.preventDefault();
-    const payload = { values: draft };
+    // Backend expects { settings: dict[str, Any], admin_token: str | None }.
+    const payload = { settings: draft };
     if (adminToken) payload.admin_token = adminToken;
     saveMut.mutate(payload);
   }
@@ -161,7 +162,7 @@ function KeyGroup({ t, title, subtitle, fields, itemMap, draft, revealed, onSet,
                     className="input pr-10 font-mono text-body-sm"
                     type={isRevealed ? 'text' : 'password'}
                     value={draftValue}
-                    placeholder={item.has_value ? '••••••••' : t('settings.sourceLabel.missing')}
+                    placeholder={item.configured ? '••••••••' : t('settings.sourceLabel.missing')}
                     onChange={(e) => onSet(key, e.target.value)}
                   />
                   <button
@@ -175,7 +176,7 @@ function KeyGroup({ t, title, subtitle, fields, itemMap, draft, revealed, onSet,
                 </div>
               </div>
               <div className="col-span-2 flex justify-end pt-1.5">
-                <SourceBadge has={item.has_value} source={item.source} t={t} />
+                <SourceBadge has={item.configured} source={item.source} t={t} />
               </div>
             </div>
           );

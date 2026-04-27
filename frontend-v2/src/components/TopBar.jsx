@@ -163,10 +163,32 @@ function Metric({ label, value, delta, valueColor = 'text-text-primary', loading
 export function ApiErrorBanner({ error, label }) {
   const { t } = useTranslation();
   if (!error) return null;
-  const message = error?.detail?.toString() || error?.message || String(error);
+  const message = formatApiError(error);
   return (
-    <div className="border border-warn px-4 py-2 flex items-center gap-2 font-mono text-[11px] text-warn tracking-wider uppercase">
-      <AlertCircle size={14} /> {label || t('common.errorState')}: {message}
+    <div className="border border-warn px-4 py-2 flex items-start gap-2 font-mono text-[11px] text-warn tracking-wider uppercase">
+      <AlertCircle size={14} className="shrink-0 mt-0.5" />
+      <span>{label || t('common.errorState')}: <span className="break-all">{message}</span></span>
     </div>
   );
+}
+
+/** FastAPI's 422 response has detail as an array of {loc, msg, type} objects.
+ *  503 / 500 usually returns a string detail. We normalise both, plus any
+ *  other shape we might see, into a single readable line. */
+function formatApiError(error) {
+  if (!error) return '';
+  const d = error.detail;
+  if (typeof d === 'string') return d;
+  if (Array.isArray(d)) {
+    return d
+      .map((entry) => {
+        if (typeof entry === 'string') return entry;
+        const loc = Array.isArray(entry?.loc) ? entry.loc.filter((p) => p !== 'body').join('.') : '';
+        const msg = entry?.msg || JSON.stringify(entry);
+        return loc ? `${loc}: ${msg}` : msg;
+      })
+      .join(' · ');
+  }
+  if (d && typeof d === 'object') return JSON.stringify(d);
+  return error.message || String(error);
 }
