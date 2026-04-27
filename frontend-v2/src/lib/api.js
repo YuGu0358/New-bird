@@ -147,6 +147,35 @@ export const getUserStrategySource = (id) => request(`/api/code/strategies/${id}
 export const reloadUserStrategy = (id) => request(`/api/code/strategies/${id}/reload`, { method: 'POST' });
 export const deleteUserStrategy = (id) => request(`/api/code/strategies/${id}`, { method: 'DELETE' });
 
+// ----------------------------------------------------------- macro (Tradewell port)
+export const getMacroDashboard = () => request('/api/macro');
+export const refreshMacroDashboard = () => request('/api/macro/refresh', { method: 'POST' });
+
+// ----------------------------------------------------------- valuation (DCF + PE channel)
+export const runDcf = (body) => request('/api/valuation/dcf', { method: 'POST', body });
+export const getPeChannel = (ticker, opts = {}) => {
+  const qs = new URLSearchParams();
+  if (opts.lookback_years) qs.set('lookback_years', String(opts.lookback_years));
+  if (opts.cagr) qs.set('cagr', String(opts.cagr));
+  return request(`/api/valuation/pe-channel/${encodeURIComponent(ticker)}${qs.toString() ? `?${qs}` : ''}`);
+};
+
+// ----------------------------------------------------------- options chain (GEX / walls / max pain)
+export const getOptionsChainGex = (ticker, maxExpiries = 6) =>
+  request(`/api/options-chain/${encodeURIComponent(ticker)}?max_expiries=${maxExpiries}`);
+export const refreshOptionsChainGex = (ticker, maxExpiries = 6) =>
+  request(`/api/options-chain/${encodeURIComponent(ticker)}/refresh?max_expiries=${maxExpiries}`, { method: 'POST' });
+export const getExpiryFocus = (ticker, expiry, opts = {}) => {
+  const qs = new URLSearchParams();
+  if (opts.max_expiries) qs.set('max_expiries', String(opts.max_expiries));
+  if (opts.top_n) qs.set('top_n', String(opts.top_n));
+  return request(
+    `/api/options-chain/${encodeURIComponent(ticker)}/expiry/${encodeURIComponent(expiry)}${
+      qs.toString() ? `?${qs}` : ''
+    }`,
+  );
+};
+
 // ----------------------------------------------------------- agents (P7)
 export const listPersonas = () => request('/api/agents/personas');
 export const analyzeWithPersona = (body) => request('/api/agents/analyze', { method: 'POST', body });

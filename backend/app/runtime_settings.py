@@ -89,6 +89,13 @@ SETTING_DEFINITIONS: tuple[SettingDefinition, ...] = (
         description="用于新闻摘要和研究报告。",
     ),
     SettingDefinition(
+        key="FRED_API_KEY",
+        label="FRED API Key",
+        category="research",
+        required=False,
+        description="用于宏观指标看板（CPI/PCE/收益率/HY OAS 等）。免费申请：https://fredaccount.stlouisfed.org/apikeys",
+    ),
+    SettingDefinition(
         key="OPENAI_API_KEY",
         label="OpenAI API Key",
         category="ai",

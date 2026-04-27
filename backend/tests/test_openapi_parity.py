@@ -68,6 +68,14 @@ EXPECTED_ROUTES: set[tuple[str, str]] = {
     ("POST",   "/api/bot/stop"),
     ("GET",    "/api/settings/status"),
     ("PUT",    "/api/settings"),
+    # --- Tradewell-inspired additions (macro / valuation / options-chain) ---
+    ("GET",    "/api/macro"),
+    ("POST",   "/api/macro/refresh"),
+    ("POST",   "/api/valuation/dcf"),
+    ("GET",    "/api/valuation/pe-channel/{ticker}"),
+    ("GET",    "/api/options-chain/{ticker}"),
+    ("POST",   "/api/options-chain/{ticker}/refresh"),
+    ("GET",    "/api/options-chain/{ticker}/expiry/{expiry}"),
 }
 
 

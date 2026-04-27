@@ -20,8 +20,10 @@ from app.routers import backtest as backtest_router
 from app.routers import bot as bot_router
 from app.routers import code as code_router
 from app.routers import health as health_router
+from app.routers import macro as macro_router
 from app.routers import metrics as metrics_router
 from app.routers import monitoring as monitoring_router
+from app.routers import options_chain as options_chain_router
 from app.routers import quantlib as quantlib_router
 from app.routers import research as research_router
 from app.routers import risk as risk_router
@@ -29,6 +31,7 @@ from app.routers import settings as settings_router
 from app.routers import social as social_router
 from app.routers import strategy_health as strategy_health_router
 from app.routers import strategies as strategies_router
+from app.routers import valuation as valuation_router
 from app.services import (
     bot_controller,
     price_alerts_service,
@@ -111,6 +114,10 @@ app.include_router(health_router.router)
 app.include_router(metrics_router.router)
 app.include_router(settings_router.router)
 app.include_router(strategy_health_router.router)
+# Tradewell-inspired additions
+app.include_router(macro_router.router)
+app.include_router(valuation_router.router)
+app.include_router(options_chain_router.router)
 
 
 def _is_safe_frontend_path(base_dir: Path, requested_path: Path) -> bool:
