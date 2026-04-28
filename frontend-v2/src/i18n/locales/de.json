@@ -741,6 +741,31 @@
     "suggestedShortCall": "Vorgeschlagener Short-Call",
     "suggestedShortPut": "Vorgeschlagener Short-Put",
     "advDollar": "ADV ($)",
-    "scoreBreakdown": "Score-Aufschlüsselung"
+    "scoreBreakdown": "Score-Aufschlüsselung",
+    "squeezeTitle": "Squeeze-Score",
+    "squeezeSubtitle": "Vier-Faktoren-Kompressionsindikator — signalisiert ein bevorstehendes Bewegungsrisiko, bevor es im Kurs sichtbar wird",
+    "squeezeLoading": "Squeeze wird berechnet…",
+    "squeezeEmpty": "Keine Chain-Daten — Squeeze nicht bewertbar",
+    "squeezeHeadline": "Squeeze-Niveau",
+    "squeezeLevel": {
+      "low": "NIEDRIG",
+      "med": "MITTEL",
+      "high": "HOCH"
+    },
+    "squeezeHintLow": "Keine Kompression erkennbar — Vola und Positionierung wirken normal.",
+    "squeezeHintMed": "Teilweise Kompression — auf einen Auslöser achten.",
+    "squeezeHintHigh": "Starke Kompression — Vola ist günstig, Open Interest gehäuft, Positionierung einseitig. Bewegungsrisiko erhöht.",
+    "squeezeIvRank": "IV-Rang (52 W)",
+    "squeezeShortInterest": "Short-Anteil am Float",
+    "squeezeFactorsTriggered": "Ausgelöst",
+    "squeezeFactorsAvailable": "Verfügbare Faktoren",
+    "squeezeSignals": "Ausgelöste Signale",
+    "squeezeNoSignals": "Kein Signal ausgelöst — kein Squeeze-Aufbau.",
+    "squeezeSignal": {
+      "iv_rank_low": "IV-Rang im untersten 30 % der 52-Wochen-Spanne — Optionsprämie ist günstig",
+      "oi_concentration_high": "Ein Strike hält über 5 % des gesamten Chain-OI — Gamma dort konzentriert",
+      "put_call_bias_bullish": "Put/Call-OI-Verhältnis < 0,5 — Positionierung stark Call-lastig",
+      "short_interest_high": "Short Interest über 15 % des Floats — Squeeze-Risiko bei scharfer Aufwärtsbewegung"
+    }
   }
 }

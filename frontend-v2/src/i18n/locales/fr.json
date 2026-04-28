@@ -741,6 +741,31 @@
     "suggestedShortCall": "Short call suggéré",
     "suggestedShortPut": "Short put suggéré",
     "advDollar": "ADV ($)",
-    "scoreBreakdown": "Détail du score"
+    "scoreBreakdown": "Détail du score",
+    "squeezeTitle": "Score de compression",
+    "squeezeSubtitle": "Indicateur à quatre facteurs — signale un risque de mouvement imminent avant qu'il n'apparaisse dans le cours",
+    "squeezeLoading": "Calcul du squeeze…",
+    "squeezeEmpty": "Aucune donnée de chaîne — score impossible",
+    "squeezeHeadline": "Niveau de compression",
+    "squeezeLevel": {
+      "low": "FAIBLE",
+      "med": "MOYEN",
+      "high": "ÉLEVÉ"
+    },
+    "squeezeHintLow": "Aucune compression détectée — la volatilité et le positionnement sont normaux.",
+    "squeezeHintMed": "Compression partielle — surveillez un catalyseur.",
+    "squeezeHintHigh": "Forte compression — volatilité bon marché, OI concentré, positionnement à sens unique. Risque de mouvement élevé.",
+    "squeezeIvRank": "Rang IV (52 sem.)",
+    "squeezeShortInterest": "Short en % du float",
+    "squeezeFactorsTriggered": "Déclenchés",
+    "squeezeFactorsAvailable": "Facteurs disponibles",
+    "squeezeSignals": "Signaux déclenchés",
+    "squeezeNoSignals": "Aucun signal — pas de squeeze en formation.",
+    "squeezeSignal": {
+      "iv_rank_low": "Rang IV dans le bas 30 % de la fourchette 52 semaines — la prime d'option est bon marché",
+      "oi_concentration_high": "Un strike détient plus de 5 % de l'OI total — Gamma concentré sur ce niveau",
+      "put_call_bias_bullish": "Ratio Put/Call OI < 0,5 — positionnement fortement orienté call",
+      "short_interest_high": "Short interest > 15 % du float — risque de squeeze lors d'une forte hausse"
+    }
   }
 }

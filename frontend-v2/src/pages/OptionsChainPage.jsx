@@ -11,7 +11,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { RefreshCw, TrendingUp, Target, X as XIcon, Crosshair } from 'lucide-react';
+import { RefreshCw, TrendingUp, Target, X as XIcon, Crosshair, Zap } from 'lucide-react';
 import {
   Bar,
   BarChart,
@@ -28,6 +28,7 @@ import {
   refreshOptionsChainGex,
   getExpiryFocus,
   getFridayScan,
+  getOptionsChainSqueeze,
 } from '../lib/api.js';
 import {
   PageHeader,
@@ -56,6 +57,7 @@ export default function OptionsChainPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['gex', ticker] });
       queryClient.invalidateQueries({ queryKey: ['expiry-focus', ticker] });
+      queryClient.invalidateQueries({ queryKey: ['squeeze', ticker] });
     },
   });
   const focusQ = useQuery({
@@ -67,6 +69,12 @@ export default function OptionsChainPage() {
   const fridayQ = useQuery({
     queryKey: ['friday-scan', ticker],
     queryFn: () => getFridayScan(ticker),
+    enabled: !!ticker,
+    retry: false,
+  });
+  const squeezeQ = useQuery({
+    queryKey: ['squeeze', ticker],
+    queryFn: () => getOptionsChainSqueeze(ticker),
     enabled: !!ticker,
     retry: false,
   });
@@ -167,6 +175,23 @@ export default function OptionsChainPage() {
               <EmptyState title={t('options.fridayScanEmpty')} />
             ) : (
               <FridayScanCard scan={fridayQ.data} t={t} />
+            )}
+          </div>
+
+          {/* Squeeze score (4-factor compression watcher) */}
+          <div className="card">
+            <SectionHeader
+              title={t('options.squeezeTitle')}
+              subtitle={t('options.squeezeSubtitle')}
+            />
+            {squeezeQ.isLoading ? (
+              <LoadingState rows={3} label={t('options.squeezeLoading')} />
+            ) : squeezeQ.isError ? (
+              <ErrorState error={squeezeQ.error} />
+            ) : !squeezeQ.data ? (
+              <EmptyState title={t('options.squeezeEmpty')} />
+            ) : (
+              <SqueezeScoreCard data={squeezeQ.data} t={t} />
             )}
           </div>
 
@@ -517,6 +542,84 @@ function FridayScanCard({ scan, t }) {
             </li>
           ))}
         </ul>
+      </div>
+    </div>
+  );
+}
+
+/* ---------------------------------------------------------- Squeeze score card */
+
+function SqueezeScoreCard({ data, t }) {
+  const level = data.level;  // low | med | high
+  const levelTone =
+    level === 'high' ? 'text-bear' :
+    level === 'med' ? 'text-warn' :
+    'text-bull';
+  const levelBg =
+    level === 'high' ? 'border-bear bg-bear/5' :
+    level === 'med' ? 'border-warn bg-warn/5' :
+    'border-bull bg-bull/5';
+  const levelLabel = t(`options.squeezeLevel.${level}`);
+
+  const pct = data.max_possible > 0 ? Math.round((data.score / data.max_possible) * 100) : 0;
+  const ivPct = data.iv_rank != null ? `${(data.iv_rank * 100).toFixed(0)}%` : '—';
+  const siPct = data.short_interest_frac != null ? `${(data.short_interest_frac * 100).toFixed(1)}%` : '—';
+
+  return (
+    <div className="space-y-5">
+      {/* Headline level */}
+      <div className={classNames('border p-4 flex items-center gap-4', levelBg)}>
+        <Zap size={28} className={levelTone} />
+        <div className="flex-1">
+          <div className="font-mono text-[10px] text-text-muted tracking-[0.2em] uppercase mb-1">
+            {t('options.squeezeHeadline')}
+          </div>
+          <div className="flex items-baseline gap-3">
+            <span className={classNames('font-display text-[28px] font-light tabular leading-none', levelTone)}>
+              {levelLabel}
+            </span>
+            <span className="font-mono text-[16px] text-text-secondary tabular">
+              · {data.score}/{data.max_possible}
+              {data.max_possible < 100 && (
+                <span className="text-text-muted ml-1">({pct}%)</span>
+              )}
+            </span>
+          </div>
+          <div className="text-caption text-text-secondary mt-1.5">
+            {level === 'high' && t('options.squeezeHintHigh')}
+            {level === 'med' && t('options.squeezeHintMed')}
+            {level === 'low' && t('options.squeezeHintLow')}
+          </div>
+        </div>
+      </div>
+
+      {/* Inputs grid */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-px bg-border-subtle">
+        <FocusStat label={t('options.squeezeIvRank')} value={ivPct} />
+        <FocusStat label={t('options.squeezeShortInterest')} value={siPct} />
+        <FocusStat label={t('options.squeezeFactorsTriggered')} value={`${(data.signals || []).length}`} />
+        <FocusStat label={t('options.squeezeFactorsAvailable')} value={`${data.max_possible / 25}`} />
+      </div>
+
+      {/* Triggered signals */}
+      <div>
+        <div className="font-mono text-[11px] text-text-muted tracking-[0.15em] uppercase mb-2">
+          {t('options.squeezeSignals')}
+        </div>
+        {(data.signals || []).length === 0 ? (
+          <div className="text-caption text-text-muted">{t('options.squeezeNoSignals')}</div>
+        ) : (
+          <ul className="space-y-1.5">
+            {data.signals.map((sig) => (
+              <li
+                key={sig}
+                className="text-body-sm text-text-secondary border-l-2 border-cyan/40 pl-3 py-0.5"
+              >
+                {t(`options.squeezeSignal.${sig}`, { defaultValue: sig })}
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
     </div>
   );

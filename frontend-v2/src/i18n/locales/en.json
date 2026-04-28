@@ -741,6 +741,31 @@
     "suggestedShortCall": "Suggested short call",
     "suggestedShortPut": "Suggested short put",
     "advDollar": "ADV ($)",
-    "scoreBreakdown": "Score breakdown"
+    "scoreBreakdown": "Score breakdown",
+    "squeezeTitle": "Squeeze Score",
+    "squeezeSubtitle": "Four-factor compression watcher — flags imminent-move risk before it shows up in price",
+    "squeezeLoading": "Computing squeeze…",
+    "squeezeEmpty": "No chain data — cannot score squeeze",
+    "squeezeHeadline": "Squeeze level",
+    "squeezeLevel": {
+      "low": "LOW",
+      "med": "MEDIUM",
+      "high": "HIGH"
+    },
+    "squeezeHintLow": "No compression detected — vol and positioning look normal.",
+    "squeezeHintMed": "Some compression — watch for a catalyst.",
+    "squeezeHintHigh": "Heavy compression — vol is cheap, OI is piled up, positioning is one-sided. Move risk is elevated.",
+    "squeezeIvRank": "IV rank (52w)",
+    "squeezeShortInterest": "Short % of float",
+    "squeezeFactorsTriggered": "Triggered",
+    "squeezeFactorsAvailable": "Factors available",
+    "squeezeSignals": "Triggered signals",
+    "squeezeNoSignals": "No signals tripped — squeeze is not loaded.",
+    "squeezeSignal": {
+      "iv_rank_low": "IV rank in the bottom 30% of its 52-week range — option premium is cheap",
+      "oi_concentration_high": "One strike holds > 5% of total chain OI — gamma is concentrated there",
+      "put_call_bias_bullish": "Put/Call OI ratio < 0.5 — positioning is heavily call-skewed",
+      "short_interest_high": "Short interest > 15% of float — squeeze risk on a sharp up-move"
+    }
   }
 }

@@ -25,6 +25,7 @@ from app.services.network_utils import run_sync_with_retries
 from core.options_chain import (
     OptionContract,
     black_scholes_greeks,
+    compute_squeeze,
     focus_expiry,
     scan_pinning,
     summarize_chain,
@@ -311,6 +312,97 @@ def _wall_dict(w: Any) -> dict[str, Any]:
         "pressure_pct": w.pressure_pct,
         "distance_pct": w.distance_pct,
         "gex_dollar": w.gex_dollar,
+    }
+
+
+def _realized_vol_rank_blocking(ticker: str) -> float | None:
+    """Approximate IV rank via 252-day realized-vol percentile.
+
+    Real IV-history isn't free on yfinance. As a defensible proxy we compute
+    21-day rolling realized vol over the last ~252 trading days and return
+    the percentile of the latest value (0..1). Higher = realized vol is at
+    the upper end of its 1-year range; lower = compressed.
+    """
+    try:
+        import math
+
+        import yfinance as yf
+
+        hist = yf.Ticker(ticker).history(period="1y", auto_adjust=False)
+    except Exception:  # noqa: BLE001
+        return None
+    if hist is None or hist.empty or "Close" not in hist.columns:
+        return None
+    closes = hist["Close"].dropna()
+    if len(closes) < 30:
+        return None
+    log_returns = (closes / closes.shift(1)).apply(lambda x: math.log(x) if x and x > 0 else 0.0)
+    rolling_std = log_returns.rolling(window=21).std().dropna()
+    if rolling_std.empty:
+        return None
+    latest = float(rolling_std.iloc[-1])
+    series = rolling_std.tolist()
+    if not series:
+        return None
+    rank = sum(1 for v in series if v <= latest) / len(series)
+    return float(rank)
+
+
+def _short_interest_blocking(ticker: str) -> float | None:
+    """Pull shortPercentOfFloat from yfinance .info (when available)."""
+    try:
+        import yfinance as yf
+
+        info = yf.Ticker(ticker).info or {}
+    except Exception:  # noqa: BLE001
+        return None
+    val = info.get("shortPercentOfFloat")
+    if val is None:
+        return None
+    try:
+        return float(val)
+    except (TypeError, ValueError):
+        return None
+
+
+async def get_squeeze_score(
+    ticker: str,
+    *,
+    max_expiries: int = DEFAULT_MAX_EXPIRIES,
+    risk_free: float = DEFAULT_RISK_FREE,
+) -> dict[str, Any] | None:
+    """Compute the 4-factor squeeze score for a ticker.
+
+    Returns a payload dict shaped for SqueezeScoreResponse, or None if the
+    chain is empty / spot is invalid.
+    """
+    normalized = ticker.upper()
+    raw = await _get_chain(
+        normalized, max_expiries=max_expiries, risk_free=risk_free, force=False
+    )
+    contracts: list[OptionContract] = raw.get("contracts") or []
+    if not contracts:
+        return None
+
+    iv_rank = await run_sync_with_retries(_realized_vol_rank_blocking, normalized)
+    short_interest = await run_sync_with_retries(_short_interest_blocking, normalized)
+
+    score = compute_squeeze(
+        contracts,
+        iv_rank=iv_rank,
+        short_interest_frac=short_interest,
+    )
+
+    return {
+        "ticker": normalized,
+        "score": score.score,
+        "level": score.level,
+        "signals": list(score.signals),
+        "factor_scores": dict(score.factor_scores),
+        "max_possible": score.max_possible,
+        "iv_rank": iv_rank,
+        "short_interest_frac": short_interest,
+        "generated_at": datetime.now(timezone.utc),
     }
 
 

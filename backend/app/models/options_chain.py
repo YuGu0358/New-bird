@@ -108,3 +108,15 @@ class FridayScanResponse(BaseModel):
     breakeven_low: Optional[float] = None
     breakeven_high: Optional[float] = None
     generated_at: datetime
+
+
+class SqueezeScoreResponse(BaseModel):
+    ticker: str
+    score: int
+    level: str  # "low" | "med" | "high"
+    signals: list[str]
+    factor_scores: dict[str, float]
+    max_possible: int
+    iv_rank: Optional[float] = None
+    short_interest_frac: Optional[float] = None
+    generated_at: datetime

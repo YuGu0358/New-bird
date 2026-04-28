@@ -741,6 +741,31 @@
     "suggestedShortCall": "建议 Short Call",
     "suggestedShortPut": "建议 Short Put",
     "advDollar": "日均 $ 成交额",
-    "scoreBreakdown": "评分明细"
+    "scoreBreakdown": "评分明细",
+    "squeezeTitle": "压缩评分",
+    "squeezeSubtitle": "四因子压缩观察器 — 在价格突破前提示潜在异动风险",
+    "squeezeLoading": "正在计算压缩评分…",
+    "squeezeEmpty": "无期权链数据 — 无法评分",
+    "squeezeHeadline": "压缩等级",
+    "squeezeLevel": {
+      "low": "低",
+      "med": "中",
+      "high": "高"
+    },
+    "squeezeHintLow": "无明显压缩 — 波动率与持仓分布属正常。",
+    "squeezeHintMed": "存在一定压缩 — 留意潜在催化剂。",
+    "squeezeHintHigh": "严重压缩 — IV 偏低、持仓集中且偏向单边，异动风险显著上升。",
+    "squeezeIvRank": "IV 分位（52 周）",
+    "squeezeShortInterest": "空头占流通股比例",
+    "squeezeFactorsTriggered": "已触发",
+    "squeezeFactorsAvailable": "可用因子数",
+    "squeezeSignals": "已触发信号",
+    "squeezeNoSignals": "无信号触发 — 压缩未形成。",
+    "squeezeSignal": {
+      "iv_rank_low": "IV 分位低于 52 周区间的 30% — 期权权利金偏低",
+      "oi_concentration_high": "单一行权价持仓占全链 5% 以上 — Gamma 集中在该位",
+      "put_call_bias_bullish": "Put/Call OI 比 < 0.5 — 持仓极度偏向看涨",
+      "short_interest_high": "空头占流通股 > 15% — 上行加速时存在挤空风险"
+    }
   }
 }

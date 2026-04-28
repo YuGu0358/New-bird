@@ -186,6 +186,8 @@ export const getFridayScan = (ticker, expiry = null) => {
     `/api/options-chain/${encodeURIComponent(ticker)}/friday-scan${qs.toString() ? `?${qs}` : ''}`,
   );
 };
+export const getOptionsChainSqueeze = (ticker, maxExpiries = 6) =>
+  request(`/api/options-chain/${encodeURIComponent(ticker)}/squeeze?max_expiries=${maxExpiries}`);
 
 // ----------------------------------------------------------- journal (Task 3)
 export const listJournal = (params = {}) => {

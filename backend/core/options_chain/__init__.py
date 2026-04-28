@@ -13,6 +13,7 @@ from core.options_chain.gex import (
 )
 from core.options_chain.expiry_focus import ExpiryFocus, StrikeOI, focus_expiry
 from core.options_chain.friday_scan import FridayScan, WallSummary, scan_pinning
+from core.options_chain.squeeze import SqueezeScore, compute_squeeze
 
 __all__ = [
     "Greeks",
@@ -21,8 +22,10 @@ __all__ = [
     "FridayScan",
     "GexSummary",
     "OptionContract",
+    "SqueezeScore",
     "StrikeOI",
     "WallSummary",
+    "compute_squeeze",
     "focus_expiry",
     "scan_pinning",
     "summarize_chain",
