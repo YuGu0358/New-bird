@@ -148,6 +148,33 @@ async def test_enabled_setting_unblocks_call(monkeypatch: pytest.MonkeyPatch) ->
     assert payload["rows"][0]["symbol"] == "BTC"
 
 
+@pytest.mark.asyncio
+async def test_total_reports_universe_size_not_post_limit_count(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """`total` should reflect the parsed universe size before the top-N trim,
+    matching `screener_service` semantics (so the UI can render "N of TOTAL")."""
+    monkeypatch.setenv("CRYPTO_COINGECKO_ENABLED", "true")
+    payload_items = [
+        _sample_item(
+            coin_id=f"coin-{i}",
+            symbol=f"c{i}",
+            name=f"Coin {i}",
+            price=100.0 * (i + 1),
+        )
+        for i in range(5)
+    ]
+    client_cls = _make_async_client(payload=payload_items)
+    monkeypatch.setattr(coingecko_service.httpx, "AsyncClient", client_cls)
+
+    result = await coingecko_service.get_markets(
+        limit=2, sort_by="price_usd", descending=True
+    )
+
+    assert len(result["rows"]) == 2  # respected limit
+    assert result["total"] == 5      # universe size, not post-limit count
+
+
 # ----- 3-5. parse_markets_payload -----
 
 

@@ -148,7 +148,9 @@ async def get_markets(
 
     return {
         "rows": [_row_to_dict(r) for r in selected],
-        "total": len(selected),
+        # Universe size BEFORE the top-N trim — matches `screener_service`
+        # semantics so the UI can render "showing N of TOTAL".
+        "total": len(universe_rows),
         "limit": max(1, min(int(limit), 250)),
         "sort_by": sort_by,
         "descending": descending,
