@@ -97,6 +97,9 @@ EXPECTED_ROUTES: set[tuple[str, str]] = {
     # --- Sector rotation ---
     ("GET",    "/api/sectors/rotation"),
     ("POST",   "/api/sectors/rotation/refresh"),
+    # --- Multi-asset screener ---
+    ("GET",    "/api/screener"),
+    ("POST",   "/api/screener/refresh"),
 }
 
 
