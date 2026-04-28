@@ -78,6 +78,7 @@ EXPECTED_ROUTES: set[tuple[str, str]] = {
     # --- Tradewell-inspired additions (macro / valuation / options-chain) ---
     ("GET",    "/api/macro"),
     ("POST",   "/api/macro/refresh"),
+    ("GET",    "/api/macro/calendar"),
     ("PUT",    "/api/macro/indicators/{code}/thresholds"),
     ("DELETE", "/api/macro/indicators/{code}/thresholds"),
     ("POST",   "/api/valuation/dcf"),

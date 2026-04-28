@@ -605,7 +605,55 @@
     "directionHintWorse": "OK bei Wert ≤ ok_max, WARN bei ≤ warn_max, GEFAHR bei ≤ danger_max — alles darüber ebenfalls GEFAHR. Für Inflation, HY OAS, Rezessionswkt. usw.",
     "directionHintBetter": "OK bei ≥ warn_max, WARN bei ≥ ok_max, sonst GEFAHR. Für Kurven-Spread, Wachstum etc.",
     "directionHintInfo": "Kein Signallevel — die Karte zeigt nur den Wert. Für Liquiditäts-/FX-Reihen.",
-    "resetToDefault": "Auf Standard zurücksetzen"
+    "resetToDefault": "Auf Standard zurücksetzen",
+    "tabs": {
+      "indicators": "Indikatoren",
+      "calendar": "Kalender"
+    },
+    "calendar": {
+      "title": "Wirtschaftskalender",
+      "subtitle": "Anstehende US-Veröffentlichungen — FOMC, CPI, NFP, PCE, BIP — mit Countdown und Wichtigkeit",
+      "daysAhead": "Zeitfenster (Tage)",
+      "impactFilter": {
+        "label": "Wichtigkeit",
+        "all": "Alle",
+        "high": "Hoch",
+        "medium": "Mittel",
+        "low": "Niedrig"
+      },
+      "columns": {
+        "date": "Datum / Uhrzeit",
+        "countdown": "Wann",
+        "event": "Ereignis",
+        "category": "Kategorie",
+        "impact": "Wichtigkeit",
+        "source": "Quelle"
+      },
+      "countdown": {
+        "today": "heute",
+        "tomorrow": "morgen",
+        "inDays_one": "in {{count}} Tag",
+        "inDays_other": "in {{count}} Tagen"
+      },
+      "category": {
+        "rates": "Zinsen",
+        "inflation": "Inflation",
+        "employment": "Beschäftigung",
+        "growth": "Wachstum",
+        "housing": "Immobilien",
+        "sentiment": "Stimmung"
+      },
+      "impactBadge": {
+        "high": "HOCH",
+        "medium": "MITTEL",
+        "low": "NIEDRIG"
+      },
+      "sourceLabel": {
+        "seed": "Kuratiert",
+        "tradingeconomics": "TradingEconomics"
+      },
+      "empty": "Im gewählten Zeitfenster sind keine Ereignisse vorhanden."
+    }
   },
   "journal": {
     "title": "Investment-Tagebuch",

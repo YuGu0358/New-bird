@@ -605,7 +605,55 @@
     "directionHintWorse": "OK if value ≤ ok_max, WARN if value ≤ warn_max, DANGER if value ≤ danger_max — anything above is also DANGER. Use for inflation, HY OAS, recession probability, etc.",
     "directionHintBetter": "OK if value ≥ warn_max, WARN if value ≥ ok_max, DANGER below. Use for yield-curve spread, growth, etc.",
     "directionHintInfo": "No signal level — the card just shows the value. Used for raw liquidity / FX series.",
-    "resetToDefault": "Reset to default"
+    "resetToDefault": "Reset to default",
+    "tabs": {
+      "indicators": "Indicators",
+      "calendar": "Calendar"
+    },
+    "calendar": {
+      "title": "Economic Calendar",
+      "subtitle": "Upcoming US releases — FOMC, CPI, NFP, PCE, GDP — with countdown and impact rating",
+      "daysAhead": "Window (days)",
+      "impactFilter": {
+        "label": "Impact",
+        "all": "All",
+        "high": "High",
+        "medium": "Medium",
+        "low": "Low"
+      },
+      "columns": {
+        "date": "Date / time",
+        "countdown": "When",
+        "event": "Event",
+        "category": "Category",
+        "impact": "Impact",
+        "source": "Source"
+      },
+      "countdown": {
+        "today": "today",
+        "tomorrow": "tomorrow",
+        "inDays_one": "in {{count}} day",
+        "inDays_other": "in {{count}} days"
+      },
+      "category": {
+        "rates": "Rates",
+        "inflation": "Inflation",
+        "employment": "Employment",
+        "growth": "Growth",
+        "housing": "Housing",
+        "sentiment": "Sentiment"
+      },
+      "impactBadge": {
+        "high": "HIGH",
+        "medium": "MED",
+        "low": "LOW"
+      },
+      "sourceLabel": {
+        "seed": "Curated",
+        "tradingeconomics": "TradingEconomics"
+      },
+      "empty": "No events in the selected window."
+    }
   },
   "journal": {
     "title": "Investment Journal",

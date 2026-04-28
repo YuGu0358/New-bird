@@ -96,6 +96,13 @@ SETTING_DEFINITIONS: tuple[SettingDefinition, ...] = (
         description="用于宏观指标看板（CPI/PCE/收益率/HY OAS 等）。免费申请：https://fredaccount.stlouisfed.org/apikeys",
     ),
     SettingDefinition(
+        key="TRADINGECONOMICS_API_KEY",
+        label="TradingEconomics API Key",
+        category="research",
+        required=False,
+        description="可选。用于实时丰富 Economic Calendar 事件；不填时使用内置精选种子事件列表。",
+    ),
+    SettingDefinition(
         key="PINE_SEEDS_DIR",
         label="Pine Seeds Directory",
         category="research",

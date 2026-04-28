@@ -10,13 +10,14 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException
 
 from app.dependencies import SessionDep, service_error
+from app.models.economic_calendar import EconomicCalendarResponse
 from app.models.macro import (
     MacroDashboardResponse,
     MacroThresholdResetResponse,
     MacroThresholdUpdateRequest,
     MacroThresholdUpdateResponse,
 )
-from app.services import macro_service
+from app.services import economic_calendar_service, macro_service
 from core.macro import FREDConfigError
 
 router = APIRouter(prefix="/api/macro", tags=["macro"])
@@ -75,3 +76,26 @@ async def reset_indicator_thresholds(
     except Exception as exc:
         raise service_error(exc) from exc
     return MacroThresholdResetResponse(code=code, removed=removed)
+
+
+@router.get("/calendar", response_model=EconomicCalendarResponse)
+async def get_economic_calendar(
+    days_ahead: int = 30,
+    impact: str | None = None,
+) -> EconomicCalendarResponse:
+    """Upcoming US economic events (FOMC / CPI / NFP / PCE / GDP …).
+
+    Backed by a curated seed list — the calendar works out-of-the-box without
+    any external API key. If `TRADINGECONOMICS_API_KEY` is configured a
+    follow-up task can layer live enrichment on top.
+    """
+    try:
+        payload = await economic_calendar_service.list_upcoming_events(
+            days_ahead=days_ahead,
+            impact_filter=impact,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise service_error(exc) from exc
+    return EconomicCalendarResponse(**payload)

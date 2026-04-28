@@ -7,13 +7,14 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { RefreshCw, Sliders, RotateCcw, Save, X as XIcon } from 'lucide-react';
+import { RefreshCw, Sliders, RotateCcw, Save, X as XIcon, CalendarDays } from 'lucide-react';
 import { Area, AreaChart, ResponsiveContainer } from 'recharts';
 import {
   getMacroDashboard,
   refreshMacroDashboard,
   updateIndicatorThresholds,
   resetIndicatorThresholds,
+  getEconomicCalendar,
 } from '../lib/api.js';
 import {
   PageHeader,
@@ -31,12 +32,14 @@ export default function MacroPage() {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const [editingCode, setEditingCode] = useState(null);
+  const [tab, setTab] = useState('indicators'); // 'indicators' | 'calendar'
 
   const macroQ = useQuery({
     queryKey: ['macro'],
     queryFn: getMacroDashboard,
     refetchInterval: 5 * 60_000,
     retry: false,
+    enabled: tab === 'indicators',
   });
   const refreshMut = useMutation({
     mutationFn: refreshMacroDashboard,
@@ -62,18 +65,45 @@ export default function MacroPage() {
         segments={[{ label: t('macro.subtitle') }]}
       />
 
-      <div className="flex justify-end -mt-4">
-        <button
-          className="btn-secondary btn-sm"
-          onClick={() => refreshMut.mutate()}
-          disabled={refreshMut.isPending}
-        >
-          <RefreshCw size={12} className={refreshMut.isPending ? 'animate-spin' : ''} />
-          {t('macro.refreshNow')}
-        </button>
+      {/* Tab switcher + actions */}
+      <div className="flex items-center justify-between -mt-4">
+        <div className="flex items-center gap-1 border border-border-subtle bg-surface">
+          <button
+            className={classNames(
+              'px-4 py-2 text-body-sm transition',
+              tab === 'indicators' ? 'bg-elevated text-text-primary' : 'text-text-muted hover:text-text-secondary',
+            )}
+            onClick={() => setTab('indicators')}
+          >
+            <Sliders size={12} className="inline -mt-0.5 mr-1.5" />
+            {t('macro.tabs.indicators')}
+          </button>
+          <button
+            className={classNames(
+              'px-4 py-2 text-body-sm transition',
+              tab === 'calendar' ? 'bg-elevated text-text-primary' : 'text-text-muted hover:text-text-secondary',
+            )}
+            onClick={() => setTab('calendar')}
+          >
+            <CalendarDays size={12} className="inline -mt-0.5 mr-1.5" />
+            {t('macro.tabs.calendar')}
+          </button>
+        </div>
+        {tab === 'indicators' && (
+          <button
+            className="btn-secondary btn-sm"
+            onClick={() => refreshMut.mutate()}
+            disabled={refreshMut.isPending}
+          >
+            <RefreshCw size={12} className={refreshMut.isPending ? 'animate-spin' : ''} />
+            {t('macro.refreshNow')}
+          </button>
+        )}
       </div>
 
-      {macroQ.isLoading ? (
+      {tab === 'calendar' ? (
+        <EconomicCalendarPanel t={t} />
+      ) : macroQ.isLoading ? (
         <LoadingState rows={6} label={t('macro.loading')} />
       ) : macroQ.isError ? (
         <ErrorState error={macroQ.error} onRetry={macroQ.refetch} />
@@ -365,5 +395,138 @@ function NumField({ label, value, onChange }) {
         onChange={(e) => onChange(e.target.value)}
       />
     </div>
+  );
+}
+
+/* ----------------------------------------------------------- Economic Calendar */
+
+function EconomicCalendarPanel({ t }) {
+  const [daysAhead, setDaysAhead] = useState(30);
+  const [impact, setImpact] = useState('');
+  const calQ = useQuery({
+    queryKey: ['macro-calendar', daysAhead, impact],
+    queryFn: () => getEconomicCalendar({ daysAhead, impact: impact || null }),
+    retry: false,
+  });
+
+  const items = calQ.data?.items || [];
+
+  return (
+    <div className="space-y-4">
+      <div className="card">
+        <SectionHeader
+          title={t('macro.calendar.title')}
+          subtitle={t('macro.calendar.subtitle')}
+          meta={
+            calQ.data?.as_of && (
+              <span className="font-mono text-[10px] tracking-[0.15em] text-text-muted uppercase">
+                {fmtRelativeTime(calQ.data.as_of)}
+              </span>
+            )
+          }
+        />
+
+        <div className="flex flex-wrap items-end gap-4 mb-4">
+          <div>
+            <label className="h-caption block mb-1">{t('macro.calendar.daysAhead')}</label>
+            <select
+              className="select"
+              value={daysAhead}
+              onChange={(e) => setDaysAhead(Number(e.target.value))}
+            >
+              <option value={7}>7</option>
+              <option value={14}>14</option>
+              <option value={30}>30</option>
+              <option value={60}>60</option>
+              <option value={90}>90</option>
+              <option value={180}>180</option>
+            </select>
+          </div>
+          <div>
+            <label className="h-caption block mb-1">{t('macro.calendar.impactFilter.label')}</label>
+            <select
+              className="select"
+              value={impact}
+              onChange={(e) => setImpact(e.target.value)}
+            >
+              <option value="">{t('macro.calendar.impactFilter.all')}</option>
+              <option value="high">{t('macro.calendar.impactFilter.high')}</option>
+              <option value="medium">{t('macro.calendar.impactFilter.medium')}</option>
+              <option value="low">{t('macro.calendar.impactFilter.low')}</option>
+            </select>
+          </div>
+        </div>
+
+        {calQ.isLoading ? (
+          <LoadingState rows={6} />
+        ) : calQ.isError ? (
+          <ErrorState error={calQ.error} onRetry={calQ.refetch} />
+        ) : items.length === 0 ? (
+          <EmptyState title={t('macro.calendar.empty')} />
+        ) : (
+          <table className="tbl">
+            <thead>
+              <tr>
+                <th>{t('macro.calendar.columns.date')}</th>
+                <th>{t('macro.calendar.columns.countdown')}</th>
+                <th>{t('macro.calendar.columns.event')}</th>
+                <th>{t('macro.calendar.columns.category')}</th>
+                <th>{t('macro.calendar.columns.impact')}</th>
+                <th>{t('macro.calendar.columns.source')}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {items.map((row) => (
+                <CalendarRow key={row.id} row={row} t={t} />
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function CalendarRow({ row, t }) {
+  const dt = new Date(row.date_utc);
+  const now = new Date();
+  const days = Math.round((dt - now) / 86_400_000);
+  let countdown = '';
+  if (days <= 0) countdown = t('macro.calendar.countdown.today');
+  else if (days === 1) countdown = t('macro.calendar.countdown.tomorrow');
+  else countdown = t('macro.calendar.countdown.inDays', { count: days });
+
+  const impactClass =
+    row.impact === 'high' ? 'text-bear bg-bear/10 border-bear/40' :
+    row.impact === 'medium' ? 'text-warn bg-warn/10 border-warn/40' :
+    'text-text-muted bg-elevated border-border-subtle';
+
+  return (
+    <tr>
+      <td className="font-mono text-text-primary tabular">
+        {dt.toISOString().slice(0, 10)}
+        <span className="ml-2 text-caption text-text-muted">
+          {dt.toISOString().slice(11, 16)} UTC
+        </span>
+      </td>
+      <td className="text-body-sm text-text-secondary">{countdown}</td>
+      <td className="font-medium text-text-primary">{row.name}</td>
+      <td>
+        <span className="font-mono text-[10px] tracking-[0.15em] uppercase text-text-muted">
+          {t(`macro.calendar.category.${row.category}`, { defaultValue: row.category })}
+        </span>
+      </td>
+      <td>
+        <span className={classNames(
+          'inline-block px-2 py-0.5 text-[10px] font-mono tracking-[0.15em] uppercase border',
+          impactClass,
+        )}>
+          {t(`macro.calendar.impactBadge.${row.impact}`)}
+        </span>
+      </td>
+      <td className="text-caption text-text-muted">
+        {t(`macro.calendar.sourceLabel.${row.source}`, { defaultValue: row.source })}
+      </td>
+    </tr>
   );
 }

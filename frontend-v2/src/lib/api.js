@@ -154,6 +154,12 @@ export const updateIndicatorThresholds = (code, body) =>
   request(`/api/macro/indicators/${encodeURIComponent(code)}/thresholds`, { method: 'PUT', body });
 export const resetIndicatorThresholds = (code) =>
   request(`/api/macro/indicators/${encodeURIComponent(code)}/thresholds`, { method: 'DELETE' });
+export const getEconomicCalendar = ({ daysAhead = 30, impact = null } = {}) => {
+  const qs = new URLSearchParams();
+  qs.set('days_ahead', String(daysAhead));
+  if (impact) qs.set('impact', impact);
+  return request(`/api/macro/calendar?${qs.toString()}`);
+};
 
 // ----------------------------------------------------------- valuation (DCF + PE channel)
 export const runDcf = (body) => request('/api/valuation/dcf', { method: 'POST', body });

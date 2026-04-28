@@ -605,7 +605,55 @@
     "directionHintWorse": "OK si valeur ≤ ok_max, ALERTE si ≤ warn_max, DANGER si ≤ danger_max — au-delà toujours DANGER. Pour inflation, HY OAS, proba de récession, etc.",
     "directionHintBetter": "OK si ≥ warn_max, ALERTE si ≥ ok_max, sinon DANGER. Pour spread de courbe, croissance, etc.",
     "directionHintInfo": "Pas de niveau de signal — la carte n'affiche que la valeur. Pour les séries de liquidité / FX.",
-    "resetToDefault": "Rétablir les valeurs par défaut"
+    "resetToDefault": "Rétablir les valeurs par défaut",
+    "tabs": {
+      "indicators": "Indicateurs",
+      "calendar": "Calendrier"
+    },
+    "calendar": {
+      "title": "Calendrier économique",
+      "subtitle": "Prochaines publications américaines — FOMC, CPI, NFP, PCE, PIB — avec compte à rebours et importance",
+      "daysAhead": "Fenêtre (jours)",
+      "impactFilter": {
+        "label": "Importance",
+        "all": "Toutes",
+        "high": "Haute",
+        "medium": "Moyenne",
+        "low": "Faible"
+      },
+      "columns": {
+        "date": "Date / heure",
+        "countdown": "Quand",
+        "event": "Événement",
+        "category": "Catégorie",
+        "impact": "Importance",
+        "source": "Source"
+      },
+      "countdown": {
+        "today": "aujourd'hui",
+        "tomorrow": "demain",
+        "inDays_one": "dans {{count}} jour",
+        "inDays_other": "dans {{count}} jours"
+      },
+      "category": {
+        "rates": "Taux",
+        "inflation": "Inflation",
+        "employment": "Emploi",
+        "growth": "Croissance",
+        "housing": "Immobilier",
+        "sentiment": "Sentiment"
+      },
+      "impactBadge": {
+        "high": "HAUTE",
+        "medium": "MOYENNE",
+        "low": "FAIBLE"
+      },
+      "sourceLabel": {
+        "seed": "Sélection",
+        "tradingeconomics": "TradingEconomics"
+      },
+      "empty": "Aucun événement dans la fenêtre sélectionnée."
+    }
   },
   "journal": {
     "title": "Journal d'investissement",

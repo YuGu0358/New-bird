@@ -605,7 +605,55 @@
     "directionHintWorse": "值 ≤ ok_max 为 OK,≤ warn_max 为 WARN,≤ danger_max 为 DANGER — 超过 danger_max 仍是 DANGER. 用于通胀、HY OAS、衰退概率等.",
     "directionHintBetter": "值 ≥ warn_max 为 OK,≥ ok_max 为 WARN,低于则 DANGER. 用于收益率曲线利差、增长等.",
     "directionHintInfo": "无信号等级 — 卡片只显示数值. 用于流动性、外汇等原始数据.",
-    "resetToDefault": "恢复默认"
+    "resetToDefault": "恢复默认",
+    "tabs": {
+      "indicators": "指标看板",
+      "calendar": "经济日历"
+    },
+    "calendar": {
+      "title": "经济日历",
+      "subtitle": "美国近期重要事件 — FOMC、CPI、NFP、PCE、GDP — 含倒计时与影响等级",
+      "daysAhead": "时间窗口（天）",
+      "impactFilter": {
+        "label": "影响等级",
+        "all": "全部",
+        "high": "高",
+        "medium": "中",
+        "low": "低"
+      },
+      "columns": {
+        "date": "日期 / 时间",
+        "countdown": "倒计时",
+        "event": "事件",
+        "category": "类别",
+        "impact": "影响",
+        "source": "来源"
+      },
+      "countdown": {
+        "today": "今天",
+        "tomorrow": "明天",
+        "inDays_one": "{{count}} 天后",
+        "inDays_other": "{{count}} 天后"
+      },
+      "category": {
+        "rates": "利率",
+        "inflation": "通胀",
+        "employment": "就业",
+        "growth": "增长",
+        "housing": "房地产",
+        "sentiment": "情绪"
+      },
+      "impactBadge": {
+        "high": "高",
+        "medium": "中",
+        "low": "低"
+      },
+      "sourceLabel": {
+        "seed": "内置精选",
+        "tradingeconomics": "TradingEconomics"
+      },
+      "empty": "所选窗口内没有事件。"
+    }
   },
   "journal": {
     "title": "投资日志",
