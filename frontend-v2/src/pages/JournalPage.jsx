@@ -152,7 +152,7 @@ export default function JournalPage() {
         </div>
         {(symbol || mood || search) && (
           <div className="font-mono text-[10px] text-text-muted tracking-[0.15em] uppercase">
-            {total} {t('journal.title')}
+            {total} {t('journal.entriesCount')}
           </div>
         )}
       </div>

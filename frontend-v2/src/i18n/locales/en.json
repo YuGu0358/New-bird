@@ -598,11 +598,10 @@
     "searchPlaceholder": "Search title or body…",
     "symbolFilter": "Symbol",
     "moodFilter": "Mood",
-    "anySymbol": "Any symbol",
     "anyMood": "Any mood",
+    "entriesCount": "entries",
     "empty": "No journal entries yet",
     "emptyHint": "Click '+ New Entry' to record your first thought",
-    "loadError": "Failed to load journal",
     "fields": {
       "title": "Title",
       "body": "Body (markdown)",

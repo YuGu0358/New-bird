@@ -598,11 +598,10 @@
     "searchPlaceholder": "Rechercher un titre ou un corps…",
     "symbolFilter": "Symbole",
     "moodFilter": "Sentiment",
-    "anySymbol": "Tout symbole",
     "anyMood": "Tout sentiment",
+    "entriesCount": "entrées",
     "empty": "Aucune entrée de journal",
-    "emptyHint": "Clique sur « + Nouvelle entrée » pour enregistrer ta première réflexion",
-    "loadError": "Échec du chargement du journal",
+    "emptyHint": "Cliquez sur « + Nouvelle entrée » pour enregistrer votre première réflexion",
     "fields": {
       "title": "Titre",
       "body": "Corps (markdown)",

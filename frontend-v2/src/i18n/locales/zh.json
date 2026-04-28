@@ -598,11 +598,10 @@
     "searchPlaceholder": "搜索标题或正文…",
     "symbolFilter": "标的",
     "moodFilter": "情绪",
-    "anySymbol": "全部标的",
     "anyMood": "全部情绪",
+    "entriesCount": "条",
     "empty": "暂无日志条目",
     "emptyHint": "点击“+ 新建日志”记录第一条想法",
-    "loadError": "日志加载失败",
     "fields": {
       "title": "标题",
       "body": "正文(支持 markdown)",
