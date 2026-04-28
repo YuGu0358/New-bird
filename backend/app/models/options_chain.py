@@ -158,3 +158,26 @@ class StructureReadResponse(BaseModel):
     rationale: list[str]
     inputs_used: dict[str, Optional[float]]
     generated_at: datetime
+
+
+class OIFloatResponse(BaseModel):
+    ticker: str
+    spot: float
+    float_shares: Optional[int] = None
+    total_call_oi: int
+    total_put_oi: int
+    notional_call_shares: int
+    notional_put_shares: int
+    notional_total_shares: int
+    notional_call_pct: Optional[float] = None
+    notional_put_pct: Optional[float] = None
+    notional_total_pct: Optional[float] = None
+    delta_adjusted_call_shares: float
+    delta_adjusted_put_shares: float
+    delta_adjusted_total_shares: float
+    delta_adjusted_call_pct: Optional[float] = None
+    delta_adjusted_put_pct: Optional[float] = None
+    delta_adjusted_total_pct: Optional[float] = None
+    contracts_with_delta: int
+    contracts_total: int
+    generated_at: datetime

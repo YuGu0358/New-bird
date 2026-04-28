@@ -25,6 +25,7 @@ from app.services.network_utils import run_sync_with_retries
 from core.options_chain import (
     OptionContract,
     black_scholes_greeks,
+    compute_oi_float,
     compute_put_call_oi_ratio,
     compute_squeeze,
     detect_wall_clusters,
@@ -372,6 +373,28 @@ def _short_interest_blocking(ticker: str) -> float | None:
         return None
 
 
+def _float_shares_blocking(ticker: str) -> int | None:
+    """Pull floatShares from yfinance .info (when available).
+
+    Mirrors `_short_interest_blocking`: any failure (network, missing key,
+    bad value) returns None and the caller surfaces fractions as null.
+    """
+    try:
+        import yfinance as yf
+
+        info = yf.Ticker(ticker).info or {}
+    except Exception:  # noqa: BLE001
+        return None
+    val = info.get("floatShares")
+    if val is None:
+        return None
+    try:
+        coerced = int(val)
+    except (TypeError, ValueError):
+        return None
+    return coerced if coerced > 0 else None
+
+
 async def get_squeeze_score(
     ticker: str,
     *,
@@ -514,6 +537,55 @@ async def get_structure_read(
         "signals_fired": list(structure.signals_fired),
         "rationale": list(structure.rationale),
         "inputs_used": dict(structure.inputs_used),
+        "generated_at": datetime.now(timezone.utc),
+    }
+
+
+async def get_oi_float(
+    ticker: str,
+    *,
+    max_expiries: int = DEFAULT_MAX_EXPIRIES,
+    risk_free: float = DEFAULT_RISK_FREE,
+) -> dict[str, Any] | None:
+    """Notional + delta-adjusted OI as a fraction of public float.
+
+    The pure compute lives in `core.options_chain.oi_float.compute_oi_float`;
+    this function is the I/O boundary — it pulls (or reuses) the cached chain
+    and yfinance's `floatShares`, then assembles the response payload. Returns
+    None when no contracts are available.
+    """
+    normalized = ticker.upper()
+    raw = await _get_chain(
+        normalized, max_expiries=max_expiries, risk_free=risk_free, force=False
+    )
+    spot = float(raw.get("spot") or 0)
+    contracts: list[OptionContract] = raw.get("contracts") or []
+    if not contracts:
+        return None
+
+    float_shares = await run_sync_with_retries(_float_shares_blocking, normalized)
+    breakdown = compute_oi_float(contracts, float_shares=float_shares)
+
+    return {
+        "ticker": normalized,
+        "spot": spot,
+        "float_shares": float_shares,
+        "total_call_oi": breakdown.total_call_oi,
+        "total_put_oi": breakdown.total_put_oi,
+        "notional_call_shares": breakdown.notional_call_shares,
+        "notional_put_shares": breakdown.notional_put_shares,
+        "notional_total_shares": breakdown.notional_total_shares,
+        "notional_call_pct": breakdown.notional_call_pct,
+        "notional_put_pct": breakdown.notional_put_pct,
+        "notional_total_pct": breakdown.notional_total_pct,
+        "delta_adjusted_call_shares": breakdown.delta_adjusted_call_shares,
+        "delta_adjusted_put_shares": breakdown.delta_adjusted_put_shares,
+        "delta_adjusted_total_shares": breakdown.delta_adjusted_total_shares,
+        "delta_adjusted_call_pct": breakdown.delta_adjusted_call_pct,
+        "delta_adjusted_put_pct": breakdown.delta_adjusted_put_pct,
+        "delta_adjusted_total_pct": breakdown.delta_adjusted_total_pct,
+        "contracts_with_delta": breakdown.contracts_with_delta,
+        "contracts_total": breakdown.contracts_total,
         "generated_at": datetime.now(timezone.utc),
     }
 

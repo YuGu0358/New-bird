@@ -13,6 +13,7 @@ from core.options_chain.gex import (
 )
 from core.options_chain.expiry_focus import ExpiryFocus, StrikeOI, focus_expiry
 from core.options_chain.friday_scan import FridayScan, WallSummary, scan_pinning
+from core.options_chain.oi_float import OIFloatBreakdown, compute_oi_float
 from core.options_chain.squeeze import (
     SqueezeScore,
     compute_put_call_oi_ratio,
@@ -32,6 +33,7 @@ __all__ = [
     "ExpiryFocus",
     "FridayScan",
     "GexSummary",
+    "OIFloatBreakdown",
     "OptionContract",
     "SqueezeScore",
     "StrikeOI",
@@ -40,6 +42,7 @@ __all__ = [
     "WallClusters",
     "WallClusterStrike",
     "WallSummary",
+    "compute_oi_float",
     "compute_put_call_oi_ratio",
     "compute_squeeze",
     "detect_wall_clusters",
