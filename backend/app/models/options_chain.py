@@ -110,6 +110,33 @@ class FridayScanResponse(BaseModel):
     generated_at: datetime
 
 
+class WallClusterStrikeRow(BaseModel):
+    strike: float
+    oi: int
+    oi_pct_of_peak: float
+    distance_pct: Optional[float] = None
+
+
+class WallClusterBucketRow(BaseModel):
+    label: str
+    dte_min: int
+    dte_max: Optional[int] = None
+    contract_count: int
+    peak_call_oi: int
+    peak_put_oi: int
+    top_calls: list[WallClusterStrikeRow]
+    top_puts: list[WallClusterStrikeRow]
+
+
+class WallClustersResponse(BaseModel):
+    ticker: str
+    spot: float
+    threshold_pct: float
+    top_n: int
+    buckets: list[WallClusterBucketRow]
+    generated_at: datetime
+
+
 class SqueezeScoreResponse(BaseModel):
     ticker: str
     score: int

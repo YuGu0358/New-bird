@@ -14,6 +14,7 @@ from app.models.options_chain import (
     FridayScanResponse,
     GexSummaryResponse,
     SqueezeScoreResponse,
+    WallClustersResponse,
 )
 from app.services import options_chain_service
 
@@ -84,6 +85,31 @@ async def get_squeeze(ticker: str, max_expiries: int = 6) -> SqueezeScoreRespons
             detail=f"No chain data available for {ticker.upper()}",
         )
     return SqueezeScoreResponse(**payload)
+
+
+@router.get("/{ticker}/clusters", response_model=WallClustersResponse)
+async def get_wall_clusters(
+    ticker: str,
+    max_expiries: int = 6,
+    threshold_pct: float = 0.20,
+    top_n: int = 2,
+) -> WallClustersResponse:
+    """Tenor-bucketed wall clusters: 0-7 / 8-30 / 31+ DTE buckets."""
+    try:
+        payload = await options_chain_service.get_wall_clusters(
+            ticker,
+            max_expiries=max(1, min(max_expiries, 12)),
+            threshold_pct=max(0.0, min(threshold_pct, 1.0)),
+            top_n=max(1, min(top_n, 5)),
+        )
+    except Exception as exc:
+        raise service_error(exc) from exc
+    if payload is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No chain data available for {ticker.upper()}",
+        )
+    return WallClustersResponse(**payload)
 
 
 @router.get("/{ticker}/expiry/{expiry}", response_model=ExpiryFocusResponse)

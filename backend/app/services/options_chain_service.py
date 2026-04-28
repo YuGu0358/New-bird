@@ -26,9 +26,14 @@ from core.options_chain import (
     OptionContract,
     black_scholes_greeks,
     compute_squeeze,
+    detect_wall_clusters,
     focus_expiry,
     scan_pinning,
     summarize_chain,
+)
+from core.options_chain.wall_clusters import (
+    CLUSTER_OI_THRESHOLD,
+    DEFAULT_TOP_N as DEFAULT_CLUSTER_TOP_N,
 )
 
 logger = logging.getLogger(__name__)
@@ -402,6 +407,58 @@ async def get_squeeze_score(
         "max_possible": score.max_possible,
         "iv_rank": iv_rank,
         "short_interest_frac": short_interest,
+        "generated_at": datetime.now(timezone.utc),
+    }
+
+
+async def get_wall_clusters(
+    ticker: str,
+    *,
+    max_expiries: int = DEFAULT_MAX_EXPIRIES,
+    risk_free: float = DEFAULT_RISK_FREE,
+    threshold_pct: float = CLUSTER_OI_THRESHOLD,
+    top_n: int = DEFAULT_CLUSTER_TOP_N,
+) -> dict[str, Any] | None:
+    """Tenor-bucketed wall clusters for the chain.
+
+    Returns a payload shaped for WallClustersResponse, or None when the chain
+    is empty.
+    """
+    normalized = ticker.upper()
+    raw = await _get_chain(
+        normalized, max_expiries=max_expiries, risk_free=risk_free, force=False
+    )
+    spot = float(raw.get("spot") or 0)
+    contracts: list[OptionContract] = raw.get("contracts") or []
+    if not contracts:
+        return None
+
+    clusters = detect_wall_clusters(
+        ticker=normalized,
+        spot=spot,
+        contracts=contracts,
+        threshold_pct=threshold_pct,
+        top_n=top_n,
+    )
+
+    return {
+        "ticker": clusters.ticker,
+        "spot": clusters.spot,
+        "threshold_pct": clusters.threshold_pct,
+        "top_n": clusters.top_n,
+        "buckets": [
+            {
+                "label": b.label,
+                "dte_min": b.dte_min,
+                "dte_max": b.dte_max,
+                "contract_count": b.contract_count,
+                "peak_call_oi": b.peak_call_oi,
+                "peak_put_oi": b.peak_put_oi,
+                "top_calls": [asdict(s) for s in b.top_calls],
+                "top_puts": [asdict(s) for s in b.top_puts],
+            }
+            for b in clusters.buckets
+        ],
         "generated_at": datetime.now(timezone.utc),
     }
 
