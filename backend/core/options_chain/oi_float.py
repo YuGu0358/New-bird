@@ -31,7 +31,7 @@ from typing import Iterable
 
 from core.options_chain.gex import CONTRACT_MULTIPLIER, OptionContract
 
-__all__ = ["CONTRACT_MULTIPLIER", "OIFloatBreakdown", "compute_oi_float"]
+__all__ = ["OIFloatBreakdown", "compute_oi_float"]
 
 
 @dataclass
