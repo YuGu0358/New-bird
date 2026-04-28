@@ -10,15 +10,15 @@ class StrategyExecutionParameters(BaseModel):
     universe_symbols: list[str]
     preferred_sectors: list[str] = Field(default_factory=list)
     excluded_symbols: list[str] = Field(default_factory=list)
-    entry_drop_percent: float
-    add_on_drop_percent: float
-    initial_buy_notional: float
-    add_on_buy_notional: float
+    entry_drop_percent: float = 2.0
+    add_on_drop_percent: float = 2.0
+    initial_buy_notional: float = 1000.0
+    add_on_buy_notional: float = 100.0
     max_daily_entries: int = 3
-    max_add_ons: int
-    take_profit_target: float
-    stop_loss_percent: float
-    max_hold_days: int
+    max_add_ons: int = 3
+    take_profit_target: float = 80.0
+    stop_loss_percent: float = 12.0
+    max_hold_days: int = 30
 
 
 class StrategyAnalysisRequest(BaseModel):
