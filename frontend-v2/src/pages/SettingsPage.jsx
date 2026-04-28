@@ -21,6 +21,11 @@ const OPTIONAL_KEYS = [
   // Optional keys — labels & hints come from i18n via translateKey/hintKey
   { key: 'OPENAI_API_KEY', labelKey: 'settings.labels.openaiApiKey', hintKey: 'settings.labels.openaiHint', required: false },
   { key: 'FRED_API_KEY', labelKey: 'settings.labels.fredApiKey', hintKey: 'settings.labels.fredHint', required: false },
+  { key: 'BROKER_BACKEND', labelKey: 'settings.labels.brokerBackend', hintKey: 'settings.labels.brokerBackendHint', required: false },
+  { key: 'IBKR_HOST', labelKey: 'settings.labels.ibkrHost', hintKey: 'settings.labels.ibkrHostHint', required: false },
+  { key: 'IBKR_PORT', labelKey: 'settings.labels.ibkrPort', hintKey: 'settings.labels.ibkrPortHint', required: false },
+  { key: 'IBKR_CLIENT_ID', labelKey: 'settings.labels.ibkrClientId', hintKey: 'settings.labels.ibkrClientIdHint', required: false },
+  { key: 'IBKR_ACCOUNT_ID', labelKey: 'settings.labels.ibkrAccountId', hintKey: 'settings.labels.ibkrAccountIdHint', required: false },
   { key: 'X_BEARER_TOKEN', labelKey: 'settings.labels.xBearerToken', hintKey: 'settings.labels.xBearerHint', required: false },
   { key: 'NOTIFICATIONS_WEBHOOK_URL', labelKey: 'settings.labels.notificationsWebhook', hintKey: 'settings.labels.notificationsHint', required: false },
   { key: 'SETTINGS_ADMIN_TOKEN', labelKey: 'settings.labels.settingsAdminToken', hintKey: 'settings.labels.settingsAdminTokenHint', required: false },

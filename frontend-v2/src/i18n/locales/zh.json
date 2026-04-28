@@ -415,7 +415,17 @@
       "settingsAdminToken": "Settings Admin Token",
       "settingsAdminTokenHint": "保护本设置页(共享/公网部署用)",
       "fredApiKey": "FRED API Key",
-      "fredHint": "免费申请: https://fredaccount.stlouisfed.org/apikeys — 仅在使用宏观环境看板(CPI / 收益率曲线 / HY OAS / VIX 等)时需要."
+      "fredHint": "免费申请: https://fredaccount.stlouisfed.org/apikeys — 仅在使用宏观环境看板(CPI / 收益率曲线 / HY OAS / VIX 等)时需要.",
+      "brokerBackend": "券商后端",
+      "brokerBackendHint": "路由到哪个券商: `alpaca`(默认)或 `ibkr`。切换到 `ibkr` 需要本地运行的 IB Gateway。",
+      "ibkrHost": "IBKR 主机",
+      "ibkrHostHint": "IB Gateway / TWS 运行的主机,默认本机 localhost。",
+      "ibkrPort": "IBKR 端口",
+      "ibkrPortHint": "5055 = paper, 4001 = live。在 IB Gateway → Configuration → API 中设置。",
+      "ibkrClientId": "IBKR 客户端 ID",
+      "ibkrClientIdHint": "每个连接需要唯一整数,运行多个机器人时使用不同值(1-32)。",
+      "ibkrAccountId": "IBKR 账户 ID",
+      "ibkrAccountIdHint": "IBKR 账户 ID,如 DU1234567 (paper) 或 U1234567 (live)。仅在使用 `ibkr` 后端时需要。"
     },
     "sourceLabel": {
       "missing": "未配置",

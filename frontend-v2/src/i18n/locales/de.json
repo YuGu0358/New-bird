@@ -415,7 +415,17 @@
       "settingsAdminToken": "Einstellungs-Admin-Token",
       "settingsAdminTokenHint": "Schützt diese Einstellungsseite auf geteilten/öffentlichen Deployments.",
       "fredApiKey": "FRED API Key",
-      "fredHint": "Kostenloser Key bei https://fredaccount.stlouisfed.org/apikeys — wird nur für das Makro-Umfeld-Dashboard (CPI / Zinskurve / HY OAS / VIX usw.) benötigt."
+      "fredHint": "Kostenloser Key bei https://fredaccount.stlouisfed.org/apikeys — wird nur für das Makro-Umfeld-Dashboard (CPI / Zinskurve / HY OAS / VIX usw.) benötigt.",
+      "brokerBackend": "Broker-Backend",
+      "brokerBackendHint": "Über welchen Broker geroutet wird: `alpaca` (Standard) oder `ibkr`. Der Wechsel zu `ibkr` setzt ein laufendes IB Gateway voraus.",
+      "ibkrHost": "IBKR-Host",
+      "ibkrHostHint": "Host, auf dem IB Gateway / TWS läuft. Standard: localhost.",
+      "ibkrPort": "IBKR-Port",
+      "ibkrPortHint": "5055 = Paper, 4001 = Live. In IB Gateway → Configuration → API einstellen.",
+      "ibkrClientId": "IBKR Client-ID",
+      "ibkrClientIdHint": "Jede Verbindung benötigt eine eindeutige Ganzzahl. Beliebig 1–32, sofern keine mehreren Bots laufen.",
+      "ibkrAccountId": "IBKR-Konto-ID",
+      "ibkrAccountIdHint": "Ihre IBKR-Konto-ID, z. B. DU1234567 (Paper) oder U1234567 (Live). Nur für das `ibkr`-Backend erforderlich."
     },
     "sourceLabel": {
       "missing": "Nicht konfiguriert",

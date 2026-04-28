@@ -415,7 +415,17 @@
       "settingsAdminToken": "Jeton admin Paramètres",
       "settingsAdminTokenHint": "Protège cette page Paramètres sur les déploiements publics.",
       "fredApiKey": "Clé API FRED",
-      "fredHint": "Clé gratuite sur https://fredaccount.stlouisfed.org/apikeys — requise uniquement pour le tableau de bord macro (CPI / courbe des taux / HY OAS / VIX, etc.)."
+      "fredHint": "Clé gratuite sur https://fredaccount.stlouisfed.org/apikeys — requise uniquement pour le tableau de bord macro (CPI / courbe des taux / HY OAS / VIX, etc.).",
+      "brokerBackend": "Backend courtier",
+      "brokerBackendHint": "Quel courtier utiliser : `alpaca` (par défaut) ou `ibkr`. Passer à `ibkr` nécessite un IB Gateway en cours d'exécution.",
+      "ibkrHost": "Hôte IBKR",
+      "ibkrHostHint": "Hôte sur lequel IB Gateway / TWS s'exécute. Par défaut localhost.",
+      "ibkrPort": "Port IBKR",
+      "ibkrPortHint": "5055 = paper, 4001 = live. À configurer dans IB Gateway → Configuration → API.",
+      "ibkrClientId": "ID client IBKR",
+      "ibkrClientIdHint": "Chaque connexion nécessite un entier unique. Utilisez une valeur entre 1 et 32, sauf si plusieurs bots tournent.",
+      "ibkrAccountId": "ID compte IBKR",
+      "ibkrAccountIdHint": "Votre identifiant de compte IBKR, ex. DU1234567 (paper) ou U1234567 (live). Requis uniquement pour le backend `ibkr`."
     },
     "sourceLabel": {
       "missing": "Non configuré",
