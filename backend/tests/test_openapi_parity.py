@@ -92,6 +92,9 @@ EXPECTED_ROUTES: set[tuple[str, str]] = {
     # --- TradingView pine-seeds workspace ---
     ("GET",    "/api/pine-seeds/status"),
     ("POST",   "/api/pine-seeds/export"),
+    # --- Sector rotation ---
+    ("GET",    "/api/sectors/rotation"),
+    ("POST",   "/api/sectors/rotation/refresh"),
 }
 
 
