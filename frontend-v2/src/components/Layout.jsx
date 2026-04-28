@@ -1,7 +1,23 @@
+import { useEffect, useState } from 'react';
 import Sidebar from './Sidebar.jsx';
 import TopBar from './TopBar.jsx';
+import CommandPalette from './CommandPalette.jsx';
 
 export default function Layout({ children }) {
+  const [paletteOpen, setPaletteOpen] = useState(false);
+
+  useEffect(() => {
+    function onKey(e) {
+      // Cmd+K (Mac) or Ctrl+K (Win/Linux)
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setPaletteOpen((v) => !v);
+      }
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
   return (
     <div className="flex min-h-screen bg-void text-text-primary">
       <Sidebar />
@@ -11,6 +27,7 @@ export default function Layout({ children }) {
           <div className="px-12 py-9 max-w-[1600px]">{children}</div>
         </div>
       </main>
+      <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} />
     </div>
   );
 }

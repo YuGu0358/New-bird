@@ -605,55 +605,7 @@
     "directionHintWorse": "OK bei Wert ≤ ok_max, WARN bei ≤ warn_max, GEFAHR bei ≤ danger_max — alles darüber ebenfalls GEFAHR. Für Inflation, HY OAS, Rezessionswkt. usw.",
     "directionHintBetter": "OK bei ≥ warn_max, WARN bei ≥ ok_max, sonst GEFAHR. Für Kurven-Spread, Wachstum etc.",
     "directionHintInfo": "Kein Signallevel — die Karte zeigt nur den Wert. Für Liquiditäts-/FX-Reihen.",
-    "resetToDefault": "Auf Standard zurücksetzen",
-    "tabs": {
-      "indicators": "Indikatoren",
-      "calendar": "Kalender"
-    },
-    "calendar": {
-      "title": "Wirtschaftskalender",
-      "subtitle": "Anstehende US-Veröffentlichungen — FOMC, CPI, NFP, PCE, BIP — mit Countdown und Wichtigkeit",
-      "daysAhead": "Zeitfenster (Tage)",
-      "impactFilter": {
-        "label": "Wichtigkeit",
-        "all": "Alle",
-        "high": "Hoch",
-        "medium": "Mittel",
-        "low": "Niedrig"
-      },
-      "columns": {
-        "date": "Datum / Uhrzeit",
-        "countdown": "Wann",
-        "event": "Ereignis",
-        "category": "Kategorie",
-        "impact": "Wichtigkeit",
-        "source": "Quelle"
-      },
-      "countdown": {
-        "today": "heute",
-        "tomorrow": "morgen",
-        "inDays_one": "in {{count}} Tag",
-        "inDays_other": "in {{count}} Tagen"
-      },
-      "category": {
-        "rates": "Zinsen",
-        "inflation": "Inflation",
-        "employment": "Beschäftigung",
-        "growth": "Wachstum",
-        "housing": "Immobilien",
-        "sentiment": "Stimmung"
-      },
-      "impactBadge": {
-        "high": "HOCH",
-        "medium": "MITTEL",
-        "low": "NIEDRIG"
-      },
-      "sourceLabel": {
-        "seed": "Kuratiert",
-        "tradingeconomics": "TradingEconomics"
-      },
-      "empty": "Im gewählten Zeitfenster sind keine Ereignisse vorhanden."
-    }
+    "resetToDefault": "Auf Standard zurücksetzen"
   },
   "journal": {
     "title": "Investment-Tagebuch",
@@ -814,6 +766,28 @@
       "oi_concentration_high": "Ein Strike hält über 5 % des gesamten Chain-OI — Gamma dort konzentriert",
       "put_call_bias_bullish": "Put/Call-OI-Verhältnis < 0,5 — Positionierung stark Call-lastig",
       "short_interest_high": "Short Interest über 15 % des Floats — Squeeze-Risiko bei scharfer Aufwärtsbewegung"
+    }
+  },
+  "cmdk": {
+    "dialogLabel": "Befehlspalette",
+    "placeholder": "Seiten oder Aktionen suchen…",
+    "empty": "Keine Treffer.",
+    "groups": {
+      "pages": "Seiten",
+      "actions": "Aktionen",
+      "recent": "Zuletzt verwendet"
+    },
+    "actions": {
+      "switchLanguageEn": "Sprache wechseln → English",
+      "switchLanguageZh": "Sprache wechseln → 中文",
+      "switchLanguageDe": "Sprache wechseln → Deutsch",
+      "switchLanguageFr": "Sprache wechseln → Français",
+      "refreshAll": "Alle Daten neu laden",
+      "openSettings": "Einstellungen öffnen"
+    },
+    "kbd": {
+      "navigate": "↑↓ navigieren · ↵ auswählen",
+      "close": "Esc zum Schließen"
     }
   }
 }
