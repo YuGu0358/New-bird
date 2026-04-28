@@ -103,6 +103,8 @@ EXPECTED_ROUTES: set[tuple[str, str]] = {
     ("POST",   "/api/screener/refresh"),
     # --- CoinGecko crypto markets (opt-in) ---
     ("GET",    "/api/crypto/markets"),
+    # --- DBnomics public series adapter ---
+    ("GET",    "/api/dbnomics/series/{provider}/{dataset}/{series_id}"),
 }
 
 

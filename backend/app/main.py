@@ -20,6 +20,7 @@ from app.routers import backtest as backtest_router
 from app.routers import bot as bot_router
 from app.routers import code as code_router
 from app.routers import crypto as crypto_router
+from app.routers import dbnomics as dbnomics_router
 from app.routers import health as health_router
 from app.routers import journal as journal_router
 from app.routers import macro as macro_router
@@ -128,6 +129,7 @@ app.include_router(options_chain_router.router)
 app.include_router(pine_seeds_router.router)
 app.include_router(screener_router.router)
 app.include_router(sectors_router.router)
+app.include_router(dbnomics_router.router)
 
 
 def _is_safe_frontend_path(base_dir: Path, requested_path: Path) -> bool:
