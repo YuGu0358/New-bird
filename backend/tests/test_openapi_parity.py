@@ -101,6 +101,8 @@ EXPECTED_ROUTES: set[tuple[str, str]] = {
     # --- Multi-asset screener ---
     ("GET",    "/api/screener"),
     ("POST",   "/api/screener/refresh"),
+    # --- CoinGecko crypto markets (opt-in) ---
+    ("GET",    "/api/crypto/markets"),
 }
 
 

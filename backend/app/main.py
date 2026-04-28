@@ -19,6 +19,7 @@ from app.routers import alerts as alerts_router
 from app.routers import backtest as backtest_router
 from app.routers import bot as bot_router
 from app.routers import code as code_router
+from app.routers import crypto as crypto_router
 from app.routers import health as health_router
 from app.routers import journal as journal_router
 from app.routers import macro as macro_router
@@ -120,6 +121,7 @@ app.include_router(metrics_router.router)
 app.include_router(settings_router.router)
 app.include_router(strategy_health_router.router)
 # Tradewell-inspired additions
+app.include_router(crypto_router.router)
 app.include_router(macro_router.router)
 app.include_router(valuation_router.router)
 app.include_router(options_chain_router.router)
