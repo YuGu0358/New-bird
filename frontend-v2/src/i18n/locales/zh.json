@@ -425,7 +425,13 @@
       "ibkrClientId": "IBKR 客户端 ID",
       "ibkrClientIdHint": "每个连接需要唯一整数,运行多个机器人时使用不同值(1-32)。",
       "ibkrAccountId": "IBKR 账户 ID",
-      "ibkrAccountIdHint": "IBKR 账户 ID,如 DU1234567 (paper) 或 U1234567 (live)。仅在使用 `ibkr` 后端时需要。"
+      "ibkrAccountIdHint": "IBKR 账户 ID,如 DU1234567 (paper) 或 U1234567 (live)。仅在使用 `ibkr` 后端时需要。",
+      "pineSeedsDir": "Pine Seeds 目录",
+      "pineSeedsDirHint": "本地写入 TradingView pine-seeds CSV 的目录。默认: `${DATA_DIR}/pine_seeds`。",
+      "pineSeedsRepoUrl": "Pine Seeds GitHub 仓库 URL",
+      "pineSeedsRepoUrlHint": "pine-seeds 公开 GitHub 仓库地址(HTTPS 或 SSH)。仅在需要自动 push 时填写。申请 TradingView 白名单: https://github.com/tradingview-pine-seeds",
+      "pineSeedsWatchlist": "TradingView 监控列表",
+      "pineSeedsWatchlistHint": "要导出 options / 估值水平的标的列表(逗号分隔)。"
     },
     "sourceLabel": {
       "missing": "未配置",

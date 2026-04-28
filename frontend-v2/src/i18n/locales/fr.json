@@ -425,7 +425,13 @@
       "ibkrClientId": "ID client IBKR",
       "ibkrClientIdHint": "Chaque connexion nécessite un entier unique. Utilisez une valeur entre 1 et 32, sauf si plusieurs bots tournent.",
       "ibkrAccountId": "ID compte IBKR",
-      "ibkrAccountIdHint": "Votre identifiant de compte IBKR, ex. DU1234567 (paper) ou U1234567 (live). Requis uniquement pour le backend `ibkr`."
+      "ibkrAccountIdHint": "Votre identifiant de compte IBKR, ex. DU1234567 (paper) ou U1234567 (live). Requis uniquement pour le backend `ibkr`.",
+      "pineSeedsDir": "Répertoire pine-seeds",
+      "pineSeedsDirHint": "Répertoire local où sont écrits les CSV pine-seeds TradingView. Par défaut : `${DATA_DIR}/pine_seeds`.",
+      "pineSeedsRepoUrl": "URL du dépôt GitHub pine-seeds",
+      "pineSeedsRepoUrlHint": "URL publique du dépôt GitHub (HTTPS ou SSH) pour pine-seeds. Requis uniquement pour l'auto-push. Demander l'inscription TradingView sur https://github.com/tradingview-pine-seeds.",
+      "pineSeedsWatchlist": "Liste de surveillance pine-seeds",
+      "pineSeedsWatchlistHint": "Liste de symboles séparés par des virgules pour exporter les options / niveaux de valorisation."
     },
     "sourceLabel": {
       "missing": "Non configuré",

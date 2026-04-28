@@ -425,7 +425,13 @@
       "ibkrClientId": "IBKR Client ID",
       "ibkrClientIdHint": "Each connection needs a unique integer. Use any 1-32 unless you run multiple bots.",
       "ibkrAccountId": "IBKR Account ID",
-      "ibkrAccountIdHint": "Your IBKR account ID, e.g. DU1234567 (paper) or U1234567 (live). Required only for `ibkr` backend."
+      "ibkrAccountIdHint": "Your IBKR account ID, e.g. DU1234567 (paper) or U1234567 (live). Required only for `ibkr` backend.",
+      "pineSeedsDir": "Pine Seeds Directory",
+      "pineSeedsDirHint": "Local directory where TradingView pine-seeds CSVs are written. Default: `${DATA_DIR}/pine_seeds`.",
+      "pineSeedsRepoUrl": "Pine Seeds Repo URL",
+      "pineSeedsRepoUrlHint": "Public GitHub repo URL (HTTPS or SSH) for pine-seeds. Required only if you want auto-push. Apply for TradingView whitelist at https://github.com/tradingview-pine-seeds.",
+      "pineSeedsWatchlist": "Pine Seeds Watchlist",
+      "pineSeedsWatchlistHint": "Comma-separated list of symbols to export options/valuation levels for."
     },
     "sourceLabel": {
       "missing": "Not configured",
