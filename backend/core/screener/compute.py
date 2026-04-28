@@ -17,7 +17,6 @@ Conventions
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
 
 
 # Columns that `sort_by` accepts. Anything else → ValueError. Kept as a
@@ -110,21 +109,6 @@ def apply_filter(
         if keep:
             out.append(row)
     return out
-
-
-def _sort_key(row: ScreenerRow, column: str) -> tuple[int, Any, str]:
-    """Build a sort key that pushes `None` values to the end in BOTH directions.
-
-    Returned tuple is `(none_flag, value_or_sentinel, symbol)`:
-    - `none_flag` is 0 for present values and 1 for None — when we later
-      reverse the list for descending sort, we apply `reverse=True` only to
-      the value component (see `sort_and_paginate`).
-    - `symbol` is the stable tiebreaker (ascending).
-    """
-    value = getattr(row, column)
-    if value is None:
-        return (1, 0, row.symbol)
-    return (0, value, row.symbol)
 
 
 def sort_and_paginate(

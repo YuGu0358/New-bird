@@ -6,7 +6,7 @@ service call, response model. All business logic lives in
 """
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 
 from app.dependencies import service_error
 from app.models.screener import ScreenerResponse
@@ -17,19 +17,19 @@ router = APIRouter(prefix="/api/screener", tags=["screener"])
 
 
 def _build_filter(
-    *,
-    sector: str | None,
-    min_market_cap: float | None,
-    max_market_cap: float | None,
-    min_pe: float | None,
-    max_pe: float | None,
-    min_peg: float | None,
-    max_peg: float | None,
-    min_revenue_growth: float | None,
-    max_revenue_growth: float | None,
-    min_momentum_3m: float | None,
-    max_momentum_3m: float | None,
+    sector: str | None = None,
+    min_market_cap: float | None = None,
+    max_market_cap: float | None = None,
+    min_pe: float | None = None,
+    max_pe: float | None = None,
+    min_peg: float | None = None,
+    max_peg: float | None = None,
+    min_revenue_growth: float | None = None,
+    max_revenue_growth: float | None = None,
+    min_momentum_3m: float | None = None,
+    max_momentum_3m: float | None = None,
 ) -> ScreenerFilter:
+    """FastAPI dependency: collect the 11 filter query params into a ScreenerFilter."""
     return ScreenerFilter(
         sector=sector,
         min_market_cap=min_market_cap,
@@ -47,36 +47,13 @@ def _build_filter(
 
 @router.get("", response_model=ScreenerResponse)
 async def screen(
-    sector: str | None = None,
-    min_market_cap: float | None = None,
-    max_market_cap: float | None = None,
-    min_pe: float | None = None,
-    max_pe: float | None = None,
-    min_peg: float | None = None,
-    max_peg: float | None = None,
-    min_revenue_growth: float | None = None,
-    max_revenue_growth: float | None = None,
-    min_momentum_3m: float | None = None,
-    max_momentum_3m: float | None = None,
+    spec: ScreenerFilter = Depends(_build_filter),
     sort_by: str = "market_cap",
     descending: bool = True,
     page: int = 1,
     page_size: int = 20,
 ) -> ScreenerResponse:
     """Filter / sort / paginate the screener universe (1h cache)."""
-    spec = _build_filter(
-        sector=sector,
-        min_market_cap=min_market_cap,
-        max_market_cap=max_market_cap,
-        min_pe=min_pe,
-        max_pe=max_pe,
-        min_peg=min_peg,
-        max_peg=max_peg,
-        min_revenue_growth=min_revenue_growth,
-        max_revenue_growth=max_revenue_growth,
-        min_momentum_3m=min_momentum_3m,
-        max_momentum_3m=max_momentum_3m,
-    )
     try:
         payload = await screener_service.search(
             spec=spec,
@@ -94,36 +71,13 @@ async def screen(
 
 @router.post("/refresh", response_model=ScreenerResponse)
 async def refresh_screen(
-    sector: str | None = None,
-    min_market_cap: float | None = None,
-    max_market_cap: float | None = None,
-    min_pe: float | None = None,
-    max_pe: float | None = None,
-    min_peg: float | None = None,
-    max_peg: float | None = None,
-    min_revenue_growth: float | None = None,
-    max_revenue_growth: float | None = None,
-    min_momentum_3m: float | None = None,
-    max_momentum_3m: float | None = None,
+    spec: ScreenerFilter = Depends(_build_filter),
     sort_by: str = "market_cap",
     descending: bool = True,
     page: int = 1,
     page_size: int = 20,
 ) -> ScreenerResponse:
     """Force-rebuild the cache, then run the same filter/sort/paginate."""
-    spec = _build_filter(
-        sector=sector,
-        min_market_cap=min_market_cap,
-        max_market_cap=max_market_cap,
-        min_pe=min_pe,
-        max_pe=max_pe,
-        min_peg=min_peg,
-        max_peg=max_peg,
-        min_revenue_growth=min_revenue_growth,
-        max_revenue_growth=max_revenue_growth,
-        min_momentum_3m=min_momentum_3m,
-        max_momentum_3m=max_momentum_3m,
-    )
     try:
         payload = await screener_service.search(
             spec=spec,

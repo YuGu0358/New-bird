@@ -183,6 +183,54 @@ def test_unknown_sort_by_raises_value_error():
         sort_and_paginate(rows, sort_by="not_a_column")
 
 
+# ----- Pagination boundary clamps -----
+
+
+def test_paginate_clamps_page_size_low_to_one():
+    """page_size <= 0 must clamp to 1 (return exactly 1 row)."""
+    rows = [_row(f"S{i:02d}", market_cap=float(i)) for i in range(5)]
+
+    out_zero, total_zero = sort_and_paginate(
+        rows, sort_by="market_cap", descending=True, page=1, page_size=0
+    )
+    assert total_zero == 5
+    assert len(out_zero) == 1
+
+    out_neg, total_neg = sort_and_paginate(
+        rows, sort_by="market_cap", descending=True, page=1, page_size=-5
+    )
+    assert total_neg == 5
+    assert len(out_neg) == 1
+
+
+def test_paginate_clamps_page_size_high_to_one_hundred():
+    """page_size > 100 must clamp to 100 (cap to protect the API)."""
+    rows = [_row(f"S{i:03d}", market_cap=float(i)) for i in range(150)]
+    out, total = sort_and_paginate(
+        rows, sort_by="market_cap", descending=True, page=1, page_size=999
+    )
+    assert total == 150
+    assert len(out) == 100
+
+
+def test_paginate_zero_or_negative_page_coerces_to_one():
+    """page <= 0 must behave identically to page=1."""
+    rows = [_row(f"S{i:02d}", market_cap=float(i)) for i in range(10)]
+
+    page_one, _ = sort_and_paginate(
+        rows, sort_by="market_cap", descending=True, page=1, page_size=5
+    )
+    page_zero, _ = sort_and_paginate(
+        rows, sort_by="market_cap", descending=True, page=0, page_size=5
+    )
+    page_neg, _ = sort_and_paginate(
+        rows, sort_by="market_cap", descending=True, page=-1, page_size=5
+    )
+
+    assert [r.symbol for r in page_zero] == [r.symbol for r in page_one]
+    assert [r.symbol for r in page_neg] == [r.symbol for r in page_one]
+
+
 # ----- Service -----
 
 

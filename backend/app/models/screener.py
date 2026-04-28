@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Optional
 
 from pydantic import BaseModel
 
@@ -10,12 +9,12 @@ from pydantic import BaseModel
 class ScreenerRowModel(BaseModel):
     symbol: str
     sector: str
-    market_cap: Optional[float] = None
-    pe_ratio: Optional[float] = None
-    peg_ratio: Optional[float] = None
-    revenue_growth: Optional[float] = None
-    momentum_3m: Optional[float] = None
-    latest_close: Optional[float] = None
+    market_cap: float | None = None
+    pe_ratio: float | None = None
+    peg_ratio: float | None = None
+    revenue_growth: float | None = None
+    momentum_3m: float | None = None
+    latest_close: float | None = None
 
 
 class ScreenerResponse(BaseModel):
@@ -26,4 +25,4 @@ class ScreenerResponse(BaseModel):
     sort_by: str
     descending: bool
     generated_at: datetime
-    as_of: Optional[datetime] = None
+    as_of: datetime | None = None
