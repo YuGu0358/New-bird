@@ -327,6 +327,23 @@ async def evaluate_rules_once(
                 rule.last_error = str(exc)
                 logger.exception("Price alert action failed for %s", rule.symbol)
 
+            try:
+                from app.services import notifications_service
+
+                await notifications_service.dispatch_price_alert(
+                    symbol=rule.symbol,
+                    condition=_condition_summary(rule.condition_type, rule.target_value),
+                    target_value=float(rule.target_value)
+                    if rule.target_value is not None
+                    else None,
+                    current_price=current_price,
+                    day_change_percent=day_change_percent,
+                    note=rule.note or None,
+                )
+            except Exception:
+                # Notifications must never block the monitor.
+                logger.exception("Price alert notification failed for %s", rule.symbol)
+
         await session.commit()
         return triggered_count
 
