@@ -75,7 +75,7 @@ def _oi_concentration(contracts: Iterable[OptionContract]) -> float:
     return max(by_strike.values()) / total
 
 
-def _put_call_oi_ratio(contracts: Iterable[OptionContract]) -> float | None:
+def compute_put_call_oi_ratio(contracts: Iterable[OptionContract]) -> float | None:
     """put_oi / call_oi. None if either side has zero OI."""
     call_oi = 0
     put_oi = 0
@@ -137,7 +137,7 @@ def compute_squeeze(
             factor_scores["oi_concentration"] = float(POINTS_PER_SIGNAL)
 
     # Factor 3: Put/Call OI ratio call-skewed
-    pc_ratio = _put_call_oi_ratio(contracts)
+    pc_ratio = compute_put_call_oi_ratio(contracts)
     if pc_ratio is not None:
         max_possible += POINTS_PER_SIGNAL
         if pc_ratio < PUT_CALL_OI_BIAS:

@@ -25,6 +25,7 @@ from app.services.network_utils import run_sync_with_retries
 from core.options_chain import (
     OptionContract,
     black_scholes_greeks,
+    compute_put_call_oi_ratio,
     compute_squeeze,
     detect_wall_clusters,
     focus_expiry,
@@ -440,26 +441,14 @@ async def get_structure_read(
         return None
 
     # Walls + max_pain via summarize_chain. The summary doesn't include a
-    # chain-wide put/call OI ratio so we compute it here from the same
-    # contracts (mirrors the helper inside core.options_chain.squeeze).
+    # chain-wide put/call OI ratio so we reuse the shared helper from the
+    # squeeze module to compute it from the same contracts.
     summary = summarize_chain(ticker=normalized, spot=spot, contracts=contracts)
     call_wall = summary.call_wall if summary else None
     put_wall = summary.put_wall if summary else None
     max_pain = summary.max_pain if summary else None
 
-    call_oi_total = 0
-    put_oi_total = 0
-    for c in contracts:
-        oi = c.open_interest or 0
-        if oi <= 0:
-            continue
-        if c.option_type.upper() == "C":
-            call_oi_total += oi
-        else:
-            put_oi_total += oi
-    put_call_oi_ratio: float | None = (
-        (put_oi_total / call_oi_total) if call_oi_total > 0 and put_oi_total > 0 else None
-    )
+    put_call_oi_ratio = compute_put_call_oi_ratio(contracts)
 
     # Front-month expiry → atm_iv + expected_move%.
     today = date.today()

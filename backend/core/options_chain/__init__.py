@@ -13,7 +13,11 @@ from core.options_chain.gex import (
 )
 from core.options_chain.expiry_focus import ExpiryFocus, StrikeOI, focus_expiry
 from core.options_chain.friday_scan import FridayScan, WallSummary, scan_pinning
-from core.options_chain.squeeze import SqueezeScore, compute_squeeze
+from core.options_chain.squeeze import (
+    SqueezeScore,
+    compute_put_call_oi_ratio,
+    compute_squeeze,
+)
 from core.options_chain.structure_read import StructureRead, read_structure
 from core.options_chain.wall_clusters import (
     WallClusterBucket,
@@ -36,6 +40,7 @@ __all__ = [
     "WallClusters",
     "WallClusterStrike",
     "WallSummary",
+    "compute_put_call_oi_ratio",
     "compute_squeeze",
     "detect_wall_clusters",
     "focus_expiry",
