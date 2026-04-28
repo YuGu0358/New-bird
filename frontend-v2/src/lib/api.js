@@ -187,6 +187,29 @@ export const getFridayScan = (ticker, expiry = null) => {
   );
 };
 
+// ----------------------------------------------------------- journal (Task 3)
+export const listJournal = (params = {}) => {
+  const qs = new URLSearchParams();
+  if (params.symbol) qs.set('symbol', params.symbol);
+  if (params.mood) qs.set('mood', params.mood);
+  if (params.search) qs.set('search', params.search);
+  if (params.limit != null) qs.set('limit', String(params.limit));
+  if (params.offset != null) qs.set('offset', String(params.offset));
+  return request(`/api/journal${qs.toString() ? `?${qs}` : ''}`);
+};
+export const getJournalEntry = (id) =>
+  request(`/api/journal/${encodeURIComponent(id)}`);
+export const createJournalEntry = (body) =>
+  request('/api/journal', { method: 'POST', body });
+export const updateJournalEntry = (id, body) =>
+  request(`/api/journal/${encodeURIComponent(id)}`, { method: 'PATCH', body });
+export const deleteJournalEntry = (id) =>
+  request(`/api/journal/${encodeURIComponent(id)}`, { method: 'DELETE' });
+export const autocompleteJournalSymbols = (prefix, limit = 10) =>
+  request(
+    `/api/journal/symbols/autocomplete?prefix=${encodeURIComponent(prefix)}&limit=${limit}`,
+  );
+
 // ----------------------------------------------------------- agents (P7)
 export const listPersonas = () => request('/api/agents/personas');
 export const analyzeWithPersona = (body) => request('/api/agents/analyze', { method: 'POST', body });

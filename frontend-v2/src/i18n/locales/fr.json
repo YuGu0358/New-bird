@@ -92,7 +92,8 @@
     "phaseStatus": "Backend P0–P9",
     "macro": "Macro",
     "valuation": "Valorisation",
-    "options": "Murs d'options"
+    "options": "Murs d'options",
+    "journal": "Journal"
   },
   "topbar": {
     "equity": "Capital",
@@ -589,6 +590,41 @@
     "directionHintBetter": "OK si ≥ warn_max, ALERTE si ≥ ok_max, sinon DANGER. Pour spread de courbe, croissance, etc.",
     "directionHintInfo": "Pas de niveau de signal — la carte n'affiche que la valeur. Pour les séries de liquidité / FX.",
     "resetToDefault": "Rétablir les valeurs par défaut"
+  },
+  "journal": {
+    "title": "Journal d'investissement",
+    "subtitle": "Notes de recherche quotidiennes liées à vos trades",
+    "newEntry": "Nouvelle entrée",
+    "searchPlaceholder": "Rechercher un titre ou un corps…",
+    "symbolFilter": "Symbole",
+    "moodFilter": "Sentiment",
+    "anySymbol": "Tout symbole",
+    "anyMood": "Tout sentiment",
+    "empty": "Aucune entrée de journal",
+    "emptyHint": "Clique sur « + Nouvelle entrée » pour enregistrer ta première réflexion",
+    "loadError": "Échec du chargement du journal",
+    "fields": {
+      "title": "Titre",
+      "body": "Corps (markdown)",
+      "symbols": "Symboles (séparés par des virgules)",
+      "mood": "Sentiment"
+    },
+    "moods": {
+      "bullish": "Haussier",
+      "bearish": "Baissier",
+      "neutral": "Neutre",
+      "watching": "Sous surveillance"
+    },
+    "actions": {
+      "save": "Enregistrer",
+      "cancel": "Annuler",
+      "edit": "Modifier",
+      "delete": "Supprimer",
+      "deleteConfirm": "Supprimer cette entrée ? Cette action est irréversible."
+    },
+    "validation": {
+      "titleRequired": "Le titre est requis"
+    }
   },
   "valuation": {
     "title": "Laboratoire de valorisation",

@@ -92,7 +92,8 @@
     "phaseStatus": "后端 P0–P9",
     "macro": "宏观环境",
     "valuation": "估值实验室",
-    "options": "期权壁垒"
+    "options": "期权壁垒",
+    "journal": "投资日志"
   },
   "topbar": {
     "equity": "净值",
@@ -589,6 +590,41 @@
     "directionHintBetter": "值 ≥ warn_max 为 OK,≥ ok_max 为 WARN,低于则 DANGER. 用于收益率曲线利差、增长等.",
     "directionHintInfo": "无信号等级 — 卡片只显示数值. 用于流动性、外汇等原始数据.",
     "resetToDefault": "恢复默认"
+  },
+  "journal": {
+    "title": "投资日志",
+    "subtitle": "与交易关联的每日研究笔记",
+    "newEntry": "新建日志",
+    "searchPlaceholder": "搜索标题或正文…",
+    "symbolFilter": "标的",
+    "moodFilter": "情绪",
+    "anySymbol": "全部标的",
+    "anyMood": "全部情绪",
+    "empty": "暂无日志条目",
+    "emptyHint": "点击“+ 新建日志”记录第一条想法",
+    "loadError": "日志加载失败",
+    "fields": {
+      "title": "标题",
+      "body": "正文(支持 markdown)",
+      "symbols": "标的(逗号分隔)",
+      "mood": "情绪"
+    },
+    "moods": {
+      "bullish": "看涨",
+      "bearish": "看跌",
+      "neutral": "中性",
+      "watching": "观望"
+    },
+    "actions": {
+      "save": "保存",
+      "cancel": "取消",
+      "edit": "编辑",
+      "delete": "删除",
+      "deleteConfirm": "确认删除这条日志?此操作不可撤销."
+    },
+    "validation": {
+      "titleRequired": "标题必填"
+    }
   },
   "valuation": {
     "title": "估值实验室",

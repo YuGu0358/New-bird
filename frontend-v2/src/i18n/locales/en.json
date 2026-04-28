@@ -92,7 +92,8 @@
     "phaseStatus": "backend P0–P9",
     "macro": "Macro Env.",
     "valuation": "Valuation",
-    "options": "Options Walls"
+    "options": "Options Walls",
+    "journal": "Journal"
   },
   "topbar": {
     "equity": "Equity",
@@ -589,6 +590,41 @@
     "directionHintBetter": "OK if value ≥ warn_max, WARN if value ≥ ok_max, DANGER below. Use for yield-curve spread, growth, etc.",
     "directionHintInfo": "No signal level — the card just shows the value. Used for raw liquidity / FX series.",
     "resetToDefault": "Reset to default"
+  },
+  "journal": {
+    "title": "Investment Journal",
+    "subtitle": "Daily research notes linked to your trades",
+    "newEntry": "New Entry",
+    "searchPlaceholder": "Search title or body…",
+    "symbolFilter": "Symbol",
+    "moodFilter": "Mood",
+    "anySymbol": "Any symbol",
+    "anyMood": "Any mood",
+    "empty": "No journal entries yet",
+    "emptyHint": "Click '+ New Entry' to record your first thought",
+    "loadError": "Failed to load journal",
+    "fields": {
+      "title": "Title",
+      "body": "Body (markdown)",
+      "symbols": "Symbols (comma-separated)",
+      "mood": "Mood"
+    },
+    "moods": {
+      "bullish": "Bullish",
+      "bearish": "Bearish",
+      "neutral": "Neutral",
+      "watching": "Watching"
+    },
+    "actions": {
+      "save": "Save",
+      "cancel": "Cancel",
+      "edit": "Edit",
+      "delete": "Delete",
+      "deleteConfirm": "Delete this entry? This cannot be undone."
+    },
+    "validation": {
+      "titleRequired": "Title is required"
+    }
   },
   "valuation": {
     "title": "Valuation Lab",

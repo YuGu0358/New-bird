@@ -92,7 +92,8 @@
     "phaseStatus": "Backend P0–P9",
     "macro": "Makro",
     "valuation": "Bewertung",
-    "options": "Optionswände"
+    "options": "Optionswände",
+    "journal": "Tagebuch"
   },
   "topbar": {
     "equity": "Eigenkapital",
@@ -589,6 +590,41 @@
     "directionHintBetter": "OK bei ≥ warn_max, WARN bei ≥ ok_max, sonst GEFAHR. Für Kurven-Spread, Wachstum etc.",
     "directionHintInfo": "Kein Signallevel — die Karte zeigt nur den Wert. Für Liquiditäts-/FX-Reihen.",
     "resetToDefault": "Auf Standard zurücksetzen"
+  },
+  "journal": {
+    "title": "Investment-Tagebuch",
+    "subtitle": "Tägliche Research-Notizen verknüpft mit deinen Trades",
+    "newEntry": "Neuer Eintrag",
+    "searchPlaceholder": "Titel oder Text durchsuchen…",
+    "symbolFilter": "Symbol",
+    "moodFilter": "Stimmung",
+    "anySymbol": "Beliebiges Symbol",
+    "anyMood": "Beliebige Stimmung",
+    "empty": "Noch keine Tagebucheinträge",
+    "emptyHint": "Klicke auf „+ Neuer Eintrag“, um deinen ersten Gedanken festzuhalten",
+    "loadError": "Tagebuch konnte nicht geladen werden",
+    "fields": {
+      "title": "Titel",
+      "body": "Text (Markdown)",
+      "symbols": "Symbole (kommagetrennt)",
+      "mood": "Stimmung"
+    },
+    "moods": {
+      "bullish": "Bullish",
+      "bearish": "Bearish",
+      "neutral": "Neutral",
+      "watching": "Beobachten"
+    },
+    "actions": {
+      "save": "Speichern",
+      "cancel": "Abbrechen",
+      "edit": "Bearbeiten",
+      "delete": "Löschen",
+      "deleteConfirm": "Diesen Eintrag löschen? Das kann nicht rückgängig gemacht werden."
+    },
+    "validation": {
+      "titleRequired": "Titel ist erforderlich"
+    }
   },
   "valuation": {
     "title": "Bewertungslabor",

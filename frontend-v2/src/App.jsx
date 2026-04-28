@@ -13,6 +13,7 @@ import SocialPage from './pages/SocialPage.jsx';
 import CodePage from './pages/CodePage.jsx';
 import SettingsPage from './pages/SettingsPage.jsx';
 import MacroPage from './pages/MacroPage.jsx';
+import JournalPage from './pages/JournalPage.jsx';
 import ValuationPage from './pages/ValuationPage.jsx';
 import OptionsChainPage from './pages/OptionsChainPage.jsx';
 import NotFoundPage from './pages/NotFoundPage.jsx';
@@ -24,6 +25,7 @@ export default function App() {
         <Route path="/" element={<DashboardPage />} />
         <Route path="/markets" element={<MarketsPage />} />
         <Route path="/portfolio" element={<PortfolioPage />} />
+        <Route path="/journal" element={<JournalPage />} />
         <Route path="/macro" element={<MacroPage />} />
         <Route path="/news" element={<NewsPage />} />
         <Route path="/valuation" element={<ValuationPage />} />

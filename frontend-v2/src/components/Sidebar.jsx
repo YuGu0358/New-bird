@@ -9,6 +9,7 @@ const NAV_ITEMS = [
   { to: '/',             slug: 'dashboard',    end: true },
   { to: '/markets',      slug: 'markets' },
   { to: '/portfolio',    slug: 'portfolio' },
+  { to: '/journal',      slug: 'journal' },
   { to: '/macro',        slug: 'macro' },
   { to: '/news',         slug: 'news' },
   { to: '/valuation',    slug: 'valuation' },
