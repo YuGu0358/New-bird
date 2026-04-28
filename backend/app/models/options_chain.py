@@ -1,7 +1,7 @@
 """Pydantic schema for /api/options-chain endpoints."""
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any, Optional
 
 from pydantic import BaseModel
@@ -180,4 +180,30 @@ class OIFloatResponse(BaseModel):
     delta_adjusted_total_pct: Optional[float] = None
     contracts_with_delta: int
     contracts_total: int
+    generated_at: datetime
+
+
+class IVSurfacePointModel(BaseModel):
+    strike: float
+    iv: float
+    moneyness: float
+    open_interest: int
+    has_call: bool
+    has_put: bool
+
+
+class IVSurfaceExpiryModel(BaseModel):
+    expiry: date
+    dte: int
+    atm_iv: Optional[float] = None
+    skew_pct: Optional[float] = None
+    points: list[IVSurfacePointModel]
+
+
+class IVSurfaceResponse(BaseModel):
+    ticker: str
+    spot: float
+    expiries: list[IVSurfaceExpiryModel]
+    strikes: list[float]
+    as_of: date
     generated_at: datetime

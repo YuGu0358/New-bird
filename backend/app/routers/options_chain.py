@@ -13,6 +13,7 @@ from app.models.options_chain import (
     ExpiryFocusResponse,
     FridayScanResponse,
     GexSummaryResponse,
+    IVSurfaceResponse,
     OIFloatResponse,
     SqueezeScoreResponse,
     StructureReadResponse,
@@ -146,6 +147,23 @@ async def get_wall_clusters(
             detail=f"No chain data available for {ticker.upper()}",
         )
     return WallClustersResponse(**payload)
+
+
+@router.get("/{ticker}/iv-surface", response_model=IVSurfaceResponse)
+async def get_iv_surface(ticker: str, max_expiries: int = 6) -> IVSurfaceResponse:
+    """Strike x expiry IV grid + per-expiry term-structure summary."""
+    try:
+        payload = await options_chain_service.get_iv_surface(
+            ticker, max_expiries=max(1, min(max_expiries, 12))
+        )
+    except Exception as exc:
+        raise service_error(exc) from exc
+    if payload is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No chain data available for {ticker.upper()}",
+        )
+    return IVSurfaceResponse(**payload)
 
 
 @router.get("/{ticker}/expiry/{expiry}", response_model=ExpiryFocusResponse)

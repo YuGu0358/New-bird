@@ -25,6 +25,7 @@ from app.services.network_utils import run_sync_with_retries
 from core.options_chain import (
     OptionContract,
     black_scholes_greeks,
+    build_iv_surface,
     compute_oi_float,
     compute_put_call_oi_ratio,
     compute_squeeze,
@@ -638,6 +639,64 @@ async def get_wall_clusters(
             }
             for b in clusters.buckets
         ],
+        "generated_at": datetime.now(timezone.utc),
+    }
+
+
+async def get_iv_surface(
+    ticker: str,
+    *,
+    max_expiries: int = DEFAULT_MAX_EXPIRIES,
+    risk_free: float = DEFAULT_RISK_FREE,
+) -> dict[str, Any] | None:
+    """Strike x expiry IV grid + per-expiry term-structure summary.
+
+    The pure compute lives in `core.options_chain.iv_surface.build_iv_surface`;
+    this function is the I/O boundary — it reuses the cached chain and shapes
+    the response for IVSurfaceResponse. Returns None when no contracts are
+    available or spot is invalid.
+    """
+    normalized = ticker.upper()
+    raw = await _get_chain(
+        normalized, max_expiries=max_expiries, risk_free=risk_free, force=False
+    )
+    spot = float(raw.get("spot") or 0)
+    contracts: list[OptionContract] = raw.get("contracts") or []
+    if not contracts or spot <= 0:
+        return None
+
+    surface = build_iv_surface(
+        ticker=normalized,
+        spot=spot,
+        contracts=contracts,
+        today=date.today(),
+    )
+
+    return {
+        "ticker": surface.ticker,
+        "spot": surface.spot,
+        "expiries": [
+            {
+                "expiry": e.expiry,
+                "dte": e.dte,
+                "atm_iv": e.atm_iv,
+                "skew_pct": e.skew_pct,
+                "points": [
+                    {
+                        "strike": p.strike,
+                        "iv": p.iv,
+                        "moneyness": p.moneyness,
+                        "open_interest": p.open_interest,
+                        "has_call": p.has_call,
+                        "has_put": p.has_put,
+                    }
+                    for p in e.points
+                ],
+            }
+            for e in surface.expiries
+        ],
+        "strikes": list(surface.strikes),
+        "as_of": surface.as_of,
         "generated_at": datetime.now(timezone.utc),
     }
 
