@@ -40,6 +40,9 @@ __all__ = [
 ]
 
 
+# Note: has_call / has_put track contract-row presence in the chain, NOT IV usability.
+# A strike may have has_call=True even if the grid's `iv` came from the put side
+# because the call's IV was NaN/None — the call row exists, the call IV just wasn't usable.
 @dataclass
 class IVSurfacePoint:
     strike: float
@@ -149,6 +152,9 @@ def build_iv_surface(
             as_of=as_of,
         )
 
+    if spot <= 0:
+        raise ValueError(f"build_iv_surface requires spot > 0; got {spot}")
+
     # Group contracts by (expiry, strike, side) so we can pair calls/puts.
     by_expiry: dict[date, dict[float, dict[str, OptionContract]]] = {}
     for c in contracts:
@@ -160,11 +166,6 @@ def build_iv_surface(
         # If duplicates exist, last one wins — yfinance shouldn't emit them
         # but be defensive.
         side_map[side] = c
-
-    # Per-expiry contracts list (used for delta lookups for skew).
-    contracts_by_expiry: dict[date, list[OptionContract]] = {}
-    for c in contracts:
-        contracts_by_expiry.setdefault(c.expiry, []).append(c)
 
     expiry_objs: list[IVSurfaceExpiry] = []
     all_strikes: set[float] = set()
@@ -181,7 +182,7 @@ def build_iv_surface(
                 continue
             call_oi = (call.open_interest or 0) if call is not None else 0
             put_oi = (put.open_interest or 0) if put is not None else 0
-            moneyness = (strike - spot) / spot if spot else 0.0
+            moneyness = (strike - spot) / spot
             points.append(
                 IVSurfacePoint(
                     strike=strike,
@@ -203,7 +204,10 @@ def build_iv_surface(
             atm_iv = best.iv
 
         # 25-delta skew: needs both 25-delta call IV and -25-delta put IV.
-        exp_contracts = contracts_by_expiry.get(exp, [])
+        exp_contracts = [
+            c for sides_map in by_expiry[exp].values()
+            for c in sides_map.values()
+        ]
         call25 = _closest_delta_iv(exp_contracts, target_delta=0.25, side="C")
         put25 = _closest_delta_iv(exp_contracts, target_delta=-0.25, side="P")
         skew_pct: float | None

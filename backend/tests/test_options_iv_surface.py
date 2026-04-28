@@ -38,6 +38,15 @@ def _row(
     )
 
 
+def test_build_iv_surface_raises_on_non_positive_spot():
+    """Pure compute should reject spot <= 0 loudly."""
+    rows = [_row(expiry=date(2026, 5, 15), strike=100, side="C", oi=1000, iv=0.30, delta=0.50)]
+    with pytest.raises(ValueError, match="spot > 0"):
+        build_iv_surface(ticker="X", spot=0, contracts=rows, today=TODAY)
+    with pytest.raises(ValueError, match="spot > 0"):
+        build_iv_surface(ticker="X", spot=-1, contracts=rows, today=TODAY)
+
+
 def test_empty_chain_returns_empty_surface():
     """No contracts → empty expiries + empty strikes; spot still echoed."""
     out = build_iv_surface(ticker="AAPL", spot=150.0, contracts=[], today=TODAY)
