@@ -7,9 +7,18 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_session
 from app.services.network_utils import friendly_service_error_detail
+from core.broker import Broker, get_broker
 from core.i18n import DEFAULT_LANG, normalize_lang
 
 SessionDep = Annotated[AsyncSession, Depends(get_session)]
+
+
+def _resolve_broker() -> Broker:
+    """Resolve the active broker per the ``BROKER_BACKEND`` runtime setting."""
+    return get_broker()
+
+
+BrokerDep = Annotated[Broker, Depends(_resolve_broker)]
 
 
 def _resolve_request_lang(
