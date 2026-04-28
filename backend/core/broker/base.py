@@ -43,3 +43,20 @@ class Broker(ABC):
     @abstractmethod
     async def close_position(self, symbol: str) -> dict[str, Any]:
         """Close an open position at market."""
+
+    @abstractmethod
+    async def get_account(self) -> dict[str, Any]:
+        """Return account-level metrics: equity, buying_power, cash, status, etc.
+
+        Shape (broker-agnostic minimum):
+            {
+                "id":         str | None,    # broker-side account id
+                "status":     str,           # 'ACTIVE' | 'RESTRICTED' | ...
+                "currency":   str,           # 'USD'
+                "equity":     float,         # total account value
+                "cash":       float,         # cash balance
+                "buying_power": float,       # available buying power
+            }
+        Returns broker-specific keys in addition; callers should treat the
+        above 6 as the contract.
+        """

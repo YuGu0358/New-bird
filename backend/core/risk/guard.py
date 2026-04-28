@@ -81,3 +81,7 @@ class RiskGuard(Broker):
     async def close_position(self, symbol: str) -> dict[str, Any]:
         # Closes are never gated — they are how the system de-risks.
         return await self._inner.close_position(symbol)
+
+    async def get_account(self) -> dict[str, Any]:
+        # Read-only passthrough; account inspection is not gated.
+        return await self._inner.get_account()

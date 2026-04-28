@@ -47,3 +47,12 @@ class AlpacaBroker(Broker):
 
     async def close_position(self, symbol: str) -> dict[str, Any]:
         return await alpaca_service.close_position(symbol)
+
+    async def get_account(self) -> dict[str, Any]:
+        raw = await alpaca_service.get_account()
+        # alpaca_service uses `account_id`; the Broker contract uses `id`.
+        # Normalize while preserving any broker-specific keys (e.g. last_equity).
+        normalized: dict[str, Any] = dict(raw)
+        if "id" not in normalized:
+            normalized["id"] = raw.get("account_id")
+        return normalized

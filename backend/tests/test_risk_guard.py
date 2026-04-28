@@ -32,6 +32,16 @@ class _FakeBroker(Broker):
         self.closed.append(symbol)
         return {"closed": symbol}
 
+    async def get_account(self) -> dict[str, Any]:
+        return {
+            "id": "fake",
+            "status": "ACTIVE",
+            "currency": "USD",
+            "equity": 100_000.0,
+            "cash": 100_000.0,
+            "buying_power": 100_000.0,
+        }
+
 
 def _empty_snapshot() -> PortfolioSnapshot:
     return PortfolioSnapshot(cash=100_000.0, equity=100_000.0)

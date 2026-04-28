@@ -117,3 +117,21 @@ class BacktestBroker(Broker):
             "symbol": symbol,
             "status": "filled",
         }
+
+    async def get_account(self) -> dict[str, Any]:
+        # Mark-to-market using the current bar price for each open symbol.
+        prices: dict[str, float] = {
+            symbol: self._current_price(symbol)
+            for symbol in self.portfolio.positions
+        }
+        equity = self.portfolio.equity(prices=prices)
+        cash = self.portfolio.cash
+        return {
+            "id": "backtest",
+            "status": "ACTIVE",
+            "currency": "USD",
+            "equity": equity,
+            "cash": cash,
+            # No leverage in the simulator — buying power equals cash.
+            "buying_power": cash,
+        }

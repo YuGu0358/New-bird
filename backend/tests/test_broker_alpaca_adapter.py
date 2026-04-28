@@ -58,6 +58,44 @@ async def test_close_position_delegates(monkeypatch: pytest.MonkeyPatch) -> None
 
 
 @pytest.mark.asyncio
+async def test_get_account_normalizes_id(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_account: dict[str, Any] = {
+        "account_id": "ABC123",
+        "status": "ACTIVE",
+        "currency": "USD",
+        "cash": 1234.56,
+        "buying_power": 2469.12,
+        "equity": 5000.0,
+        "last_equity": 4900.0,
+    }
+
+    async def fake_get_account() -> dict[str, Any]:
+        return fake_account
+
+    from app.services import alpaca_service
+
+    monkeypatch.setattr(alpaca_service, "get_account", fake_get_account)
+    broker = AlpacaBroker()
+    result = await broker.get_account()
+
+    # Contract: 6 keys present
+    for key in ("id", "status", "currency", "equity", "cash", "buying_power"):
+        assert key in result, f"missing contract key {key!r}"
+
+    # Values flow through (with id normalized from account_id)
+    assert result["id"] == "ABC123"
+    assert result["status"] == "ACTIVE"
+    assert result["currency"] == "USD"
+    assert result["equity"] == 5000.0
+    assert result["cash"] == 1234.56
+    assert result["buying_power"] == 2469.12
+
+    # Broker-specific keys preserved
+    assert result["last_equity"] == 4900.0
+    assert result["account_id"] == "ABC123"
+
+
+@pytest.mark.asyncio
 async def test_list_orders_passes_status_filter(monkeypatch: pytest.MonkeyPatch) -> None:
     captured_kwargs: dict[str, Any] = {}
 
