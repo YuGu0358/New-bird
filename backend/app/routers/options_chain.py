@@ -14,6 +14,7 @@ from app.models.options_chain import (
     FridayScanResponse,
     GexSummaryResponse,
     SqueezeScoreResponse,
+    StructureReadResponse,
     WallClustersResponse,
 )
 from app.services import options_chain_service
@@ -85,6 +86,23 @@ async def get_squeeze(ticker: str, max_expiries: int = 6) -> SqueezeScoreRespons
             detail=f"No chain data available for {ticker.upper()}",
         )
     return SqueezeScoreResponse(**payload)
+
+
+@router.get("/{ticker}/structure", response_model=StructureReadResponse)
+async def get_structure(ticker: str, max_expiries: int = 6) -> StructureReadResponse:
+    """Structural pattern: 5 signals -> 4 patterns (+ UNCLEAR fallback)."""
+    try:
+        payload = await options_chain_service.get_structure_read(
+            ticker, max_expiries=max(1, min(max_expiries, 12))
+        )
+    except Exception as exc:
+        raise service_error(exc) from exc
+    if payload is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No chain data available for {ticker.upper()}",
+        )
+    return StructureReadResponse(**payload)
 
 
 @router.get("/{ticker}/clusters", response_model=WallClustersResponse)

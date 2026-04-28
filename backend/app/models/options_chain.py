@@ -147,3 +147,14 @@ class SqueezeScoreResponse(BaseModel):
     iv_rank: Optional[float] = None
     short_interest_frac: Optional[float] = None
     generated_at: datetime
+
+
+class StructureReadResponse(BaseModel):
+    ticker: str
+    pattern: str
+    winning_player: str
+    confidence: int
+    signals_fired: list[str]
+    rationale: list[str]
+    inputs_used: dict[str, Optional[float]]
+    generated_at: datetime

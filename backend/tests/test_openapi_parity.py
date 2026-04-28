@@ -88,6 +88,7 @@ EXPECTED_ROUTES: set[tuple[str, str]] = {
     ("GET",    "/api/options-chain/{ticker}/expiry/{expiry}"),
     ("GET",    "/api/options-chain/{ticker}/friday-scan"),
     ("GET",    "/api/options-chain/{ticker}/squeeze"),
+    ("GET",    "/api/options-chain/{ticker}/structure"),
     ("GET",    "/api/options-chain/{ticker}/clusters"),
     # --- TradingView pine-seeds workspace ---
     ("GET",    "/api/pine-seeds/status"),

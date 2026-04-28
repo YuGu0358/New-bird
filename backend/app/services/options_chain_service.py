@@ -28,6 +28,7 @@ from core.options_chain import (
     compute_squeeze,
     detect_wall_clusters,
     focus_expiry,
+    read_structure,
     scan_pinning,
     summarize_chain,
 )
@@ -407,6 +408,123 @@ async def get_squeeze_score(
         "max_possible": score.max_possible,
         "iv_rank": iv_rank,
         "short_interest_frac": short_interest,
+        "generated_at": datetime.now(timezone.utc),
+    }
+
+
+async def get_structure_read(
+    ticker: str,
+    *,
+    max_expiries: int = DEFAULT_MAX_EXPIRIES,
+    risk_free: float = DEFAULT_RISK_FREE,
+) -> dict[str, Any] | None:
+    """Classify the chain into one of 5 structural patterns.
+
+    Reuses the cached chain (no re-fetch). Calls summarize_chain for the
+    walls/max_pain, focus_expiry on the front-month for atm_iv + expected
+    move, _realized_vol_rank_blocking for iv_rank, and scan_pinning for
+    pinning_score. Hands all of that to read_structure() and shapes the
+    output for StructureReadResponse.
+
+    Returns None if the chain is empty or spot is invalid (matches
+    get_squeeze_score's convention).
+    """
+    normalized = ticker.upper()
+    raw = await _get_chain(
+        normalized, max_expiries=max_expiries, risk_free=risk_free, force=False
+    )
+    spot = float(raw.get("spot") or 0)
+    contracts: list[OptionContract] = raw.get("contracts") or []
+    expiry_strings: list[str] = raw.get("expiries") or []
+    if not contracts or spot <= 0:
+        return None
+
+    # Walls + max_pain via summarize_chain. The summary doesn't include a
+    # chain-wide put/call OI ratio so we compute it here from the same
+    # contracts (mirrors the helper inside core.options_chain.squeeze).
+    summary = summarize_chain(ticker=normalized, spot=spot, contracts=contracts)
+    call_wall = summary.call_wall if summary else None
+    put_wall = summary.put_wall if summary else None
+    max_pain = summary.max_pain if summary else None
+
+    call_oi_total = 0
+    put_oi_total = 0
+    for c in contracts:
+        oi = c.open_interest or 0
+        if oi <= 0:
+            continue
+        if c.option_type.upper() == "C":
+            call_oi_total += oi
+        else:
+            put_oi_total += oi
+    put_call_oi_ratio: float | None = (
+        (put_oi_total / call_oi_total) if call_oi_total > 0 and put_oi_total > 0 else None
+    )
+
+    # Front-month expiry → atm_iv + expected_move%.
+    today = date.today()
+    atm_iv: float | None = None
+    expected_move_pct: float | None = None
+    front_expiry: date | None = None
+    front_candidates: list[date] = []
+    for s in expiry_strings:
+        try:
+            d = date.fromisoformat(s)
+        except ValueError:
+            continue
+        if d >= today:
+            front_candidates.append(d)
+    front_candidates.sort()
+    if front_candidates:
+        front_expiry = front_candidates[0]
+        focus = focus_expiry(
+            ticker=normalized,
+            spot=spot,
+            contracts=contracts,
+            expiry=front_expiry,
+            today=today,
+        )
+        if focus is not None:
+            atm_iv = focus.atm_iv
+            if focus.expected_move is not None and spot > 0:
+                expected_move_pct = float(focus.expected_move) / spot
+
+    # iv_rank proxy via 1y realized-vol percentile (same as squeeze).
+    iv_rank = await run_sync_with_retries(_realized_vol_rank_blocking, normalized)
+
+    # Pinning score: scan the same front-month expiry.
+    pinning_score: int | None = None
+    if front_expiry is not None:
+        scan = scan_pinning(
+            ticker=normalized,
+            spot=spot,
+            contracts=contracts,
+            target_expiry=front_expiry,
+            today=today,
+            adv_dollar=raw.get("adv_dollar"),
+        )
+        pinning_score = scan.pinning_score
+
+    structure = read_structure(
+        spot=spot,
+        call_wall=call_wall,
+        put_wall=put_wall,
+        max_pain=max_pain,
+        atm_iv=atm_iv,
+        expected_move_pct=expected_move_pct,
+        iv_rank=iv_rank,
+        put_call_oi_ratio=put_call_oi_ratio,
+        pinning_score=pinning_score,
+    )
+
+    return {
+        "ticker": normalized,
+        "pattern": structure.pattern,
+        "winning_player": structure.winning_player,
+        "confidence": structure.confidence,
+        "signals_fired": list(structure.signals_fired),
+        "rationale": list(structure.rationale),
+        "inputs_used": dict(structure.inputs_used),
         "generated_at": datetime.now(timezone.utc),
     }
 
