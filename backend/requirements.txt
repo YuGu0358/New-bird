@@ -14,3 +14,4 @@ yfinance
 openai
 pypdf
 QuantLib
+ib_async>=1.0.3,<2
