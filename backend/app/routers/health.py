@@ -6,9 +6,11 @@ from datetime import datetime, timezone
 from fastapi import APIRouter
 from sqlalchemy import select
 
+from app import runtime_settings
 from app.dependencies import SessionDep
 from app.database import StrategyProfile
 from app.models import HealthResponse, ReadinessCheck, ReadinessResponse
+from app.services import ibkr_client
 
 router = APIRouter(prefix="/api/health", tags=["health"])
 
@@ -40,5 +42,30 @@ async def readiness(session: SessionDep) -> ReadinessResponse:
         checks.append(ReadinessCheck(name="strategy_registry", ok=True))
     except Exception as exc:  # noqa: BLE001
         checks.append(ReadinessCheck(name="strategy_registry", ok=False, detail=str(exc)))
+
+    # IBKR reachability — only fail readiness when IBKR is the active backend.
+    backend = (runtime_settings.get_setting("BROKER_BACKEND", "alpaca") or "").strip().lower()
+    if backend != "ibkr":
+        checks.append(ReadinessCheck(name="ibkr.reachable", ok=True, detail="not in use"))
+    else:
+        try:
+            reachable = await ibkr_client.is_reachable()
+        except Exception as exc:  # noqa: BLE001 -- defensive; is_reachable is documented not to raise
+            checks.append(
+                ReadinessCheck(name="ibkr.reachable", ok=False, detail=str(exc))
+            )
+        else:
+            if reachable:
+                checks.append(
+                    ReadinessCheck(name="ibkr.reachable", ok=True, detail="reachable")
+                )
+            else:
+                checks.append(
+                    ReadinessCheck(
+                        name="ibkr.reachable",
+                        ok=False,
+                        detail="IB Gateway unreachable on configured host:port",
+                    )
+                )
 
     return ReadinessResponse(ready=all(c.ok for c in checks), checks=checks)

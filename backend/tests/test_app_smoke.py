@@ -174,6 +174,15 @@ def test_health_readiness(client) -> None:
     assert any(c["name"] == "database" for c in body["checks"])
 
 
+def test_health_readiness_includes_ibkr_check(client) -> None:
+    """The IBKR reachability check should appear in the readiness payload."""
+    response = client.get("/api/health/ready")
+    assert response.status_code in (200, 503)  # ok if all green, 503 if any check failed
+    body = response.json()
+    check_names = {c["name"] for c in body.get("checks", [])}
+    assert "ibkr.reachable" in check_names
+
+
 def test_metrics_endpoint(client) -> None:
     # Hit a few endpoints first so counters have non-zero values.
     client.get("/api/health")

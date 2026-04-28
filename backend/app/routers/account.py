@@ -6,7 +6,7 @@ from fastapi import APIRouter
 from sqlalchemy import desc, select
 
 from app.database import Trade
-from app.dependencies import SessionDep, service_error
+from app.dependencies import BrokerDep, SessionDep, service_error
 from app.models import (
     Account,
     ControlResponse,
@@ -26,18 +26,18 @@ def _normalize_timestamp(value: datetime) -> datetime:
 
 
 @router.get("/account", response_model=Account)
-async def get_account() -> Account:
+async def get_account(broker: BrokerDep) -> Account:
     try:
-        payload = await alpaca_service.get_account()
+        payload = await broker.get_account()
     except Exception as exc:
         raise service_error(exc) from exc
     return Account(**payload)
 
 
 @router.get("/positions", response_model=list[Position])
-async def get_positions() -> list[Position]:
+async def get_positions(broker: BrokerDep) -> list[Position]:
     try:
-        payload = await alpaca_service.list_positions()
+        payload = await broker.list_positions()
     except Exception as exc:
         raise service_error(exc) from exc
     return [Position(**row) for row in payload]
@@ -53,9 +53,9 @@ async def get_trades(session: SessionDep) -> list[TradeRecord]:
 
 
 @router.get("/orders", response_model=list[OrderRecord])
-async def get_orders(status: str = "all") -> list[OrderRecord]:
+async def get_orders(broker: BrokerDep, status: str = "all") -> list[OrderRecord]:
     try:
-        payload = await alpaca_service.list_orders(status=status)
+        payload = await broker.list_orders(status=status)
     except Exception as exc:
         raise service_error(exc) from exc
     return [OrderRecord(**row) for row in payload]
