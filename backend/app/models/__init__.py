@@ -68,6 +68,11 @@ from app.models.observability import (
     ReadinessResponse,
     StrategyHealthResponse,
 )
+from app.models.pine_seeds import (
+    PineSeedsExportRequest,
+    PineSeedsExportResponse,
+    PineSeedsStatusResponse,
+)
 from app.models.quantlib import (
     BondAnalyticsRequest,
     BondRiskResponse,
@@ -169,6 +174,9 @@ __all__ = [
     "PersonaView",
     "PersonaWeightsView",
     "PersonasResponse",
+    "PineSeedsExportRequest",
+    "PineSeedsExportResponse",
+    "PineSeedsStatusResponse",
     "Position",
     "PriceAlertRuleCreateRequest",
     "PriceAlertRuleUpdateRequest",

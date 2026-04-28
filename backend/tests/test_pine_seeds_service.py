@@ -2,12 +2,13 @@
 from __future__ import annotations
 
 import json
+import subprocess
 from pathlib import Path
 
 import pytest
 
 from app.services import macro_service, options_chain_service, valuation_service
-from app.services import pine_seeds_service
+from app.services import pine_seeds_publisher, pine_seeds_service
 
 
 def _gex_summary(ticker: str) -> dict:
@@ -293,3 +294,118 @@ def test_symbols_none_and_watchlist_unset_uses_default(
     asyncio.run(pine_seeds_service.export_snapshot(tmp_path, include_macro=False))
 
     assert sorted(seen) == ["AAPL", "NVDA", "QQQ", "SPY"]
+
+
+# ---------------------------------------------------------------------------
+# pine_seeds_publisher tests
+# ---------------------------------------------------------------------------
+
+
+def test_publish_returns_not_configured_when_repo_url_unset(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """No PINE_SEEDS_REPO_URL → publisher returns {'published': False, ...}
+    without ever invoking subprocess."""
+    import asyncio
+
+    from app import runtime_settings
+
+    def fake_get_setting(key: str, default: str | None = None) -> str | None:
+        if key == "PINE_SEEDS_REPO_URL":
+            return ""
+        return default
+
+    monkeypatch.setattr(runtime_settings, "get_setting", fake_get_setting)
+
+    calls: list[list[str]] = []
+
+    def fake_run(cmd, *args, **kwargs):  # pragma: no cover — must not be called
+        calls.append(list(cmd))
+        raise AssertionError("subprocess.run must not be invoked when repo url is unset")
+
+    monkeypatch.setattr(pine_seeds_publisher, "_run", fake_run)
+
+    result = asyncio.run(pine_seeds_publisher.publish_workspace(tmp_path))
+
+    assert result == {"published": False, "reason": "not configured"}
+    assert calls == []
+
+
+def test_publish_succeeds_when_subprocess_runs_clean(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Configured URL + clean subprocess.run → {'published': True}, with all
+    git steps invoked in order."""
+    import asyncio
+
+    from app import runtime_settings
+
+    # Pre-create .git so `git init` is skipped.
+    (tmp_path / ".git").mkdir()
+
+    def fake_get_setting(key: str, default: str | None = None) -> str | None:
+        if key == "PINE_SEEDS_REPO_URL":
+            return "https://example.com/newbird/seeds.git"
+        return default
+
+    monkeypatch.setattr(runtime_settings, "get_setting", fake_get_setting)
+
+    invoked: list[list[str]] = []
+
+    def fake_run(cmd, *, cwd):
+        invoked.append(list(cmd))
+        return subprocess.CompletedProcess(args=cmd, returncode=0, stdout=b"", stderr=b"")
+
+    monkeypatch.setattr(pine_seeds_publisher, "_run", fake_run)
+
+    result = asyncio.run(pine_seeds_publisher.publish_workspace(tmp_path))
+
+    assert result == {"published": True}
+    # `git init` skipped because .git exists.
+    assert ["git", "init"] not in invoked
+    # `git remote add origin <url>` is attempted first.
+    assert invoked[0] == ["git", "remote", "add", "origin", "https://example.com/newbird/seeds.git"]
+    # The core add/commit/push trio fires in order.
+    cmds_only = [step[:2] for step in invoked]
+    assert ["git", "add"] in cmds_only
+    assert ["git", "commit"] in cmds_only
+    assert ["git", "push"] in cmds_only
+
+
+def test_publish_returns_reason_when_subprocess_fails(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """git push raising CalledProcessError(stderr=...) → published=False with
+    stderr propagated as reason."""
+    import asyncio
+
+    from app import runtime_settings
+
+    (tmp_path / ".git").mkdir()
+
+    def fake_get_setting(key: str, default: str | None = None) -> str | None:
+        if key == "PINE_SEEDS_REPO_URL":
+            return "https://example.com/newbird/seeds.git"
+        return default
+
+    monkeypatch.setattr(runtime_settings, "get_setting", fake_get_setting)
+
+    def fake_run(cmd, *, cwd):
+        if cmd[:2] == ["git", "push"]:
+            raise subprocess.CalledProcessError(
+                returncode=1,
+                cmd=cmd,
+                output=b"",
+                stderr=b"auth failed",
+            )
+        return subprocess.CompletedProcess(args=cmd, returncode=0, stdout=b"", stderr=b"")
+
+    monkeypatch.setattr(pine_seeds_publisher, "_run", fake_run)
+
+    result = asyncio.run(pine_seeds_publisher.publish_workspace(tmp_path))
+
+    assert result["published"] is False
+    assert "auth failed" in result["reason"]
