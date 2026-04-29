@@ -48,6 +48,7 @@ from app.routers import strategies as strategies_router
 from app.routers import valuation as valuation_router
 from app.services import (
     bot_controller,
+    polygon_ws_publisher,
     scheduled_jobs,
 )
 
@@ -69,6 +70,7 @@ async def lifespan(app: FastAPI):
     await init_database()
     await app_scheduler.start()
     scheduled_jobs.register_default_jobs()
+    await polygon_ws_publisher.start()
 
     # Re-register user-uploaded strategies after DB is up.
     try:
@@ -84,6 +86,7 @@ async def lifespan(app: FastAPI):
     try:
         yield
     finally:
+        await polygon_ws_publisher.shutdown()
         await app_scheduler.shutdown()
         await bot_controller.shutdown_bot()
 
