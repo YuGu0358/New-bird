@@ -107,3 +107,19 @@ async def test_register_job_replaces_existing_by_default() -> None:
     sched = app_scheduler.get_scheduler()
     jobs = sched.get_jobs()
     assert sum(1 for j in jobs if j.id == "dup") == 1
+
+
+@pytest.mark.asyncio
+async def test_register_default_jobs_wires_known_ids() -> None:
+    """After register_default_jobs, the canonical job ids should be present."""
+    from app.services.scheduled_jobs import register_default_jobs
+
+    await app_scheduler.start()
+    register_default_jobs()
+
+    sched = app_scheduler.get_scheduler()
+    job_ids = {j.id for j in sched.get_jobs()}
+    # The three platform jobs we ship in this plan:
+    assert "price_alerts_evaluate" in job_ids
+    assert "social_polling_run" in job_ids
+    assert "sector_rotation_refresh" in job_ids
