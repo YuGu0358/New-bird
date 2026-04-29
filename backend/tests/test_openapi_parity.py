@@ -144,6 +144,8 @@ EXPECTED_ROUTES: set[tuple[str, str]] = {
     ("PUT",    "/api/portfolio/overrides"),
     ("GET",    "/api/portfolio/overrides/{broker_account_id}/{ticker}"),
     ("DELETE", "/api/portfolio/overrides/{broker_account_id}/{ticker}"),
+    # --- Position snapshots (Phase 2.4) ---
+    ("GET",    "/api/portfolio/snapshots"),
 }
 
 

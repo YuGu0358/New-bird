@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from sqlalchemy import Boolean, DateTime, Float, Integer, JSON, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, DateTime, Float, Index, Integer, JSON, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.engine import Base
@@ -398,6 +398,51 @@ class PositionOverride(Base):
         nullable=False,
         default=lambda: datetime.now(timezone.utc),
     )
+
+
+class PositionSnapshot(Base):
+    """Periodic snapshot of broker positions (append-only time series).
+
+    Designed for the multi-account portfolio drill-down (Phase 2.5):
+    "show me how my AAPL position evolved over the last week" boils
+    down to filtering this table by (broker_account_id, symbol) and
+    reading the last N rows.
+
+    The composite index on (broker_account_id, symbol, snapshot_at)
+    matches the most common query shape — the engine can serve a
+    drill-down chart without a sort step.
+
+    Append-only: we never UPDATE rows; the scheduled job inserts a new
+    snapshot every 5 minutes for every (account, symbol) pair that has
+    an open position. Old snapshots can be aged out via a future
+    retention job (out of scope for this task).
+    """
+    __tablename__ = "position_snapshots"
+    __table_args__ = (
+        Index(
+            "ix_position_snapshots_account_symbol_time",
+            "broker_account_id",
+            "symbol",
+            "snapshot_at",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    broker_account_id: Mapped[int] = mapped_column(
+        Integer, nullable=False, index=True
+    )
+    symbol: Mapped[str] = mapped_column(String(16), nullable=False)
+    snapshot_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+    )
+    qty: Mapped[float] = mapped_column(Float, nullable=False)
+    avg_cost: Mapped[float | None] = mapped_column(Float, nullable=True)
+    market_value: Mapped[float | None] = mapped_column(Float, nullable=True)
+    current_price: Mapped[float | None] = mapped_column(Float, nullable=True)
+    unrealized_pl: Mapped[float | None] = mapped_column(Float, nullable=True)
+    side: Mapped[str] = mapped_column(String(8), nullable=False, default="long")
 
 
 class JournalEntry(Base):

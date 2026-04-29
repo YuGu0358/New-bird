@@ -25,6 +25,7 @@ from app import runtime_settings, scheduler as app_scheduler
 from app.services import (
     macro_service,
     options_chain_service,
+    position_sync_service,
     price_alerts_service,
     sector_rotation_service,
     social_polling_service,
@@ -42,6 +43,8 @@ SECTOR_ROTATION_INTERVAL_SECONDS = 60 * 60
 OPTIONS_CHAIN_SYNC_INTERVAL_SECONDS = 30 * 60
 # US equity regular session: 13:30–20:00 UTC (09:30–16:00 ET).
 # Cron uses UTC since AsyncIOScheduler is UTC-by-default.
+
+POSITION_SYNC_INTERVAL_SECONDS = 5 * 60
 
 
 async def _price_alerts_evaluate() -> None:
@@ -108,6 +111,21 @@ async def _options_chain_sync() -> None:
             )
 
 
+async def _position_sync() -> None:
+    """5-min IBKR position snapshot pass.
+
+    `position_sync_service.snapshot_once` opens its own session and
+    swallows per-pass errors; we just call it. The number of rows
+    written is logged at debug for ops visibility.
+    """
+    try:
+        written = await position_sync_service.snapshot_once()
+        if written:
+            logger.debug("position_sync: wrote %d snapshot rows", written)
+    except Exception:  # noqa: BLE001
+        logger.exception("position_sync job failed")
+
+
 def register_default_jobs() -> None:
     """Register every periodic job the platform owns.
 
@@ -150,4 +168,9 @@ def register_default_jobs() -> None:
             hour="13-19",
             minute="*/30",
         ),
+    )
+    app_scheduler.register_job(
+        "position_sync",
+        _position_sync,
+        IntervalTrigger(seconds=POSITION_SYNC_INTERVAL_SECONDS),
     )
