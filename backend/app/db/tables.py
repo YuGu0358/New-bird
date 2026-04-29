@@ -473,6 +473,38 @@ class UserWorkspace(Base):
     )
 
 
+class Workflow(Base):
+    """User-built node-graph workflow definition (Phase 5.6).
+
+    The `definition_json` blob stores the React Flow JSON shape verbatim
+    (nodes + edges) — same opaque-blob convention as `UserWorkspace`.
+    Names are unique so PUT acts as upsert by name.
+
+    `schedule_seconds` is None for run-on-demand workflows. When set
+    (>= 60), the application scheduler runs the workflow on that
+    interval if `is_active` is True.
+    """
+
+    __tablename__ = "workflows"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    name: Mapped[str] = mapped_column(String(120), unique=True, index=True, nullable=False)
+    definition_json: Mapped[str] = mapped_column(Text, nullable=False, default="{}")
+    schedule_seconds: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+    )
+
+
 class JournalEntry(Base):
     """User-authored investment journal entry (markdown body + symbol tags + mood).
 

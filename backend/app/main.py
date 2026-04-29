@@ -53,6 +53,7 @@ from app.routers import stream as stream_router
 from app.routers import strategy_health as strategy_health_router
 from app.routers import strategies as strategies_router
 from app.routers import valuation as valuation_router
+from app.routers import workflow as workflow_router
 from app.routers import workspace as workspace_router
 from app.services import (
     bot_controller,
@@ -78,6 +79,20 @@ async def lifespan(app: FastAPI):
     await init_database()
     await app_scheduler.start()
     scheduled_jobs.register_default_jobs()
+
+    # Register any active scheduled workflows. Needs a DB session, so it
+    # can't live inside register_default_jobs() — see workflow_service.
+    try:
+        from app.database import AsyncSessionLocal
+        from app.services import workflow_service
+        async with AsyncSessionLocal() as session:
+            await workflow_service.register_workflow_jobs(session)
+    except Exception:
+        import logging
+        logging.getLogger(__name__).exception(
+            "register_workflow_jobs failed at startup"
+        )
+
     await polygon_ws_publisher.start()
 
     # Re-register user-uploaded strategies after DB is up.
@@ -161,6 +176,7 @@ app.include_router(kraken_router.router)
 app.include_router(onchain_router.router)
 app.include_router(stream_router.router)
 app.include_router(broker_accounts_router.router)
+app.include_router(workflow_router.router)
 app.include_router(workspace_router.router)
 
 

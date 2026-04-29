@@ -159,6 +159,14 @@ EXPECTED_ROUTES: set[tuple[str, str]] = {
     ("PUT",    "/api/workspaces"),
     ("GET",    "/api/workspaces/{name}"),
     ("DELETE", "/api/workspaces/{name}"),
+    # --- Visual workflow node editor (Phase 5.6) ---
+    ("GET",    "/api/workflows"),
+    ("PUT",    "/api/workflows"),
+    ("GET",    "/api/workflows/{name}"),
+    ("DELETE", "/api/workflows/{name}"),
+    ("POST",   "/api/workflows/{name}/run"),
+    ("POST",   "/api/workflows/{name}/enable"),
+    ("POST",   "/api/workflows/{name}/disable"),
 }
 
 
