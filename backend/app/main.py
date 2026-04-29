@@ -37,6 +37,7 @@ from app.routers import screener as screener_router
 from app.routers import sectors as sectors_router
 from app.routers import research as research_router
 from app.routers import risk as risk_router
+from app.routers import scheduler as scheduler_router
 from app.routers import settings as settings_router
 from app.routers import social as social_router
 from app.routers import strategy_health as strategy_health_router
@@ -132,6 +133,7 @@ app.include_router(valuation_router.router)
 app.include_router(options_chain_router.router)
 app.include_router(pine_seeds_router.router)
 app.include_router(predictions_router.router)
+app.include_router(scheduler_router.router)
 app.include_router(screener_router.router)
 app.include_router(sectors_router.router)
 app.include_router(dbnomics_router.router)

@@ -118,6 +118,8 @@ EXPECTED_ROUTES: set[tuple[str, str]] = {
     ("GET",    "/api/docs/{slug}"),
     # --- Technical indicators ---
     ("GET",    "/api/indicators/{symbol}"),
+    # --- Application scheduler observability ---
+    ("GET",    "/api/scheduler/jobs"),
 }
 
 

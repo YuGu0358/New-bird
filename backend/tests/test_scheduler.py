@@ -123,3 +123,52 @@ async def test_register_default_jobs_wires_known_ids() -> None:
     assert "price_alerts_evaluate" in job_ids
     assert "social_polling_run" in job_ids
     assert "sector_rotation_refresh" in job_ids
+
+
+from fastapi.testclient import TestClient
+
+
+@pytest.mark.asyncio
+async def test_jobs_endpoint_lists_registered_jobs() -> None:
+    """GET /api/scheduler/jobs surfaces id + trigger + next_run_time.
+
+    Use bare TestClient(app) (no `with`) so the FastAPI lifespan does NOT
+    run — we control the scheduler state explicitly via start() and the
+    autouse fixture's shutdown(). Wrapping in `with` would invoke
+    lifespan startup, which calls register_default_jobs again and would
+    fight the autouse fixture's reset.
+    """
+    from app.main import app
+    from app.services.scheduled_jobs import register_default_jobs
+
+    await app_scheduler.start()
+    register_default_jobs()
+
+    client = TestClient(app)
+    resp = client.get("/api/scheduler/jobs")
+
+    assert resp.status_code == 200
+    body = resp.json()
+    job_ids = {j["id"] for j in body["jobs"]}
+    assert "price_alerts_evaluate" in job_ids
+    assert "social_polling_run" in job_ids
+    assert "sector_rotation_refresh" in job_ids
+    for job in body["jobs"]:
+        assert "trigger" in job
+        # next_run_time may be None during shutdown windows, but the key
+        # must always be present so the UI can render a "—" cell.
+        assert "next_run_time" in job
+
+
+@pytest.mark.asyncio
+async def test_jobs_endpoint_empty_when_scheduler_not_started() -> None:
+    """When scheduler.get_scheduler() returns None, endpoint returns []."""
+    from app.main import app
+
+    # Autouse fixture already reset the singleton; bare TestClient skips
+    # lifespan, so the scheduler stays None.
+    client = TestClient(app)
+    resp = client.get("/api/scheduler/jobs")
+
+    assert resp.status_code == 200
+    assert resp.json() == {"jobs": []}
