@@ -1,7 +1,8 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { XCircle, Square } from 'lucide-react';
+import { XCircle, Square, ChevronRight } from 'lucide-react';
 import {
   getPositions,
   getOrders,
@@ -9,6 +10,7 @@ import {
   cancelOrders,
   closePositions,
   getStrategyHealth,
+  listBrokerAccounts,
 } from '../lib/api.js';
 import {
   SectionHeader,
@@ -53,6 +55,8 @@ export default function PortfolioPage() {
         title={t('portfolio.title')}
         segments={[{ label: t('portfolio.subtitle') }]}
       />
+
+      <AccountsSection />
 
       {/* Sidebar stats */}
       <div className="grid grid-cols-12 gap-6">
@@ -168,6 +172,44 @@ function SidebarStat({ label, value, valueClass = 'text-steel-50', small = false
       <div className="metric-caption">{label}</div>
       <div className={classNames(small ? 'text-body font-medium' : 'metric-value', valueClass, 'mt-1 break-all')}>
         {value}
+      </div>
+    </div>
+  );
+}
+
+function AccountsSection() {
+  const accountsQ = useQuery({ queryKey: ['broker-accounts'], queryFn: () => listBrokerAccounts() });
+  const items = accountsQ.data?.items ?? [];
+  if (accountsQ.isLoading) return null;
+  // Surface errors so a failed account fetch isn't invisible. Empty list still
+  // hides the section to keep the page calm for users with no broker yet.
+  if (accountsQ.isError) {
+    return (
+      <div className="card">
+        <ErrorState error={accountsQ.error} onRetry={accountsQ.refetch} />
+      </div>
+    );
+  }
+  if (items.length === 0) return null;
+  return (
+    <div className="card">
+      <div className="font-mono text-[11px] text-text-muted tracking-[0.15em] uppercase mb-3">Accounts</div>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+        {items.map((a) => (
+          <Link
+            key={a.id}
+            to={`/portfolio/account/${a.id}`}
+            className="flex items-center justify-between border border-border-subtle bg-surface px-4 py-3 hover:border-cyan transition"
+          >
+            <div className="min-w-0">
+              <div className="font-medium text-steel-50 truncate">{a.alias || a.account_id}</div>
+              <div className="font-mono text-[10px] text-text-muted tracking-[0.15em] uppercase mt-0.5">
+                {a.broker} · {a.tier} · {a.is_active ? 'ACTIVE' : 'INACTIVE'}
+              </div>
+            </div>
+            <ChevronRight size={14} className="text-text-muted shrink-0" />
+          </Link>
+        ))}
       </div>
     </div>
   );

@@ -60,6 +60,39 @@ export const getOrders = (status = 'all') => request(`/api/orders?status=${encod
 export const cancelOrders = () => request('/api/orders/cancel', { method: 'POST' });
 export const closePositions = () => request('/api/positions/close', { method: 'POST' });
 
+// ----------------------------------------------------------- broker accounts (Phase 2.1)
+/** @returns {Promise<{ items: Array<{ id: number, broker: string, account_id: string, alias: string, tier: string, is_active: boolean, created_at: string, updated_at: string }> }>} */
+export const listBrokerAccounts = (onlyActive = false) =>
+  request(`/api/broker-accounts${onlyActive ? '?only_active=true' : ''}`);
+/** @param {number} accountPk */
+export const getBrokerAccount = (accountPk) =>
+  request(`/api/broker-accounts/${accountPk}`);
+/** @param {number} accountPk @param {string} alias */
+export const updateBrokerAccountAlias = (accountPk, alias) =>
+  request(`/api/broker-accounts/${accountPk}/alias`, { method: 'PATCH', body: { alias } });
+/** @param {number} accountPk @param {'TIER_1'|'TIER_2'|'TIER_3'} tier */
+export const updateBrokerAccountTier = (accountPk, tier) =>
+  request(`/api/broker-accounts/${accountPk}/tier`, { method: 'PATCH', body: { tier } });
+
+// ----------------------------------------------------------- position overrides (Phase 2.2)
+/** @param {number} accountPk */
+export const listOverridesForAccount = (accountPk) =>
+  request(`/api/portfolio/overrides?broker_account_id=${accountPk}`);
+/** @param {number} accountPk @param {string} ticker */
+export const getOverride = (accountPk, ticker) =>
+  request(`/api/portfolio/overrides/${accountPk}/${encodeURIComponent(ticker)}`);
+/** @param {{ broker_account_id: number, ticker: string, stop_price?: number|null, take_profit_price?: number|null, notes?: string|null, tier_override?: string|null }} payload */
+export const upsertOverride = (payload) =>
+  request('/api/portfolio/overrides', { method: 'PUT', body: payload });
+/** @param {number} accountPk @param {string} ticker */
+export const deleteOverride = (accountPk, ticker) =>
+  request(`/api/portfolio/overrides/${accountPk}/${encodeURIComponent(ticker)}`, { method: 'DELETE' });
+
+// ----------------------------------------------------------- position snapshots (Phase 2.4)
+/** @param {number} accountPk @param {number} [limit=200] */
+export const listAccountSnapshots = (accountPk, limit = 200) =>
+  request(`/api/portfolio/snapshots?broker_account_id=${accountPk}&limit=${limit}`);
+
 // ----------------------------------------------------------- monitoring + watchlist
 export const getMonitoring = () => request('/api/monitoring');
 export const refreshMonitoring = () => request('/api/monitoring/refresh', { method: 'POST' });
