@@ -116,6 +116,8 @@ EXPECTED_ROUTES: set[tuple[str, str]] = {
     # --- Docs panel ---
     ("GET",    "/api/docs/list"),
     ("GET",    "/api/docs/{slug}"),
+    # --- Technical indicators ---
+    ("GET",    "/api/indicators/{symbol}"),
 }
 
 
