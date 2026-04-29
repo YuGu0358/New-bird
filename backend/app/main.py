@@ -26,6 +26,7 @@ from app.routers import dbnomics as dbnomics_router
 from app.routers import docs as docs_router
 from app.routers import geopolitics as geopolitics_router
 from app.routers import health as health_router
+from app.routers import heatmap as heatmap_router
 from app.routers import indicators as indicators_router
 from app.routers import journal as journal_router
 from app.routers import kraken as kraken_router
@@ -149,6 +150,7 @@ app.include_router(sectors_router.router)
 app.include_router(dbnomics_router.router)
 app.include_router(docs_router.router)
 app.include_router(geopolitics_router.router)
+app.include_router(heatmap_router.router)
 app.include_router(indicators_router.router)
 app.include_router(kraken_router.router)
 app.include_router(onchain_router.router)
