@@ -357,6 +357,15 @@ SETTING_DEFINITIONS: tuple[SettingDefinition, ...] = (
         description="Polymarket gamma 公共只读 API 入口；通常无需修改。",
     ),
     SettingDefinition(
+        key="DOCS_ROOT_DIR",
+        label="Docs Root Directory",
+        category="research",
+        required=False,
+        sensitive=False,
+        default="",
+        description="覆盖 /api/docs 扫描的根目录（默认仓库根下的 docs/）。",
+    ),
+    SettingDefinition(
         key="ALLOW_LIVE_ALERT_ORDERS",
         label="Allow Live Alert Orders",
         category="safety",

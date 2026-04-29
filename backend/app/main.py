@@ -21,6 +21,7 @@ from app.routers import bot as bot_router
 from app.routers import code as code_router
 from app.routers import crypto as crypto_router
 from app.routers import dbnomics as dbnomics_router
+from app.routers import docs as docs_router
 from app.routers import geopolitics as geopolitics_router
 from app.routers import health as health_router
 from app.routers import journal as journal_router
@@ -133,6 +134,7 @@ app.include_router(predictions_router.router)
 app.include_router(screener_router.router)
 app.include_router(sectors_router.router)
 app.include_router(dbnomics_router.router)
+app.include_router(docs_router.router)
 app.include_router(geopolitics_router.router)
 
 

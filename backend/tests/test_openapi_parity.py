@@ -113,6 +113,9 @@ EXPECTED_ROUTES: set[tuple[str, str]] = {
     ("GET",    "/api/predictions/markets"),
     # --- News clustering (NLP) ---
     ("GET",    "/api/news/{symbol}/clusters"),
+    # --- Docs panel ---
+    ("GET",    "/api/docs/list"),
+    ("GET",    "/api/docs/{slug}"),
 }
 
 
