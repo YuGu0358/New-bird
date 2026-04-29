@@ -354,6 +354,52 @@ class BrokerAccount(Base):
     )
 
 
+class PositionOverride(Base):
+    """User-set per-position annotations stacked on top of broker positions.
+
+    Identified by (broker_account_id, ticker). The UNIQUE constraint
+    on that pair makes the table a "key/value lookup with extra fields"
+    — the API layer treats it as upsert (PUT replaces an existing row,
+    no separate POST/PATCH split).
+
+    All fields except ids and ticker are nullable: the user may set
+    just a stop, just a TP, just a note, etc., without forcing the
+    others. `tier_override` is a single-position override on top of
+    the BrokerAccount.tier — when None, the parent account's tier
+    applies.
+
+    NOT a foreign key to BrokerAccount.id at the DB level: SQLite
+    enforces FKs only with PRAGMA foreign_keys=ON which the existing
+    DB layer doesn't enable. Service layer validates by lookup.
+    """
+    __tablename__ = "position_overrides"
+    __table_args__ = (
+        UniqueConstraint(
+            "broker_account_id", "ticker", name="uq_position_override"
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    broker_account_id: Mapped[int] = mapped_column(
+        Integer, nullable=False, index=True
+    )
+    ticker: Mapped[str] = mapped_column(String(16), nullable=False, index=True)
+    stop_price: Mapped[float | None] = mapped_column(Float, nullable=True)
+    take_profit_price: Mapped[float | None] = mapped_column(Float, nullable=True)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    tier_override: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+    )
+
+
 class JournalEntry(Base):
     """User-authored investment journal entry (markdown body + symbol tags + mood).
 
