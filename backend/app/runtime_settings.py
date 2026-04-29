@@ -217,6 +217,15 @@ SETTING_DEFINITIONS: tuple[SettingDefinition, ...] = (
         description="用于社媒摘要。",
     ),
     SettingDefinition(
+        key="OPENAI_EMBEDDING_MODEL",
+        label="OpenAI Embedding Model",
+        category="ai",
+        required=False,
+        sensitive=False,
+        default="text-embedding-3-small",
+        description="用于新闻聚类等向量化任务的嵌入模型。",
+    ),
+    SettingDefinition(
         key="ENABLE_SOCIAL_AUTO_TRADE",
         label="Enable Social Auto Trade",
         category="safety",

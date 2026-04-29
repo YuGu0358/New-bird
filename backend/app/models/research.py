@@ -101,3 +101,18 @@ class RawHeadlinesResponse(BaseModel):
     count: int
     headlines: list[TavilySearchSource]
     generated_at: datetime
+
+
+class NewsClusterRow(BaseModel):
+    cluster_id: int
+    exemplar_title: Optional[str] = None
+    size: int
+    member_indices: list[int]
+
+
+class NewsClustersResponse(BaseModel):
+    symbol: str
+    k_clusters: int
+    clusters: list[NewsClusterRow]
+    headlines: list[TavilySearchSource]
+    generated_at: datetime

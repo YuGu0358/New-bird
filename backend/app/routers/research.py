@@ -10,6 +10,7 @@ from app.dependencies import RequestLang, SessionDep, service_error
 from app.models import (
     CompanyProfileResponse,
     NewsArticle,
+    NewsClustersResponse,
     RawHeadlinesResponse,
     StockResearchReport,
     SymbolChartResponse,
@@ -19,6 +20,7 @@ from app.services import (
     chart_service,
     company_profile_service,
     market_research_service,
+    news_clustering_service,
     tavily_service,
 )
 
@@ -101,6 +103,38 @@ async def get_raw_headlines(
     except Exception as exc:
         raise service_error(exc) from exc
     return RawHeadlinesResponse(**payload)
+
+
+@router.get("/news/{symbol}/clusters", response_model=NewsClustersResponse)
+async def get_news_clusters(
+    symbol: str,
+    lang: RequestLang,
+    max_results: int = 12,
+    k_clusters: int = 4,
+) -> NewsClustersResponse:
+    """KMeans clustering of raw headlines via OpenAI embeddings."""
+    if k_clusters < 1 or k_clusters > 10:
+        raise HTTPException(
+            status_code=400,
+            detail="k_clusters must be between 1 and 10",
+        )
+    if max_results < 2 or max_results > 30:
+        raise HTTPException(
+            status_code=400,
+            detail="max_results must be between 2 and 30",
+        )
+    try:
+        payload = await news_clustering_service.cluster_headlines(
+            symbol,
+            max_results=max_results,
+            k_clusters=k_clusters,
+            lang=lang,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise service_error(exc) from exc
+    return NewsClustersResponse(**payload)
 
 
 @router.get("/research/{symbol}", response_model=StockResearchReport)
