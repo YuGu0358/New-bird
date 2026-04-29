@@ -38,6 +38,7 @@ import {
   EmptyState,
 } from '../components/primitives.jsx';
 import { fmtUsd, classNames } from '../lib/format.js';
+import OperationPanel from '../components/OperationPanel.jsx';
 
 export default function OptionsChainPage() {
   const { t } = useTranslation();
@@ -279,7 +280,17 @@ export default function OptionsChainPage() {
               ) : !focusQ.data ? (
                 <EmptyState title={t('options.focusEmpty')} />
               ) : (
-                <ExpiryFocusPanel data={focusQ.data} t={t} />
+                <>
+                  <ExpiryFocusPanel data={focusQ.data} t={t} />
+                  <div className="mt-6">
+                    <OperationPanel
+                      ticker={ticker}
+                      expiry={selectedExpiry}
+                      spot={gexQ.data?.spot}
+                      expiryFocus={focusQ.data}
+                    />
+                  </div>
+                </>
               )}
             </div>
           )}
