@@ -23,6 +23,7 @@ from typing import Any
 
 from app import runtime_settings
 from app.services import polygon_service
+from app.services.watchlist import get_watchlist
 from app.streaming import event_bus
 
 logger = logging.getLogger(__name__)
@@ -32,8 +33,6 @@ logger = logging.getLogger(__name__)
 # easier to reason about than a math expression in tests.
 _BACKOFF_SCHEDULE_SECONDS = (1, 2, 4, 8, 16, 30)
 
-# Default watchlist if PINE_SEEDS_WATCHLIST is unset/empty.
-WATCHLIST_DEFAULT = "SPY,QQQ,NVDA,AAPL"
 
 
 _task: asyncio.Task[None] | None = None
@@ -53,11 +52,7 @@ def _api_key_configured() -> bool:
 
 
 def _watchlist() -> list[str]:
-    raw = (
-        runtime_settings.get_setting("PINE_SEEDS_WATCHLIST", WATCHLIST_DEFAULT)
-        or WATCHLIST_DEFAULT
-    )
-    return [s.strip().upper() for s in raw.split(",") if s.strip()]
+    return get_watchlist()
 
 
 async def _publish_tick(payload: dict[str, Any]) -> None:
@@ -148,7 +143,23 @@ async def start() -> None:
 
 
 async def shutdown() -> None:
-    """Cancel the publisher task and wait for cleanup. Idempotent."""
+    """Cancel the publisher task and wait for cleanup. Idempotent.
+
+    Caveat: `polygon_service._run_sdk_stream` blocks on
+    `asyncio.to_thread(ws_client.run, ...)`. Cancelling the awaiting
+    coroutine here will raise CancelledError into the asyncio loop, but
+    the underlying Polygon SDK thread keeps the socket open until the
+    SDK times out internally — `to_thread` cannot interrupt sync code.
+    In practice this is fine for FastAPI shutdown (the process exits
+    shortly after), but if a long-lived test or hot reload depends on
+    the socket actually closing, that requires a `close()` hook on
+    `_run_sdk_stream` (currently absent).
+
+    On shutdown the SDK thread may also try to schedule callbacks via
+    `asyncio.run_coroutine_threadsafe` against a closing loop; we
+    swallow the resulting exception below as expected fallout, not a
+    bug to fix here.
+    """
     global _task
     async with _lock:
         task = _task
@@ -158,8 +169,13 @@ async def shutdown() -> None:
     task.cancel()
     try:
         await task
-    except (asyncio.CancelledError, Exception):  # noqa: BLE001
+    except asyncio.CancelledError:
         pass
+    except Exception:  # noqa: BLE001
+        # Defensive — log instead of silently swallowing so a real bug
+        # in the inner task surfaces during shutdown rather than
+        # disappearing.
+        logger.exception("polygon_ws_publisher: error during shutdown")
 
 
 def is_running() -> bool:

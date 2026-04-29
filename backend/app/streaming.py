@@ -91,6 +91,11 @@ class EventBus:
         The cache survives even when no subscribers are listening — that's
         the point of the DataHub upgrade. `ttl` is optional; None means
         no expiry. The cached value is replaced on every publish.
+
+        TTL ONLY governs the cache snapshot returned by `latest()` and the
+        `replay_latest=True` branch of `subscribe()`. Live subscribers
+        always receive the event regardless of `ttl` — once it's in their
+        queue, it will be delivered.
         """
         event = Event(topic=topic, data=dict(data or {}))
         expires_at = (

@@ -91,17 +91,14 @@ async def _macro_sync() -> None:
 async def _options_chain_sync() -> None:
     """Force-refresh the options chain cache for the watchlist.
 
-    Reads PINE_SEEDS_WATCHLIST (comma-separated) so the user can
-    customize without touching this file. Per-ticker failures are
-    logged at DEBUG and don't block the rest of the batch.
+    Reads PINE_SEEDS_WATCHLIST (comma-separated) via the shared
+    `watchlist.get_watchlist()` helper so the canonical default lives in
+    runtime_settings only. Per-ticker failures are logged at DEBUG and
+    don't block the rest of the batch.
     """
-    raw = (
-        runtime_settings.get_setting(
-            "PINE_SEEDS_WATCHLIST", "SPY,QQQ,NVDA,AAPL"
-        )
-        or "SPY,QQQ,NVDA,AAPL"
-    )
-    symbols = [s.strip().upper() for s in raw.split(",") if s.strip()]
+    from app.services.watchlist import get_watchlist
+
+    symbols = get_watchlist()
     for symbol in symbols:
         try:
             await options_chain_service.get_gex_summary(symbol, force=True)
