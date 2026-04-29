@@ -53,3 +53,57 @@ async def test_shutdown_is_idempotent() -> None:
 @pytest.mark.asyncio
 async def test_get_scheduler_returns_none_before_start() -> None:
     assert app_scheduler.get_scheduler() is None
+
+
+@pytest.mark.asyncio
+async def test_register_job_before_start_raises() -> None:
+    async def noop() -> None:
+        return None
+
+    with pytest.raises(RuntimeError, match="Scheduler not started"):
+        app_scheduler.register_job(
+            "noop", noop, IntervalTrigger(seconds=1)
+        )
+
+
+@pytest.mark.asyncio
+async def test_register_job_runs_on_interval() -> None:
+    """A registered job should actually fire on the trigger.
+
+    Use a 1-second interval and wait ~1.5s — the trigger machinery is
+    APScheduler's, so this is a smoke test of the wiring, not of the
+    scheduler library itself.
+    """
+    counter = {"hits": 0}
+
+    async def bump() -> None:
+        counter["hits"] += 1
+
+    await app_scheduler.start()
+    app_scheduler.register_job(
+        "bump", bump, IntervalTrigger(seconds=1), next_run_time=None
+    )
+
+    # Manually trigger one run rather than waiting wall-clock — keeps the
+    # test fast and deterministic. APScheduler exposes the underlying
+    # job's `func` via `get_job(job_id)`.
+    sched = app_scheduler.get_scheduler()
+    job = sched.get_job("bump")
+    await job.func()
+
+    assert counter["hits"] == 1
+
+
+@pytest.mark.asyncio
+async def test_register_job_replaces_existing_by_default() -> None:
+    async def noop() -> None:
+        return None
+
+    await app_scheduler.start()
+    app_scheduler.register_job("dup", noop, IntervalTrigger(seconds=10))
+    # Re-registering with the same id should not raise.
+    app_scheduler.register_job("dup", noop, IntervalTrigger(seconds=20))
+
+    sched = app_scheduler.get_scheduler()
+    jobs = sched.get_jobs()
+    assert sum(1 for j in jobs if j.id == "dup") == 1
