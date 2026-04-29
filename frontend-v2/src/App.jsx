@@ -17,6 +17,7 @@ import JournalPage from './pages/JournalPage.jsx';
 import ValuationPage from './pages/ValuationPage.jsx';
 import OptionsChainPage from './pages/OptionsChainPage.jsx';
 import AccountDetailPage from './pages/AccountDetailPage.jsx';
+import WorkflowsPage from './pages/WorkflowsPage.jsx';
 import NotFoundPage from './pages/NotFoundPage.jsx';
 
 export default function App() {
@@ -39,6 +40,7 @@ export default function App() {
         <Route path="/risk" element={<RiskPage />} />
         <Route path="/social" element={<SocialPage />} />
         <Route path="/code" element={<CodePage />} />
+        <Route path="/workflows" element={<WorkflowsPage />} />
         <Route path="/settings" element={<SettingsPage />} />
         <Route path="*" element={<NotFoundPage />} />
       </Routes>

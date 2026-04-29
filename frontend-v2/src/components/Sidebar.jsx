@@ -21,6 +21,7 @@ const NAV_ITEMS = [
   { to: '/risk',         slug: 'risk' },
   { to: '/social',       slug: 'social' },
   { to: '/code',         slug: 'code' },
+  { to: '/workflows',    slug: 'workflows' },
 ];
 
 const SYS_ITEMS = [

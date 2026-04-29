@@ -251,6 +251,80 @@ export const autocompleteJournalSymbols = (prefix, limit = 10) =>
     `/api/journal/symbols/autocomplete?prefix=${encodeURIComponent(prefix)}&limit=${limit}`,
   );
 
+// ----------------------------------------------------------- workflows (Phase 5.6)
+/**
+ * @typedef {Object} WorkflowNode
+ * @property {string} id
+ * @property {string} type
+ * @property {{x: number, y: number}} position
+ * @property {Record<string, unknown>} data
+ */
+/**
+ * @typedef {Object} WorkflowEdge
+ * @property {string} id
+ * @property {string} source
+ * @property {string} target
+ */
+/**
+ * @typedef {Object} WorkflowDefinition
+ * @property {WorkflowNode[]} nodes
+ * @property {WorkflowEdge[]} edges
+ */
+/**
+ * @typedef {Object} WorkflowView
+ * @property {number} id
+ * @property {string} name
+ * @property {WorkflowDefinition} definition
+ * @property {number|null} schedule_seconds
+ * @property {boolean} is_active
+ * @property {string} created_at
+ * @property {string} updated_at
+ */
+/**
+ * @typedef {Object} WorkflowRunNode
+ * @property {string} node_id
+ * @property {string} node_type
+ * @property {unknown} output
+ * @property {string} [error]
+ */
+/**
+ * @typedef {Object} WorkflowRunView
+ * @property {boolean} succeeded
+ * @property {number} duration_ms
+ * @property {WorkflowRunNode[]} nodes
+ * @property {unknown} final_output
+ */
+
+/** @returns {Promise<{ workflows: WorkflowView[] }>} */
+export const listWorkflows = () => request('/api/workflows');
+
+/** @param {string} name @returns {Promise<WorkflowView>} */
+export const getWorkflow = (name) =>
+  request(`/api/workflows/${encodeURIComponent(name)}`);
+
+/**
+ * @param {{ name: string, definition: WorkflowDefinition, schedule_seconds: number|null, is_active: boolean }} payload
+ * @returns {Promise<WorkflowView>}
+ */
+export const upsertWorkflow = (payload) =>
+  request('/api/workflows', { method: 'PUT', body: payload });
+
+/** @param {string} name */
+export const deleteWorkflow = (name) =>
+  request(`/api/workflows/${encodeURIComponent(name)}`, { method: 'DELETE' });
+
+/** @param {string} name @returns {Promise<WorkflowRunView>} */
+export const runWorkflow = (name) =>
+  request(`/api/workflows/${encodeURIComponent(name)}/run`, { method: 'POST' });
+
+/** @param {string} name @returns {Promise<WorkflowView>} */
+export const enableWorkflow = (name) =>
+  request(`/api/workflows/${encodeURIComponent(name)}/enable`, { method: 'POST' });
+
+/** @param {string} name @returns {Promise<WorkflowView>} */
+export const disableWorkflow = (name) =>
+  request(`/api/workflows/${encodeURIComponent(name)}/disable`, { method: 'POST' });
+
 // ----------------------------------------------------------- agents (P7)
 export const listPersonas = () => request('/api/agents/personas');
 export const analyzeWithPersona = (body) => request('/api/agents/analyze', { method: 'POST', body });
