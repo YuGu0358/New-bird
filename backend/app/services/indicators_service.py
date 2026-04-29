@@ -1,7 +1,8 @@
 """Indicator service — pulls bars via chart_service then runs the pure compute.
 
-Reuses the existing 10-minute chart cache (chart_service._chart_cache), so a
-caller asking for both RSI and MACD on the same range hits yfinance once.
+Reuses chart_service's per-range cache (60s for intraday up to 30 min for
+yearly views — see _CHART_RANGE_CONFIG), so a caller asking for both RSI
+and MACD on the same range hits yfinance once.
 """
 from __future__ import annotations
 

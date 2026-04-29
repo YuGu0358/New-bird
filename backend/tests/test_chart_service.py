@@ -67,10 +67,11 @@ class ChartServiceTests(unittest.IsolatedAsyncioTestCase):
         ) as download_mock:
             payload = await chart_service.get_symbol_chart("nvda", "1mo")
 
-        download_mock.assert_called_once_with("NVDA", "1mo", "1d")
+        # 1mo now uses 1h bars (was 1d) to surface intraday detail.
+        download_mock.assert_called_once_with("NVDA", "1mo", "1h")
         self.assertEqual(payload["symbol"], "NVDA")
         self.assertEqual(payload["range"], "1mo")
-        self.assertEqual(payload["interval"], "1d")
+        self.assertEqual(payload["interval"], "1h")
         self.assertEqual(payload["latest_price"], 105.0)
         self.assertEqual(payload["range_change_percent"], 5.0)
         self.assertEqual(len(payload["points"]), 3)
@@ -100,9 +101,10 @@ class ChartServiceTests(unittest.IsolatedAsyncioTestCase):
         ) as download_mock:
             payload = await chart_service.get_symbol_chart("aapl", "1d")
 
-        download_mock.assert_called_once_with("AAPL", "1d", "5m")
+        # 1d now uses 1m bars (was 5m) so per-minute moves are visible.
+        download_mock.assert_called_once_with("AAPL", "1d", "1m")
         self.assertEqual(payload["range"], "1d")
-        self.assertEqual(payload["interval"], "5m")
+        self.assertEqual(payload["interval"], "1m")
         self.assertEqual(payload["latest_price"], 101.2)
 
 

@@ -37,10 +37,13 @@ export default function NewsPage() {
     queryFn: () => getCompany(symbol),
     enabled: !!symbol,
   });
+  const [chartRange, setChartRange] = useState('1d');
   const chartQ = useQuery({
-    queryKey: ['chart', symbol],
-    queryFn: () => getChart(symbol, '1mo'),
+    queryKey: ['chart', symbol, chartRange],
+    queryFn: () => getChart(symbol, chartRange),
     enabled: !!symbol,
+    // 1m / 5m bars stale fast — auto-refresh on intraday ranges.
+    refetchInterval: chartRange === '1d' ? 60_000 : chartRange === '5d' ? 120_000 : false,
   });
   const tavilyQ = useQuery({
     queryKey: ['tavily', submittedQuery],
@@ -85,8 +88,12 @@ export default function NewsPage() {
 
       {/* Chart */}
       <div className="card">
-        <SectionHeader title={t('news.priceTrend', { symbol })} subtitle={t('news.priceTrendSubtitle')} />
-        <ChartView q={chartQ} t={t} />
+        <SectionHeader
+          title={t('news.priceTrend', { symbol })}
+          subtitle={`${chartRange} · ${chartQ.data?.interval ?? '...'}`}
+          meta={<RangePicker value={chartRange} onChange={setChartRange} />}
+        />
+        <ChartView q={chartQ} range={chartRange} t={t} />
       </div>
 
       {/* Three-column research */}
@@ -125,7 +132,45 @@ export default function NewsPage() {
   );
 }
 
-function ChartView({ q, t }) {
+const RANGES = ['1d', '5d', '1mo', '3mo', '6mo', '1y', '2y'];
+
+function RangePicker({ value, onChange }) {
+  return (
+    <div className="inline-flex gap-1 font-mono text-[10px] tracking-[0.15em] uppercase">
+      {RANGES.map((r) => (
+        <button
+          key={r}
+          type="button"
+          onClick={() => onChange(r)}
+          className={
+            'px-2 py-1 border ' +
+            (r === value
+              ? 'border-cyan text-cyan bg-cyan/10'
+              : 'border-border-subtle text-text-secondary hover:text-text-primary')
+          }
+        >
+          {r}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/** Format a tick label appropriately for the selected range. */
+function tickFormatter(range, raw) {
+  if (!raw) return '';
+  const d = new Date(raw);
+  if (Number.isNaN(d.getTime())) return String(raw);
+  if (range === '1d') {
+    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  }
+  if (range === '5d') {
+    return d.toLocaleString([], { month: 'numeric', day: 'numeric', hour: '2-digit' });
+  }
+  return d.toLocaleDateString([], { month: 'short', day: 'numeric' });
+}
+
+function ChartView({ q, range, t }) {
   if (q.isLoading) return <LoadingState rows={4} label={t('news.loadingChart')} />;
   if (q.isError) return <ErrorState error={q.error} onRetry={q.refetch} />;
   const points = (q.data?.points || q.data?.bars || []).map((p) => ({
@@ -144,13 +189,29 @@ function ChartView({ q, t }) {
             </linearGradient>
           </defs>
           <CartesianGrid stroke="#2A3645" strokeDasharray="3 3" />
-          <XAxis dataKey="t" stroke="#7C8A9A" fontSize={11} tickLine={false} />
+          <XAxis
+            dataKey="t"
+            stroke="#7C8A9A"
+            fontSize={11}
+            tickLine={false}
+            tickFormatter={(v) => tickFormatter(range, v)}
+            minTickGap={40}
+          />
           <YAxis stroke="#7C8A9A" fontSize={11} tickLine={false} domain={['auto', 'auto']} />
           <Tooltip
             contentStyle={{ background: '#0F1923', border: '1px solid #3D7FA5', borderRadius: 6, color: '#E8ECF1', fontSize: 12 }}
             formatter={(v) => fmtUsd(v)}
+            labelFormatter={(v) => tickFormatter(range, v)}
           />
-          <Area type="monotone" dataKey="v" stroke="#5BA3C6" strokeWidth={2} fill="url(#chartFill)" />
+          <Area
+            type="monotone"
+            dataKey="v"
+            stroke="#5BA3C6"
+            strokeWidth={range === '1d' ? 1.5 : 2}
+            fill="url(#chartFill)"
+            isAnimationActive={false}
+            dot={false}
+          />
         </AreaChart>
       </ResponsiveContainer>
     </div>
