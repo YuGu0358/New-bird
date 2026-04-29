@@ -29,6 +29,7 @@ from app.routers import metrics as metrics_router
 from app.routers import monitoring as monitoring_router
 from app.routers import options_chain as options_chain_router
 from app.routers import pine_seeds as pine_seeds_router
+from app.routers import predictions as predictions_router
 from app.routers import quantlib as quantlib_router
 from app.routers import screener as screener_router
 from app.routers import sectors as sectors_router
@@ -128,6 +129,7 @@ app.include_router(macro_router.router)
 app.include_router(valuation_router.router)
 app.include_router(options_chain_router.router)
 app.include_router(pine_seeds_router.router)
+app.include_router(predictions_router.router)
 app.include_router(screener_router.router)
 app.include_router(sectors_router.router)
 app.include_router(dbnomics_router.router)

@@ -109,6 +109,8 @@ EXPECTED_ROUTES: set[tuple[str, str]] = {
     ("GET",    "/api/news/{symbol}/headlines"),
     # --- Geopolitical risk events ---
     ("GET",    "/api/geopolitics/events"),
+    # --- Polymarket prediction markets (opt-in) ---
+    ("GET",    "/api/predictions/markets"),
 }
 
 
