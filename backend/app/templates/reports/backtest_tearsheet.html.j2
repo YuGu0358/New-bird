@@ -1,0 +1,26 @@
+{% extends "_base.html.j2" %}
+{% block body %}
+<h2>Performance Metrics</h2>
+<table>
+  <thead><tr><th>Metric</th><th class="num">Value</th></tr></thead>
+  <tbody>
+    <tr><td>CAGR</td><td class="num">{{ metrics.cagr | fmt_pct }}</td></tr>
+    <tr><td>Volatility (annualised)</td><td class="num">{{ metrics.volatility | fmt_pct }}</td></tr>
+    <tr><td>Sharpe Ratio</td><td class="num">{{ metrics.sharpe | fmt_num(3) }}</td></tr>
+    <tr><td>Sortino Ratio</td><td class="num">{{ metrics.sortino | fmt_num(3) }}</td></tr>
+    <tr><td>Max Drawdown</td><td class="num">{{ metrics.max_drawdown | fmt_pct }}</td></tr>
+    <tr><td>Calmar Ratio</td><td class="num">{{ metrics.calmar | fmt_num(3) }}</td></tr>
+    <tr><td>Total Return</td><td class="num">{{ metrics.total_return | fmt_pct }}</td></tr>
+    <tr><td>Periods</td><td class="num">{{ metrics.periods }}</td></tr>
+  </tbody>
+</table>
+
+<h2>Run Configuration</h2>
+<table>
+  <tbody>
+    <tr><td>Run ID</td><td class="num">{{ metrics.run_id }}</td></tr>
+    <tr><td>Periods per year</td><td class="num">{{ metrics.periods_per_year }}</td></tr>
+    <tr><td>Risk-free rate</td><td class="num">{{ metrics.risk_free_rate | fmt_pct }}</td></tr>
+  </tbody>
+</table>
+{% endblock %}

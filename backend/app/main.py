@@ -41,6 +41,7 @@ from app.routers import portfolio_overrides as portfolio_overrides_router
 from app.routers import portfolio_snapshots as portfolio_snapshots_router
 from app.routers import predictions as predictions_router
 from app.routers import quantlib as quantlib_router
+from app.routers import reports as reports_router
 from app.routers import screener as screener_router
 from app.routers import sectors as sectors_router
 from app.routers import research as research_router
@@ -146,6 +147,7 @@ app.include_router(portfolio_opt_router.router)
 app.include_router(portfolio_overrides_router.router)
 app.include_router(portfolio_snapshots_router.router)
 app.include_router(predictions_router.router)
+app.include_router(reports_router.router)
 app.include_router(scheduler_router.router)
 app.include_router(screener_router.router)
 app.include_router(sectors_router.router)

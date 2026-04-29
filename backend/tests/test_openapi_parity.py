@@ -151,6 +151,9 @@ EXPECTED_ROUTES: set[tuple[str, str]] = {
     ("GET",    "/api/heatmap/sectors"),
     # --- Portfolio optimisation (Phase 5.3) ---
     ("POST",   "/api/portfolio/optimize"),
+    # --- HTML reports (Phase 7.4 lite) ---
+    ("GET",    "/api/reports/backtest/{run_id}.html"),
+    ("GET",    "/api/reports/portfolio/{broker_account_id}.html"),
 }
 
 
