@@ -10,6 +10,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from core.observability import configure_logging
+from app import scheduler as app_scheduler
 from app.database import init_database
 from app.middleware.correlation import CorrelationIdMiddleware
 from app.middleware.metrics import HttpMetricsMiddleware
@@ -45,8 +46,7 @@ from app.routers import strategies as strategies_router
 from app.routers import valuation as valuation_router
 from app.services import (
     bot_controller,
-    price_alerts_service,
-    social_polling_service,
+    scheduled_jobs,
 )
 
 FRONTEND_DIST_DIR = Path(
@@ -65,8 +65,8 @@ async def lifespan(app: FastAPI):
     Tests bypass this by constructing TestClient(app) without `with`.
     """
     await init_database()
-    await price_alerts_service.start_monitor()
-    await social_polling_service.start_monitor()
+    await app_scheduler.start()
+    scheduled_jobs.register_default_jobs()
 
     # Re-register user-uploaded strategies after DB is up.
     try:
@@ -82,8 +82,7 @@ async def lifespan(app: FastAPI):
     try:
         yield
     finally:
-        await price_alerts_service.shutdown_monitor()
-        await social_polling_service.shutdown_monitor()
+        await app_scheduler.shutdown()
         await bot_controller.shutdown_bot()
 
 
