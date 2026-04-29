@@ -129,6 +129,8 @@ EXPECTED_ROUTES: set[tuple[str, str]] = {
     # --- SSE event stream ---
     ("GET",    "/api/stream/{topic:path}"),
     ("GET",    "/api/stream/{topic:path}/latest"),
+    # --- SABR volatility model (Phase 5.2) ---
+    ("POST",   "/api/quantlib/sabr/fit"),
 }
 
 
