@@ -30,6 +30,7 @@ from app.routers import journal as journal_router
 from app.routers import macro as macro_router
 from app.routers import metrics as metrics_router
 from app.routers import monitoring as monitoring_router
+from app.routers import onchain as onchain_router
 from app.routers import options_chain as options_chain_router
 from app.routers import pine_seeds as pine_seeds_router
 from app.routers import predictions as predictions_router
@@ -139,6 +140,7 @@ app.include_router(dbnomics_router.router)
 app.include_router(docs_router.router)
 app.include_router(geopolitics_router.router)
 app.include_router(indicators_router.router)
+app.include_router(onchain_router.router)
 
 
 def _is_safe_frontend_path(base_dir: Path, requested_path: Path) -> bool:

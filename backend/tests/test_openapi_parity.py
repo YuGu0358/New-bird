@@ -120,6 +120,8 @@ EXPECTED_ROUTES: set[tuple[str, str]] = {
     ("GET",    "/api/indicators/{symbol}"),
     # --- Application scheduler observability ---
     ("GET",    "/api/scheduler/jobs"),
+    # --- GlassNode on-chain metrics (opt-in) ---
+    ("GET",    "/api/onchain/metrics/{asset}/{metric_path:path}"),
 }
 
 
