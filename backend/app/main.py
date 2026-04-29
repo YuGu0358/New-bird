@@ -27,6 +27,7 @@ from app.routers import geopolitics as geopolitics_router
 from app.routers import health as health_router
 from app.routers import indicators as indicators_router
 from app.routers import journal as journal_router
+from app.routers import kraken as kraken_router
 from app.routers import macro as macro_router
 from app.routers import metrics as metrics_router
 from app.routers import monitoring as monitoring_router
@@ -144,6 +145,7 @@ app.include_router(dbnomics_router.router)
 app.include_router(docs_router.router)
 app.include_router(geopolitics_router.router)
 app.include_router(indicators_router.router)
+app.include_router(kraken_router.router)
 app.include_router(onchain_router.router)
 app.include_router(stream_router.router)
 

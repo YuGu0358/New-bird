@@ -123,6 +123,9 @@ EXPECTED_ROUTES: set[tuple[str, str]] = {
     ("GET",    "/api/scheduler/jobs"),
     # --- GlassNode on-chain metrics (opt-in) ---
     ("GET",    "/api/onchain/metrics/{asset}/{metric_path:path}"),
+    # --- Kraken public market data (opt-in) ---
+    ("GET",    "/api/kraken/ticker/{pair}"),
+    ("GET",    "/api/kraken/trades/{pair}"),
     # --- SSE event stream ---
     ("GET",    "/api/stream/{topic:path}"),
     ("GET",    "/api/stream/{topic:path}/latest"),
