@@ -19,6 +19,7 @@ from app.routers import agents as agents_router
 from app.routers import alerts as alerts_router
 from app.routers import backtest as backtest_router
 from app.routers import bot as bot_router
+from app.routers import broker_accounts as broker_accounts_router
 from app.routers import code as code_router
 from app.routers import crypto as crypto_router
 from app.routers import dbnomics as dbnomics_router
@@ -148,6 +149,7 @@ app.include_router(indicators_router.router)
 app.include_router(kraken_router.router)
 app.include_router(onchain_router.router)
 app.include_router(stream_router.router)
+app.include_router(broker_accounts_router.router)
 
 
 def _is_safe_frontend_path(base_dir: Path, requested_path: Path) -> bool:

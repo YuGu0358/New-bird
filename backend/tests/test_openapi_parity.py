@@ -131,6 +131,14 @@ EXPECTED_ROUTES: set[tuple[str, str]] = {
     ("GET",    "/api/stream/{topic:path}/latest"),
     # --- SABR volatility model (Phase 5.2) ---
     ("POST",   "/api/quantlib/sabr/fit"),
+    # --- Broker accounts (Phase 2.3) ---
+    ("GET",    "/api/broker-accounts"),
+    ("POST",   "/api/broker-accounts"),
+    ("GET",    "/api/broker-accounts/{account_pk}"),
+    ("PATCH",  "/api/broker-accounts/{account_pk}/alias"),
+    ("PATCH",  "/api/broker-accounts/{account_pk}/tier"),
+    ("PATCH",  "/api/broker-accounts/{account_pk}/active"),
+    ("DELETE", "/api/broker-accounts/{account_pk}"),
 }
 
 

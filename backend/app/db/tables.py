@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from sqlalchemy import Boolean, DateTime, Float, Integer, JSON, String, Text
+from sqlalchemy import Boolean, DateTime, Float, Integer, JSON, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.engine import Base
@@ -315,6 +315,42 @@ class MacroThresholdOverride(Base):
         nullable=False,
         default=lambda: datetime.now(timezone.utc),
         onupdate=lambda: datetime.now(timezone.utc),
+    )
+
+
+class BrokerAccount(Base):
+    """A broker account the user has connected (alpaca / ibkr / kraken).
+
+    Multi-account: one user may have multiple accounts at the same
+    broker (e.g., paper + live, or different IBKR sub-accounts). The
+    `(broker, account_id)` pair is the natural key — uniqueness enforced
+    via a composite UNIQUE constraint.
+
+    Tier: a user-controlled label that the UI uses to group accounts
+    (Tier 1 = primary trading, Tier 2 = secondary, Tier 3 = experimental
+    / paper). Defaults to TIER_2 when the user adds an account without
+    explicit tier choice.
+    """
+    __tablename__ = "broker_accounts"
+    __table_args__ = (
+        UniqueConstraint("broker", "account_id", name="uq_broker_account"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    broker: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    account_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    alias: Mapped[str] = mapped_column(String(64), nullable=False, default="")
+    tier: Mapped[str] = mapped_column(String(16), nullable=False, default="TIER_2")
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
     )
 
 
