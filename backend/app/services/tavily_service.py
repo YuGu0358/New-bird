@@ -186,6 +186,64 @@ async def search_web(
     return payload
 
 
+async def fetch_raw_headlines(
+    symbol: str,
+    *,
+    max_results: int = 10,
+    lang: str = DEFAULT_LANG,
+) -> dict[str, Any]:
+    """Tavily news results without LLM summarization.
+
+    Distinct from `fetch_news_summary` — that one routes the headlines through
+    an OpenAI-style summary so the UI gets one paragraph. This one returns the
+    individual articles with title / url / source / domain / published_date /
+    snippet, so the user can scan the raw feed without paying for the summary
+    pass and without language localization. Tavily's `include_answer=False`
+    flag keeps the response light.
+
+    Caches per (symbol, max_results) — language is irrelevant here because we
+    don't translate any of the per-article fields. The 20-min TTL matches
+    `search_web` so a watchlist refresh doesn't churn the upstream.
+    """
+    normalized_symbol = symbol.upper()
+    capped = max(1, min(int(max_results or 0), 20))
+    cache_key = (f"raw:{normalized_symbol}", "news", f"k={capped}")
+    now = datetime.now(timezone.utc)
+    cached_item = _search_cache.get(cache_key)
+    if cached_item is not None and now - cached_item[0] <= _SEARCH_CACHE_TTL:
+        return cached_item[1]
+
+    client = _create_client()
+    response = await run_sync_with_retries(
+        client.search,
+        query=f"latest news headlines about {normalized_symbol} stock",
+        topic="news",
+        search_depth="basic",
+        max_results=capped,
+        include_answer=False,
+    )
+
+    results: list[dict[str, Any]] = []
+    if isinstance(response, dict):
+        results = [
+            normalized_item
+            for normalized_item in (
+                _normalize_result(item) for item in (response.get("results") or [])
+            )
+            if normalized_item is not None
+        ]
+
+    payload = {
+        "symbol": normalized_symbol,
+        "max_results": capped,
+        "count": len(results),
+        "headlines": results,
+        "generated_at": now,
+    }
+    _search_cache[cache_key] = (now, payload)
+    return payload
+
+
 async def fetch_news_summary(symbol: str, *, lang: str = DEFAULT_LANG) -> dict[str, Any]:
     client = _create_client()
     normalized_symbol = symbol.upper()

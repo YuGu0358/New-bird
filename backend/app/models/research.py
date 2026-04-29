@@ -93,3 +93,11 @@ class TavilySearchResponse(BaseModel):
     answer: str
     generated_at: datetime
     results: list[TavilySearchSource]
+
+
+class RawHeadlinesResponse(BaseModel):
+    symbol: str
+    max_results: int
+    count: int
+    headlines: list[TavilySearchSource]
+    generated_at: datetime

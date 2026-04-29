@@ -10,6 +10,7 @@ from app.dependencies import RequestLang, SessionDep, service_error
 from app.models import (
     CompanyProfileResponse,
     NewsArticle,
+    RawHeadlinesResponse,
     StockResearchReport,
     SymbolChartResponse,
     TavilySearchResponse,
@@ -82,6 +83,24 @@ async def get_news(symbol: str, session: SessionDep, lang: RequestLang) -> NewsA
         source=payload["source"],
         timestamp=datetime.now(timezone.utc),
     )
+
+
+@router.get("/news/{symbol}/headlines", response_model=RawHeadlinesResponse)
+async def get_raw_headlines(
+    symbol: str,
+    lang: RequestLang,
+    max_results: int = 10,
+) -> RawHeadlinesResponse:
+    """Tavily raw headlines for a symbol — no LLM summary."""
+    try:
+        payload = await tavily_service.fetch_raw_headlines(
+            symbol, max_results=max_results, lang=lang
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise service_error(exc) from exc
+    return RawHeadlinesResponse(**payload)
 
 
 @router.get("/research/{symbol}", response_model=StockResearchReport)
