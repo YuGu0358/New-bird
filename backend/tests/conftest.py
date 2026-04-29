@@ -44,8 +44,11 @@ def client(isolated_data_dir: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator
     async def _noop(*args, **kwargs):
         return None
 
-    monkeypatch.setattr(price_alerts_service, "start_monitor", _noop)
-    monkeypatch.setattr(price_alerts_service, "shutdown_monitor", _noop)
+    # price_alerts_service.start_monitor / shutdown_monitor were removed when the
+    # in-process polling loop was retired in favor of the APScheduler job; keep the
+    # patches tolerant so older lifespan code or future re-introductions still no-op.
+    monkeypatch.setattr(price_alerts_service, "start_monitor", _noop, raising=False)
+    monkeypatch.setattr(price_alerts_service, "shutdown_monitor", _noop, raising=False)
     monkeypatch.setattr(social_polling_service, "start_monitor", _noop)
     monkeypatch.setattr(social_polling_service, "shutdown_monitor", _noop)
     monkeypatch.setattr(bot_controller, "shutdown_bot", _noop)
