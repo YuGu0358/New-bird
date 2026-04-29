@@ -42,6 +42,7 @@ from app.routers import risk as risk_router
 from app.routers import scheduler as scheduler_router
 from app.routers import settings as settings_router
 from app.routers import social as social_router
+from app.routers import stream as stream_router
 from app.routers import strategy_health as strategy_health_router
 from app.routers import strategies as strategies_router
 from app.routers import valuation as valuation_router
@@ -141,6 +142,7 @@ app.include_router(docs_router.router)
 app.include_router(geopolitics_router.router)
 app.include_router(indicators_router.router)
 app.include_router(onchain_router.router)
+app.include_router(stream_router.router)
 
 
 def _is_safe_frontend_path(base_dir: Path, requested_path: Path) -> bool:
