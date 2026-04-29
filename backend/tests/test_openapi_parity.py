@@ -107,6 +107,8 @@ EXPECTED_ROUTES: set[tuple[str, str]] = {
     ("GET",    "/api/dbnomics/series/{provider}/{dataset}/{series_id}"),
     # --- Raw headlines aggregator ---
     ("GET",    "/api/news/{symbol}/headlines"),
+    # --- Geopolitical risk events ---
+    ("GET",    "/api/geopolitics/events"),
 }
 
 
