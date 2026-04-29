@@ -119,10 +119,12 @@ async def test_register_default_jobs_wires_known_ids() -> None:
 
     sched = app_scheduler.get_scheduler()
     job_ids = {j.id for j in sched.get_jobs()}
-    # The three platform jobs we ship in this plan:
+    # All five platform jobs we ship after Wave 7 Task 1:
     assert "price_alerts_evaluate" in job_ids
     assert "social_polling_run" in job_ids
     assert "sector_rotation_refresh" in job_ids
+    assert "macro_sync" in job_ids
+    assert "options_chain_sync" in job_ids
 
 
 from fastapi.testclient import TestClient
@@ -153,6 +155,8 @@ async def test_jobs_endpoint_lists_registered_jobs() -> None:
     assert "price_alerts_evaluate" in job_ids
     assert "social_polling_run" in job_ids
     assert "sector_rotation_refresh" in job_ids
+    assert "macro_sync" in job_ids
+    assert "options_chain_sync" in job_ids
     for job in body["jobs"]:
         assert "trigger" in job
         # next_run_time may be None during shutdown windows, but the key

@@ -18,10 +18,13 @@ from __future__ import annotations
 
 import logging
 
+from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
 
-from app import scheduler as app_scheduler
+from app import runtime_settings, scheduler as app_scheduler
 from app.services import (
+    macro_service,
+    options_chain_service,
     price_alerts_service,
     sector_rotation_service,
     social_polling_service,
@@ -35,6 +38,10 @@ logger = logging.getLogger(__name__)
 # is expensive and the cache TTL inside the service is 15 min, so 60 min
 # is the sweet spot between freshness and rate-limit pressure.
 SECTOR_ROTATION_INTERVAL_SECONDS = 60 * 60
+
+OPTIONS_CHAIN_SYNC_INTERVAL_SECONDS = 30 * 60
+# US equity regular session: 13:30–20:00 UTC (09:30–16:00 ET).
+# Cron uses UTC since AsyncIOScheduler is UTC-by-default.
 
 
 async def _price_alerts_evaluate() -> None:
@@ -69,6 +76,41 @@ async def _sector_rotation_refresh() -> None:
         logger.exception("sector_rotation_refresh job failed")
 
 
+async def _macro_sync() -> None:
+    """Force-refresh the macro indicator dashboard cache.
+
+    FRED publishes most series on a daily cadence in the US morning;
+    14:00 UTC (10am ET) is after the bulk of releases.
+    """
+    try:
+        await macro_service.get_dashboard(force=True)
+    except Exception:  # noqa: BLE001
+        logger.exception("macro_sync job failed")
+
+
+async def _options_chain_sync() -> None:
+    """Force-refresh the options chain cache for the watchlist.
+
+    Reads PINE_SEEDS_WATCHLIST (comma-separated) so the user can
+    customize without touching this file. Per-ticker failures are
+    logged at DEBUG and don't block the rest of the batch.
+    """
+    raw = (
+        runtime_settings.get_setting(
+            "PINE_SEEDS_WATCHLIST", "SPY,QQQ,NVDA,AAPL"
+        )
+        or "SPY,QQQ,NVDA,AAPL"
+    )
+    symbols = [s.strip().upper() for s in raw.split(",") if s.strip()]
+    for symbol in symbols:
+        try:
+            await options_chain_service.get_gex_summary(symbol, force=True)
+        except Exception as exc:  # noqa: BLE001
+            logger.debug(
+                "options_chain_sync skipped %s: %s", symbol, exc
+            )
+
+
 def register_default_jobs() -> None:
     """Register every periodic job the platform owns.
 
@@ -93,4 +135,22 @@ def register_default_jobs() -> None:
         "sector_rotation_refresh",
         _sector_rotation_refresh,
         IntervalTrigger(seconds=SECTOR_ROTATION_INTERVAL_SECONDS),
+    )
+    app_scheduler.register_job(
+        "macro_sync",
+        _macro_sync,
+        # Daily at 14:00 UTC (10am ET) — after the typical FRED
+        # morning release window.
+        CronTrigger(hour=14, minute=0),
+    )
+    app_scheduler.register_job(
+        "options_chain_sync",
+        _options_chain_sync,
+        # Every 30 minutes during the US regular session window.
+        # day_of_week='mon-fri' skips weekends. Cron in UTC.
+        CronTrigger(
+            day_of_week="mon-fri",
+            hour="13-19",
+            minute="*/30",
+        ),
     )
