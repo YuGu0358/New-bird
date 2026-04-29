@@ -445,6 +445,34 @@ class PositionSnapshot(Base):
     side: Mapped[str] = mapped_column(String(8), nullable=False, default="long")
 
 
+class UserWorkspace(Base):
+    """Saved UI workspace snapshot (active tab, selected ticker, filters, etc.).
+
+    Single-user MVP: no user_id; multi-user is a follow-up.
+
+    The opaque `state_json` blob is stored as Text — the backend doesn't
+    interpret the structure, it just round-trips the JSON the frontend
+    sends. Names are unique so PUT acts as upsert by name.
+    """
+
+    __tablename__ = "user_workspaces"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    name: Mapped[str] = mapped_column(String(120), unique=True, index=True, nullable=False)
+    state_json: Mapped[str] = mapped_column(Text, nullable=False, default="{}")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+    )
+
+
 class JournalEntry(Base):
     """User-authored investment journal entry (markdown body + symbol tags + mood).
 

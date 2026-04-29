@@ -154,6 +154,11 @@ EXPECTED_ROUTES: set[tuple[str, str]] = {
     # --- HTML reports (Phase 7.4 lite) ---
     ("GET",    "/api/reports/backtest/{run_id}.html"),
     ("GET",    "/api/reports/portfolio/{broker_account_id}.html"),
+    # --- Workspace save/load (Phase 7.3) ---
+    ("GET",    "/api/workspaces"),
+    ("PUT",    "/api/workspaces"),
+    ("GET",    "/api/workspaces/{name}"),
+    ("DELETE", "/api/workspaces/{name}"),
 }
 
 
