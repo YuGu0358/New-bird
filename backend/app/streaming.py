@@ -23,7 +23,7 @@ import asyncio
 import json
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any, AsyncIterator
 
 logger = logging.getLogger(__name__)
@@ -56,6 +56,14 @@ class Event:
         return f"event: {self.topic}\ndata: {payload}\n\n"
 
 
+@dataclass
+class _CachedEvent:
+    """Internal — pairs an Event with its expiry instant."""
+
+    event: Event
+    expires_at: datetime | None  # None = never expires
+
+
 class EventBus:
     """Topic -> list[asyncio.Queue] router.
 
@@ -67,12 +75,29 @@ class EventBus:
 
     def __init__(self) -> None:
         self._subscribers: dict[str, list[asyncio.Queue[Event]]] = {}
+        self._latest: dict[str, _CachedEvent] = {}
         self._lock = asyncio.Lock()
 
-    async def publish(self, topic: str, data: dict[str, Any] | None = None) -> int:
-        """Send `data` to every subscriber on `topic`. Returns delivery count."""
+    async def publish(
+        self,
+        topic: str,
+        data: dict[str, Any] | None = None,
+        *,
+        ttl: timedelta | None = None,
+    ) -> int:
+        """Send `data` to every subscriber on `topic` AND cache as the new
+        latest value for the topic. Returns delivery count to live subscribers.
+
+        The cache survives even when no subscribers are listening — that's
+        the point of the DataHub upgrade. `ttl` is optional; None means
+        no expiry. The cached value is replaced on every publish.
+        """
         event = Event(topic=topic, data=dict(data or {}))
+        expires_at = (
+            event.occurred_at + ttl if ttl is not None else None
+        )
         async with self._lock:
+            self._latest[topic] = _CachedEvent(event=event, expires_at=expires_at)
             queues = list(self._subscribers.get(topic, ()))
         delivered = 0
         for queue in queues:
@@ -96,7 +121,32 @@ class EventBus:
                     )
         return delivered
 
-    async def subscribe(self, topic: str) -> AsyncIterator[Event]:
+    def latest(self, topic: str) -> Event | None:
+        """Return the most recent cached event for `topic`, honoring TTL.
+
+        Synchronous — reads a dict; we tolerate a benign race with publish()
+        because the worst case is "we observed an event 1ms before its
+        eviction". TTL eviction is lazy: the entry is removed on the next
+        `latest()` call after expiry, NOT on a background sweep.
+        """
+        cached = self._latest.get(topic)
+        if cached is None:
+            return None
+        if (
+            cached.expires_at is not None
+            and datetime.now(timezone.utc) >= cached.expires_at
+        ):
+            # Lazy eviction so the cache is self-trimming under read load.
+            self._latest.pop(topic, None)
+            return None
+        return cached.event
+
+    async def subscribe(
+        self,
+        topic: str,
+        *,
+        replay_latest: bool = False,
+    ) -> AsyncIterator[Event]:
         """Yield events for `topic` until the consumer cancels.
 
         Caller pattern:
@@ -107,11 +157,20 @@ class EventBus:
         The async generator handles its own cleanup via try/finally: when
         the caller breaks, raises, or the surrounding task is cancelled,
         the queue is removed from the subscriber list.
+
+        When `replay_latest=True` and a cached value exists for `topic`,
+        the iterator yields the cached event as its FIRST event before
+        any live events. Lets late-joining consumers see the current
+        snapshot without waiting for the next publish.
         """
         queue: asyncio.Queue[Event] = asyncio.Queue(maxsize=SUBSCRIBER_QUEUE_MAXSIZE)
         async with self._lock:
             self._subscribers.setdefault(topic, []).append(queue)
         try:
+            if replay_latest:
+                cached = self.latest(topic)
+                if cached is not None:
+                    yield cached
             while True:
                 event = await queue.get()
                 yield event
@@ -131,8 +190,12 @@ class EventBus:
         return len(self._subscribers.get(topic, ()))
 
     def reset(self) -> None:
-        """Test-only - wipe every subscription. Production code never calls this."""
+        """Test-only - wipe every subscription AND cached value.
+
+        Production code never calls this.
+        """
         self._subscribers.clear()
+        self._latest.clear()
 
 
 # Module-level singleton.

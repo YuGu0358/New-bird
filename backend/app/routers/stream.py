@@ -11,9 +11,9 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import AsyncIterator
+from typing import Any, AsyncIterator
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 
 from app.streaming import event_bus
@@ -57,6 +57,31 @@ async def _stream_topic(topic: str, request: Request) -> AsyncIterator[bytes]:
             await consumer
         except (asyncio.CancelledError, Exception):  # noqa: BLE001
             pass
+
+
+@router.get("/{topic:path}/latest")
+async def get_latest(topic: str) -> dict[str, Any]:
+    """Snapshot read — return the most recent cached event for `topic`.
+
+    Useful for late-joining UI tabs that just want the current state
+    without opening an SSE connection. 404 when the cache is empty (or
+    the cached value's TTL has expired).
+
+    NOTE: declared BEFORE the catch-all SSE route so FastAPI matches
+    `/{topic}/latest` before falling through to `/{topic:path}` (which
+    would otherwise greedily swallow the `/latest` suffix into `topic`).
+    """
+    cached = event_bus.latest(topic)
+    if cached is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No cached event for topic {topic!r}",
+        )
+    return {
+        "topic": cached.topic,
+        "data": cached.data,
+        "occurred_at": cached.occurred_at.isoformat(),
+    }
 
 
 @router.get("/{topic:path}")

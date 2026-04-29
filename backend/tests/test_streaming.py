@@ -158,3 +158,161 @@ def test_stream_route_is_registered() -> None:
         if hasattr(route, "methods")
     }
     assert "/api/stream/{topic:path}" in paths
+
+
+from datetime import timedelta
+
+
+# ---------- Last-value cache ----------
+
+
+@pytest.mark.asyncio
+async def test_latest_returns_none_when_topic_never_published() -> None:
+    bus = EventBus()
+    assert bus.latest("never") is None
+
+
+@pytest.mark.asyncio
+async def test_latest_returns_most_recent_event() -> None:
+    bus = EventBus()
+    await bus.publish("topic", {"v": 1})
+    await bus.publish("topic", {"v": 2})
+    snapshot = bus.latest("topic")
+    assert snapshot is not None
+    assert snapshot.data == {"v": 2}
+
+
+@pytest.mark.asyncio
+async def test_latest_isolated_per_topic() -> None:
+    bus = EventBus()
+    await bus.publish("a", {"v": "alpha"})
+    await bus.publish("b", {"v": "bravo"})
+    assert bus.latest("a").data == {"v": "alpha"}
+    assert bus.latest("b").data == {"v": "bravo"}
+
+
+@pytest.mark.asyncio
+async def test_publish_with_ttl_expires_cache() -> None:
+    """A 1ms TTL should immediately make latest() return None."""
+    bus = EventBus()
+    await bus.publish("topic", {"v": 1}, ttl=timedelta(milliseconds=1))
+    # Sleep slightly longer than the TTL.
+    await asyncio.sleep(0.01)
+    assert bus.latest("topic") is None
+
+
+@pytest.mark.asyncio
+async def test_publish_without_ttl_persists() -> None:
+    bus = EventBus()
+    await bus.publish("topic", {"v": 1})
+    await asyncio.sleep(0.05)
+    assert bus.latest("topic") is not None
+
+
+# ---------- replay_latest ----------
+
+
+@pytest.mark.asyncio
+async def test_subscribe_replay_latest_yields_cached_first() -> None:
+    bus = EventBus()
+    await bus.publish("topic", {"v": "snapshot"})
+
+    received: list[Event] = []
+    agen = bus.subscribe("topic", replay_latest=True)
+
+    # Pull the first event — should be the cached snapshot.
+    first = await agen.__anext__()
+    received.append(first)
+
+    # Now publish a live event; should arrive next.
+    await bus.publish("topic", {"v": "live"})
+    second = await asyncio.wait_for(agen.__anext__(), timeout=1.0)
+    received.append(second)
+
+    await agen.aclose()
+
+    assert len(received) == 2
+    assert received[0].data == {"v": "snapshot"}
+    assert received[1].data == {"v": "live"}
+
+
+@pytest.mark.asyncio
+async def test_subscribe_replay_latest_skipped_when_no_cache() -> None:
+    bus = EventBus()
+    received: list[Event] = []
+
+    async def consumer() -> None:
+        async for event in bus.subscribe("topic", replay_latest=True):
+            received.append(event)
+            break
+
+    task = asyncio.create_task(consumer())
+    await asyncio.sleep(0)
+    await bus.publish("topic", {"v": "first"})
+    await asyncio.wait_for(task, timeout=1.0)
+    # No cache existed → only the live event arrives.
+    assert len(received) == 1
+    assert received[0].data == {"v": "first"}
+
+
+@pytest.mark.asyncio
+async def test_subscribe_replay_latest_default_off() -> None:
+    """Without `replay_latest=True`, cached values are NOT yielded."""
+    bus = EventBus()
+    await bus.publish("topic", {"v": "old"})
+
+    received: list[Event] = []
+
+    async def consumer() -> None:
+        async for event in bus.subscribe("topic"):  # default kwarg
+            received.append(event)
+            break
+
+    task = asyncio.create_task(consumer())
+    await asyncio.sleep(0)
+    await bus.publish("topic", {"v": "new"})
+    await asyncio.wait_for(task, timeout=1.0)
+    assert received[0].data == {"v": "new"}
+
+
+# ---------- reset() must clear cache ----------
+
+
+@pytest.mark.asyncio
+async def test_reset_clears_cache() -> None:
+    bus = EventBus()
+    await bus.publish("topic", {"v": 1})
+    assert bus.latest("topic") is not None
+    bus.reset()
+    assert bus.latest("topic") is None
+
+
+# ---------- /api/stream/{topic}/latest endpoint ----------
+
+
+def test_latest_endpoint_returns_404_when_no_cache() -> None:
+    """Bare TestClient — endpoint should 404 with a clean detail when no
+    event has been published to the topic yet."""
+    from fastapi.testclient import TestClient
+    from app.main import app
+
+    client = TestClient(app)
+    resp = client.get("/api/stream/never-published/latest")
+    assert resp.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_latest_endpoint_returns_cached_event() -> None:
+    """Publish first, then GET — endpoint should return the cached event JSON."""
+    from fastapi.testclient import TestClient
+    from app.main import app
+
+    await event_bus.publish("test:cache", {"price": 42.0})
+
+    client = TestClient(app)
+    resp = client.get("/api/stream/test:cache/latest")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["topic"] == "test:cache"
+    assert body["data"] == {"price": 42.0}
+    assert "occurred_at" in body

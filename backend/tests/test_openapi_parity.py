@@ -125,6 +125,7 @@ EXPECTED_ROUTES: set[tuple[str, str]] = {
     ("GET",    "/api/onchain/metrics/{asset}/{metric_path:path}"),
     # --- SSE event stream ---
     ("GET",    "/api/stream/{topic:path}"),
+    ("GET",    "/api/stream/{topic:path}/latest"),
 }
 
 
