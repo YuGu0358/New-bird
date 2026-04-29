@@ -13,7 +13,8 @@ from app.models import (
     BacktestSummaryView,
     BacktestTradeView,
 )
-from app.services import backtest_service
+from app.models.tearsheet import TearsheetResponse
+from app.services import backtest_service, tearsheet_service
 
 router = APIRouter(prefix="/api/backtest", tags=["backtest"])
 
@@ -81,3 +82,31 @@ async def get_equity_curve(run_id: int, session: SessionDep) -> BacktestEquityCu
             for p in points
         ],
     )
+
+
+@router.get("/{run_id}/tearsheet", response_model=TearsheetResponse)
+async def get_tearsheet(
+    run_id: int,
+    session: SessionDep,
+    periods_per_year: int = 252,
+    risk_free_rate: float = 0.04,
+) -> TearsheetResponse:
+    """Performance tearsheet (Sharpe/Sortino/MaxDD/Calmar/CAGR) for a backtest run."""
+    if periods_per_year <= 0:
+        raise HTTPException(
+            status_code=400, detail="periods_per_year must be > 0"
+        )
+    try:
+        payload = await tearsheet_service.get_tearsheet(
+            session,
+            run_id,
+            periods_per_year=periods_per_year,
+            risk_free_rate=risk_free_rate,
+        )
+    except Exception as exc:
+        raise service_error(exc) from exc
+    if payload is None:
+        raise HTTPException(
+            status_code=404, detail=f"Backtest run {run_id} not found"
+        )
+    return TearsheetResponse(**payload)

@@ -45,6 +45,7 @@ EXPECTED_ROUTES: set[tuple[str, str]] = {
     ("GET",    "/api/backtest/runs"),
     ("GET",    "/api/backtest/{run_id}"),
     ("GET",    "/api/backtest/{run_id}/equity-curve"),
+    ("GET",    "/api/backtest/{run_id}/tearsheet"),
     ("POST",   "/api/quantlib/bond/risk"),
     ("POST",   "/api/quantlib/bond/yield"),
     ("POST",   "/api/quantlib/option/greeks"),
