@@ -16,3 +16,4 @@ pypdf
 QuantLib
 ib_async>=1.0.3,<2
 apscheduler>=3.10,<4
+keyring>=24,<26

@@ -400,7 +400,18 @@ SETTING_DEFINITIONS: tuple[SettingDefinition, ...] = (
         default="false",
         description="false 时自动交易仅允许 Alpaca paper 账户。",
     ),
+    SettingDefinition(
+        key="SECURE_STORAGE_ENABLED",
+        label="Enable Secure Credential Storage",
+        category="safety",
+        required=False,
+        sensitive=False,
+        default="false",
+        description="true 时把 sensitive 标记的 setting 存入 OS 钥匙串（macOS Keychain / Windows Credential Manager / Linux libsecret）；默认 false 时仍写 SQLite。",
+    ),
 )
+
+ENABLED_SETTING_KEY = "SECURE_STORAGE_ENABLED"
 
 _SETTING_MAP = {item.key: item for item in SETTING_DEFINITIONS}
 
@@ -439,10 +450,40 @@ def _read_stored_values() -> dict[str, str]:
         connection.close()
 
 
+def _delete_stored_value(key: str) -> None:
+    """Remove a single key from app_settings. Idempotent."""
+    connection = _connect()
+    try:
+        connection.execute("DELETE FROM app_settings WHERE key = ?", (key,))
+        connection.commit()
+    finally:
+        connection.close()
+
+
+def _vault_enabled() -> bool:
+    """Read the master switch directly from SQLite to avoid recursion."""
+    stored = _read_stored_values().get(ENABLED_SETTING_KEY, "")
+    return _parse_bool(stored, default=False)
+
+
 def get_setting(key: str, default: str | None = None) -> str | None:
     normalized_key = str(key or "").strip()
     if not normalized_key:
         return default
+
+    # Vault read-through: only sensitive keys, only when enabled.
+    definition = _SETTING_MAP.get(normalized_key)
+    if (
+        definition is not None
+        and definition.sensitive
+        and normalized_key != ENABLED_SETTING_KEY  # avoid recursion
+        and _vault_enabled()
+    ):
+        from app.services.secure_storage_service import get_secret
+
+        secret = get_secret(normalized_key)
+        if secret:
+            return secret
 
     stored = _read_stored_values().get(normalized_key)
     if stored:
@@ -452,8 +493,7 @@ def get_setting(key: str, default: str | None = None) -> str | None:
     if env_value:
         return env_value
 
-    definition = _SETTING_MAP.get(normalized_key)
-    if definition and definition.default is not None:
+    if definition is not None and definition.default is not None:
         return definition.default
 
     return default
@@ -538,6 +578,11 @@ def save_settings(values: dict[str, Any], admin_token: str | None = None) -> dic
     now = datetime.now(timezone.utc).isoformat()
 
     try:
+        # Cache vault-enabled state once per save call to avoid repeated
+        # SQLite reads (and to make the routing decision consistent across
+        # the loop even if a value flips the switch mid-batch).
+        vault_on = _vault_enabled()
+
         for key, raw_value in values.items():
             definition = _SETTING_MAP.get(str(key).strip())
             if definition is None:
@@ -546,6 +591,26 @@ def save_settings(values: dict[str, Any], admin_token: str | None = None) -> dic
             normalized_value = str(raw_value).strip() if raw_value is not None else ""
             if not normalized_value:
                 continue
+
+            # Route sensitive values to the OS keychain when the master
+            # switch is on. Never route the switch itself (chicken-and-egg).
+            if (
+                definition.sensitive
+                and definition.key != ENABLED_SETTING_KEY
+                and vault_on
+            ):
+                from app.services.secure_storage_service import set_secret
+
+                if set_secret(definition.key, normalized_value):
+                    # Vault write succeeded; remove any stale SQLite copy
+                    # so we don't leave plaintext behind.
+                    connection.execute(
+                        "DELETE FROM app_settings WHERE key = ?",
+                        (definition.key,),
+                    )
+                    updated_keys.append(definition.key)
+                    continue
+                # Vault write failed -- fall through to SQLite write.
 
             connection.execute(
                 """
