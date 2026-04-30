@@ -113,15 +113,72 @@ export const getChart = (symbol, range = '3mo') =>
 export const getCompany = (symbol) => request(`/api/company/${encodeURIComponent(symbol)}`);
 
 // ----------------------------------------------------------- strategies
+// `request` always sets Content-Type: application/json and JSON-stringifies
+// the body, which conflicts with FormData (browser must set the multipart
+// boundary itself). Keep a small parallel helper for file uploads instead of
+// overloading `request` with a branchy path.
+async function requestMultipart(path, formData) {
+  const res = await fetch(path, {
+    method: 'POST',
+    headers: { Accept: 'application/json', 'Accept-Language': currentLang() },
+    body: formData,
+  });
+  let payload = null;
+  const text = await res.text();
+  if (text) {
+    try {
+      payload = JSON.parse(text);
+    } catch {
+      payload = text;
+    }
+  }
+  if (!res.ok) {
+    const detail = payload && typeof payload === 'object' && 'detail' in payload ? payload.detail : payload;
+    throw new ApiError(`API ${res.status} ${res.statusText}`, { status: res.status, detail });
+  }
+  return payload;
+}
+
 export const listStrategies = () => request('/api/strategies');
 export const listRegisteredStrategies = () => request('/api/strategies/registered');
-export const analyzeStrategy = (body) => request('/api/strategies/analyze', { method: 'POST', body });
-export const previewStrategy = (body) => request('/api/strategies/preview', { method: 'POST', body });
-export const saveStrategy = (body) => request('/api/strategies', { method: 'POST', body });
+
+/** @param {{ description: string }} body */
+export const analyzeStrategy = (body) =>
+  request('/api/strategies/analyze', { method: 'POST', body });
+
+/** @param {File[]} files */
+export const analyzeStrategyUpload = (files) => {
+  const fd = new FormData();
+  for (const f of files) fd.append('files', f);
+  return requestMultipart('/api/strategies/analyze-upload', fd);
+};
+
+/** @param {{ code: string, description?: string, source_name?: string }} body */
+export const analyzeFactorCode = (body) =>
+  request('/api/strategies/analyze-factor-code', { method: 'POST', body });
+
+/** @param {File[]} files @param {string} [description] */
+export const analyzeFactorUpload = (files, description = '') => {
+  const fd = new FormData();
+  for (const f of files) fd.append('files', f);
+  if (description) fd.append('description', description);
+  return requestMultipart('/api/strategies/analyze-factor-upload', fd);
+};
+
+export const previewStrategy = (body) =>
+  request('/api/strategies/preview', { method: 'POST', body });
+
+export const saveStrategy = (body) =>
+  request('/api/strategies', { method: 'POST', body });
+
 export const updateStrategy = (id, body) =>
   request(`/api/strategies/${id}`, { method: 'PUT', body });
+
+/** @param {number} id */
 export const activateStrategy = (id) =>
   request(`/api/strategies/${id}/activate`, { method: 'POST' });
+
+/** @param {number} id */
 export const deleteStrategy = (id) =>
   request(`/api/strategies/${id}`, { method: 'DELETE' });
 
