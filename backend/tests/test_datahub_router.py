@@ -95,3 +95,33 @@ async def test_sse_stream_delivers_published_events() -> None:
 
     # Cleanup — close the generator so the subscription is unsubscribed.
     await gen.aclose()
+
+
+@pytest.mark.asyncio
+async def test_legacy_stream_url_still_works() -> None:
+    """`GET /api/stream/quote:SPY` should keep delivering `market:quote:SPY`
+    publishes for a transition window.
+
+    Driven by calling the legacy router's `_stream` async generator
+    directly with a fake Request — same pattern as the datahub SSE
+    test, for the same deadlock-avoidance reason.
+    """
+    from app.routers.stream import _stream as legacy_stream
+
+    datahub_service.register_topic(Topic(name="market:quote:SPY"))
+
+    class _FakeRequest:
+        async def is_disconnected(self) -> bool:
+            return False
+
+    gen = legacy_stream("quote:SPY", _FakeRequest())  # type: ignore[arg-type]
+    first = await asyncio.wait_for(gen.__anext__(), timeout=2.0)
+    assert b"connected" in first
+
+    await datahub_service.publish("market:quote:SPY", {"price": 1.0})
+    next_chunk = await asyncio.wait_for(gen.__anext__(), timeout=2.0)
+    assert b'"price": 1.0' in next_chunk
+    # Legacy URL preserves the legacy short-name in the SSE event field.
+    assert next_chunk.startswith(b"event: quote:SPY")
+
+    await gen.aclose()

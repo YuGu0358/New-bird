@@ -1,21 +1,15 @@
-"""In-process topic-based pub/sub for server-sent events.
+"""DEPRECATED — single-topic EventBus shim.
 
-Why in-process: the platform runs as a single FastAPI process; a Redis
-pub/sub layer would add an ops dependency we don't need at this scale.
-If we ever go multi-worker we'll swap the EventBus internals for Redis
-without changing callers.
+Phase 6.1 split:
 
-Pattern:
-    from app.streaming import event_bus
-    await event_bus.publish("scheduler:job_completed", {"job_id": "x"})
-
-    async for event in event_bus.subscribe("scheduler:job_completed"):
-        ...
-
-Subscribers each own a bounded queue (max 100 events). When the queue
-fills up - typically because the consumer is slow / disconnected - the
-oldest event is dropped silently. We don't block publishers on slow
-consumers; the publisher contract is "fire and forget".
+- The module-level ``event_bus`` symbol is now a *shim* that forwards
+  to ``app.services.datahub_service`` so any pre-migration import of
+  ``from app.streaming import event_bus`` keeps working but the bytes
+  flow through the canonical DataHub pub/sub.
+- The original ``EventBus`` / ``Event`` classes are retained for legacy
+  tests and any caller that still constructs its own bus instance —
+  they remain pure-Python with no datahub dependency. New code should
+  not depend on them; removal target Phase 6.2.
 """
 from __future__ import annotations
 
@@ -25,6 +19,9 @@ import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from typing import Any, AsyncIterator
+
+from app.services import datahub_service
+from core.datahub import Topic, UnknownTopicError
 
 logger = logging.getLogger(__name__)
 
@@ -65,12 +62,12 @@ class _CachedEvent:
 
 
 class EventBus:
-    """Topic -> list[asyncio.Queue] router.
+    """DEPRECATED legacy single-topic bus. New code: use DataHub.
 
-    Subscribers register a queue under their topic of interest; publishers
-    fan-out to every queue under that topic. Queues are bounded - if a
-    consumer is slow we drop the oldest event for that consumer to keep
-    the bus moving.
+    Topic -> list[asyncio.Queue] router. Subscribers register a queue
+    under their topic of interest; publishers fan-out to every queue
+    under that topic. Queues are bounded - if a consumer is slow we
+    drop the oldest event for that consumer to keep the bus moving.
     """
 
     def __init__(self) -> None:
@@ -85,18 +82,6 @@ class EventBus:
         *,
         ttl: timedelta | None = None,
     ) -> int:
-        """Send `data` to every subscriber on `topic` AND cache as the new
-        latest value for the topic. Returns delivery count to live subscribers.
-
-        The cache survives even when no subscribers are listening — that's
-        the point of the DataHub upgrade. `ttl` is optional; None means
-        no expiry. The cached value is replaced on every publish.
-
-        TTL ONLY governs the cache snapshot returned by `latest()` and the
-        `replay_latest=True` branch of `subscribe()`. Live subscribers
-        always receive the event regardless of `ttl` — once it's in their
-        queue, it will be delivered.
-        """
         event = Event(topic=topic, data=dict(data or {}))
         expires_at = (
             event.occurred_at + ttl if ttl is not None else None
@@ -110,9 +95,6 @@ class EventBus:
                 queue.put_nowait(event)
                 delivered += 1
             except asyncio.QueueFull:
-                # Slow consumer - drop oldest then enqueue. We accept the
-                # write race here; queue is per-subscriber so the only
-                # contention is between the bus and that one consumer.
                 try:
                     queue.get_nowait()
                 except asyncio.QueueEmpty:
@@ -127,13 +109,6 @@ class EventBus:
         return delivered
 
     def latest(self, topic: str) -> Event | None:
-        """Return the most recent cached event for `topic`, honoring TTL.
-
-        Synchronous — reads a dict; we tolerate a benign race with publish()
-        because the worst case is "we observed an event 1ms before its
-        eviction". TTL eviction is lazy: the entry is removed on the next
-        `latest()` call after expiry, NOT on a background sweep.
-        """
         cached = self._latest.get(topic)
         if cached is None:
             return None
@@ -141,7 +116,6 @@ class EventBus:
             cached.expires_at is not None
             and datetime.now(timezone.utc) >= cached.expires_at
         ):
-            # Lazy eviction so the cache is self-trimming under read load.
             self._latest.pop(topic, None)
             return None
         return cached.event
@@ -152,22 +126,6 @@ class EventBus:
         *,
         replay_latest: bool = False,
     ) -> AsyncIterator[Event]:
-        """Yield events for `topic` until the consumer cancels.
-
-        Caller pattern:
-            async for event in event_bus.subscribe("foo"):
-                if some_condition:
-                    break
-
-        The async generator handles its own cleanup via try/finally: when
-        the caller breaks, raises, or the surrounding task is cancelled,
-        the queue is removed from the subscriber list.
-
-        When `replay_latest=True` and a cached value exists for `topic`,
-        the iterator yields the cached event as its FIRST event before
-        any live events. Lets late-joining consumers see the current
-        snapshot without waiting for the next publish.
-        """
         queue: asyncio.Queue[Event] = asyncio.Queue(maxsize=SUBSCRIBER_QUEUE_MAXSIZE)
         async with self._lock:
             self._subscribers.setdefault(topic, []).append(queue)
@@ -191,17 +149,50 @@ class EventBus:
                         self._subscribers.pop(topic, None)
 
     def subscriber_count(self, topic: str) -> int:
-        """Test/observability helper - how many active queues on topic."""
         return len(self._subscribers.get(topic, ()))
 
     def reset(self) -> None:
-        """Test-only - wipe every subscription AND cached value.
-
-        Production code never calls this.
-        """
+        """Test-only - wipe every subscription AND cached value."""
         self._subscribers.clear()
         self._latest.clear()
 
 
-# Module-level singleton.
-event_bus = EventBus()
+class _LegacyEventBusShim:
+    """Translates legacy short topic names (`quote:SPY`) into canonical
+    DataHub names (`market:quote:SPY`).
+
+    This is the object exposed as the module-level ``event_bus`` symbol.
+    Pre-migration callers calling ``await event_bus.publish(...)`` will
+    keep working while the bytes flow through the DataHub bus.
+    """
+
+    @staticmethod
+    def _canonical(name: str) -> str:
+        if name.startswith("quote:"):
+            return "market:" + name
+        return name
+
+    async def publish(
+        self,
+        topic: str,
+        data: dict[str, Any] | None = None,
+        **_: Any,
+    ) -> int:
+        canonical = self._canonical(topic)
+        bus = datahub_service.bus()
+        if canonical not in {t.name for t in bus.topics()}:
+            datahub_service.register_topic(Topic(name=canonical, ttl_seconds=60.0))
+        try:
+            return await datahub_service.publish(canonical, dict(data or {}))
+        except UnknownTopicError:
+            return 0
+
+    def reset(self) -> None:
+        """Compatibility shim — resetting the legacy bus is a no-op now;
+        the DataHub singleton owns its own lifecycle via
+        ``datahub_service.shutdown()``. Tests that called this on the
+        legacy global still get a clean call."""
+        return None
+
+
+event_bus = _LegacyEventBusShim()
