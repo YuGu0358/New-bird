@@ -108,6 +108,13 @@ async def run_optimization(
 
     if backend == "skfolio":
         from core.portfolio_opt.skfolio_adapter import optimise as sk_optimise
+        # `efficient_return` doesn't have a clean skfolio equivalent and
+        # `target_return` would be silently dropped — reject explicitly.
+        if mode == "efficient_return":
+            raise ValueError(
+                "efficient_return mode is not supported by the skfolio backend; "
+                "use backend='pyportfolioopt' or pick mode='mean_risk'/'hrp'."
+            )
         sk_mode = "hrp" if mode == "hrp" else "mean_risk"
         sk_result = await run_sync_with_retries(
             sk_optimise, prices, mode=sk_mode, risk_free_rate=risk_free_rate,
@@ -115,7 +122,9 @@ async def run_optimization(
         return {
             "tickers": normalized,
             "lookback_days": lookback_days,
-            "mode": mode,
+            # Surface the request->execution mapping so max_sharpe doesn't
+            # silently become mean_risk in the response.
+            "mode": f"{mode}->{sk_mode}" if sk_mode != mode else mode,
             "target_return": target_return,
             "risk_free_rate": risk_free_rate,
             "weights": sk_result.weights,

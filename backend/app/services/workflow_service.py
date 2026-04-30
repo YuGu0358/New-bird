@@ -217,15 +217,32 @@ async def _default_paper_order(payload: dict[str, Any]) -> dict[str, Any]:
         logger.info("workflow paper-order without symbol: %s", payload)
         return {"accepted": True, "broker": "noop", "reason": "no symbol in node payload"}
 
-    qty = payload.get("qty")
-    notional = payload.get("notional")
+    # Hard caps so a malformed workflow definition can't request a
+    # 1B-share paper trade that bloats the broker's logs and obscures
+    # legitimate fills. The caller's workflow editor enforces sane
+    # bounds; this is the second line of defence.
+    MAX_QTY = 100_000        # 100k shares per order
+    MAX_NOTIONAL = 1_000_000  # $1M notional per order
+
+    qty_raw = payload.get("qty")
+    notional_raw = payload.get("notional")
+    qty = float(qty_raw) if qty_raw is not None else None
+    notional = float(notional_raw) if notional_raw is not None else None
+
+    if qty is not None and (qty <= 0 or qty > MAX_QTY):
+        return {"accepted": False, "broker": "noop",
+                "reason": f"qty {qty} outside (0, {MAX_QTY}]"}
+    if notional is not None and (notional <= 0 or notional > MAX_NOTIONAL):
+        return {"accepted": False, "broker": "noop",
+                "reason": f"notional {notional} outside (0, {MAX_NOTIONAL}]"}
+
     try:
         from app.services import alpaca_service
         result = await alpaca_service.submit_order(
             symbol,
             side,
-            qty=float(qty) if qty is not None else None,
-            notional=float(notional) if notional is not None else None,
+            qty=qty,
+            notional=notional,
         )
         return {"accepted": True, "broker": "alpaca-paper", "order": result}
     except Exception as exc:

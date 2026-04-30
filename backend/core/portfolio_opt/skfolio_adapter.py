@@ -80,21 +80,58 @@ def optimise(
 
     portfolio = model.fit_predict(returns)
 
-    weights = {
-        str(name): float(w)
-        for name, w in zip(portfolio.assets, portfolio.weights)
-        if abs(float(w)) > 1e-6
-    }
+    # Defensive attribute discovery — skfolio's Portfolio API has shifted
+    # across releases (`portfolio.assets` + `portfolio.weights` array vs
+    # `portfolio.weights` dict vs `model.weights_`). Try the common shapes
+    # in order and fall back to `model.weights_` zipped with the input
+    # column names. Raises with a clear error if none works so the user
+    # gets a fixable hint rather than an opaque AttributeError.
+    weights: dict[str, float] = {}
+    cols = list(returns.columns)
+    if hasattr(portfolio, "weights") and hasattr(portfolio, "assets"):
+        try:
+            for name, w in zip(portfolio.assets, portfolio.weights):
+                wf = float(w)
+                if abs(wf) > 1e-6:
+                    weights[str(name)] = wf
+        except Exception:
+            weights = {}
+    if not weights and hasattr(portfolio, "weights"):
+        # weights might be a dict on some versions
+        w_obj = portfolio.weights
+        if isinstance(w_obj, dict):
+            weights = {str(k): float(v) for k, v in w_obj.items() if abs(float(v)) > 1e-6}
+    if not weights and hasattr(model, "weights_"):
+        try:
+            for name, w in zip(cols, model.weights_):
+                wf = float(w)
+                if abs(wf) > 1e-6:
+                    weights[str(name)] = wf
+        except Exception:
+            pass
+    if not weights:
+        raise RuntimeError(
+            "skfolio fit succeeded but weights could not be extracted — "
+            "the installed skfolio version may have an incompatible Portfolio API."
+        )
 
-    # skfolio.Portfolio exposes annualized stats.
+    # skfolio.Portfolio exposes annualized stats — be tolerant about which
+    # attribute names are present; log when we fall back so a regression in
+    # skfolio internals doesn't silently zero out our forecasts.
+    ann_return = 0.0
+    ann_vol = 0.0
+    sharpe = 0.0
     try:
-        ann_return = float(portfolio.mean) * 252
-        ann_vol = float(portfolio.standard_deviation) * (252 ** 0.5)
+        if hasattr(portfolio, "mean"):
+            ann_return = float(portfolio.mean) * 252
+        if hasattr(portfolio, "standard_deviation"):
+            ann_vol = float(portfolio.standard_deviation) * (252 ** 0.5)
         sharpe = (ann_return - risk_free_rate) / ann_vol if ann_vol > 0 else 0.0
-    except Exception:
-        ann_return = 0.0
-        ann_vol = 0.0
-        sharpe = 0.0
+    except Exception as exc:
+        import logging
+        logging.getLogger(__name__).warning(
+            "skfolio stats extraction failed (%s); returning zeros", exc
+        )
 
     return SkfolioResult(
         weights=weights,

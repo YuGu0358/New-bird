@@ -14,12 +14,15 @@ data-grounded second opinion the user can trust to be reproducible.
 """
 from __future__ import annotations
 
+import logging
 from datetime import datetime, timezone
 from typing import Any, Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.services import chart_service, position_costs_service, signals_service
+
+logger = logging.getLogger(__name__)
 
 
 async def recommend_for_symbol(
@@ -90,7 +93,10 @@ async def recommend_for_symbol(
 async def _fetch_current_price(symbol: str, range_name: str) -> Optional[float]:
     try:
         chart = await chart_service.get_symbol_chart(symbol, range_name=range_name)
-    except Exception:
+    except Exception as exc:
+        # A network/yfinance failure looks identical to "no price" downstream;
+        # log so an operator can tell which it was without cranking up debug.
+        logger.warning("trade_rec: chart fetch failed for %s/%s: %s", symbol, range_name, exc)
         return None
     points = (chart or {}).get("points") or []
     if not points:

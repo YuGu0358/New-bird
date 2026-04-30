@@ -32,11 +32,12 @@ class PositionCostUpsertRequest(BaseModel):
 
     broker_account_id: int = Field(..., gt=0)
     ticker: str = Field(..., min_length=1, max_length=16)
-    avg_cost_basis: float = Field(..., ge=0)
-    total_shares: float = Field(..., ge=0)
-    custom_stop_loss: Optional[float] = Field(None, ge=0)
-    custom_take_profit: Optional[float] = Field(None, ge=0)
-    notes: str = ""
+    # Caps prevent IEEE-754 inf/nan poisoning the running-avg math downstream.
+    avg_cost_basis: float = Field(..., ge=0, le=1_000_000)        # $1M/share max
+    total_shares: float = Field(..., ge=0, le=1_000_000_000)      # 1B shares max
+    custom_stop_loss: Optional[float] = Field(None, ge=0, le=1_000_000)
+    custom_take_profit: Optional[float] = Field(None, ge=0, le=1_000_000)
+    notes: str = Field(default="", max_length=2000)
 
 
 class PositionCostBuyRequest(BaseModel):
@@ -44,5 +45,5 @@ class PositionCostBuyRequest(BaseModel):
 
     broker_account_id: int = Field(..., gt=0)
     ticker: str = Field(..., min_length=1, max_length=16)
-    fill_price: float = Field(..., gt=0)
-    fill_qty: float = Field(..., gt=0)
+    fill_price: float = Field(..., gt=0, le=1_000_000)
+    fill_qty: float = Field(..., gt=0, le=1_000_000_000)
