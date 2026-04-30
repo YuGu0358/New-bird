@@ -88,6 +88,31 @@ export const upsertOverride = (payload) =>
 export const deleteOverride = (accountPk, ticker) =>
   request(`/api/portfolio/overrides/${accountPk}/${encodeURIComponent(ticker)}`, { method: 'DELETE' });
 
+// ----------------------------------------------------------- position costs (cost basis + custom stops)
+/** @param {number} accountPk */
+export const listPositionCosts = (accountPk) =>
+  request(`/api/position-costs?broker_account_id=${accountPk}`);
+
+/** @param {number} accountPk @param {string} ticker */
+export const getPositionCost = (accountPk, ticker) =>
+  request(`/api/position-costs/${accountPk}/${encodeURIComponent(ticker)}`);
+
+/**
+ * @param {{ broker_account_id: number, ticker: string, avg_cost_basis: number,
+ *           total_shares: number, custom_stop_loss?: number|null,
+ *           custom_take_profit?: number|null, notes?: string }} payload
+ */
+export const upsertPositionCost = (payload) =>
+  request('/api/position-costs', { method: 'PUT', body: payload });
+
+/** @param {{ broker_account_id: number, ticker: string, fill_price: number, fill_qty: number }} payload */
+export const recordPositionBuy = (payload) =>
+  request('/api/position-costs/buy', { method: 'POST', body: payload });
+
+/** @param {number} accountPk @param {string} ticker */
+export const deletePositionCost = (accountPk, ticker) =>
+  request(`/api/position-costs/${accountPk}/${encodeURIComponent(ticker)}`, { method: 'DELETE' });
+
 // ----------------------------------------------------------- position snapshots (Phase 2.4)
 /** @param {number} accountPk @param {number} [limit=200] */
 export const listAccountSnapshots = (accountPk, limit = 200) =>

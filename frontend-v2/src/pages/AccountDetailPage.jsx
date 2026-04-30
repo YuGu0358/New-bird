@@ -11,6 +11,7 @@ import {
   listAccountSnapshots, getOverride, upsertOverride, deleteOverride,
 } from '../lib/api.js';
 import { fmtUsd, fmtSignedUsd, fmtPct, classNames } from '../lib/format.js';
+import PositionCostEditor from '../components/PositionCostEditor.jsx';
 
 const TIER_OPTIONS = ['TIER_1', 'TIER_2', 'TIER_3'];
 
@@ -83,6 +84,9 @@ export default function AccountDetailPage() {
       </div>
       {selectedTicker && (
         <OverrideEditor accountPk={accountPk} ticker={selectedTicker} onClear={() => setSelectedTicker(null)} />
+      )}
+      {selectedTicker && (
+        <PositionCostEditor accountPk={accountPk} ticker={selectedTicker} onClose={() => setSelectedTicker(null)} />
       )}
       {selectedTicker && (
         <div className="card">
