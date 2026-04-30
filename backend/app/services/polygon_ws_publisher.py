@@ -24,7 +24,8 @@ from typing import Any
 from app import runtime_settings
 from app.services import polygon_service
 from app.services.watchlist import get_watchlist
-from app.streaming import event_bus
+from app.services import datahub_service
+from core.datahub import Topic, UnknownTopicError
 
 logger = logging.getLogger(__name__)
 
@@ -56,16 +57,35 @@ def _watchlist() -> list[str]:
 
 
 async def _publish_tick(payload: dict[str, Any]) -> None:
-    """Forward one tick payload onto the bus.
+    """Forward one tick payload onto the DataHub bus.
 
-    Polygon ticks come in with at minimum ``{"symbol", "price", "timestamp"}``
-    after `_run_sdk_stream`'s normalization. We re-publish the dict unchanged.
+    Polygon ticks come in normalized to at least
+    ``{"symbol", "price", "timestamp"}``. We translate to topic
+    ``market:quote:{SYMBOL}`` (uppercased) and lazily register the
+    concrete topic the first time we see a symbol — this keeps the
+    default taxonomy small while still letting `register_topic` apply
+    the canonical TTL/dedupe/throttle policy from the template.
     """
     symbol = str(payload.get("symbol") or "").strip().upper()
     if not symbol:
         return
+    topic_name = f"market:quote:{symbol}"
+    bus = datahub_service.bus()
+    # Register on first sight; idempotent.
+    if topic_name not in {t.name for t in bus.topics()}:
+        datahub_service.register_topic(
+            Topic(
+                name=topic_name,
+                ttl_seconds=60.0,
+                throttle_seconds=0.0,
+                replay_on_subscribe=True,
+                dedupe_key_fn=lambda p: (p.get("price"), p.get("timestamp")),
+            )
+        )
     try:
-        await event_bus.publish(f"quote:{symbol}", payload)
+        await datahub_service.publish(topic_name, payload)
+    except UnknownTopicError:  # extremely unlikely (race with shutdown)
+        logger.debug("polygon_ws_publisher: bus shut down mid-publish")
     except Exception:  # noqa: BLE001 — bus errors must not kill the WS loop
         logger.exception("polygon_ws_publisher: bus publish failed")
 

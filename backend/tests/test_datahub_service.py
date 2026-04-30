@@ -98,3 +98,29 @@ async def test_shutdown_resets_bus() -> None:
     assert bus_a is not bus_b
     # Default topics gone too — start() has not been re-called.
     assert datahub_service.bus().topics() == []
+
+
+# ---------- Polygon WS migration ------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_polygon_ws_publisher_emits_via_datahub() -> None:
+    """`_publish_tick` must register the per-symbol topic on demand and
+    publish the payload through datahub_service."""
+    from app.services import polygon_ws_publisher
+
+    await datahub_service.start()
+    received: list[dict] = []
+
+    async def cb(topic: str, payload: dict) -> None:
+        received.append({"topic": topic, "payload": payload})
+
+    datahub_service.bus().subscribe("market:quote:*", cb)
+
+    payload = {"symbol": "SPY", "price": 410.5, "timestamp": 1714000000}
+    await polygon_ws_publisher._publish_tick(payload)
+    await asyncio.sleep(0)
+
+    assert received == [
+        {"topic": "market:quote:SPY", "payload": payload}
+    ]
