@@ -1,10 +1,7 @@
-"""DataHub: in-process topic-based pub/sub.
-
-Pure-compute package — depends only on stdlib `asyncio`, `dataclasses`,
-`fnmatch`. Importable from any layer without pulling in FastAPI.
-"""
+"""DataHub: in-process topic-based pub/sub."""
 from __future__ import annotations
 
+from core.datahub.bus import Bus, SubscriberCallback, SubscriptionToken
 from core.datahub.errors import (
     BusError,
     SubscriberClosedError,
@@ -13,9 +10,12 @@ from core.datahub.errors import (
 from core.datahub.topic import DedupeKeyFn, Topic
 
 __all__ = [
+    "Bus",
     "BusError",
     "DedupeKeyFn",
+    "SubscriberCallback",
     "SubscriberClosedError",
+    "SubscriptionToken",
     "Topic",
     "UnknownTopicError",
 ]
