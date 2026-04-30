@@ -11,9 +11,10 @@ Install: ``pip install skfolio`` (note: pulls scikit-learn, cvxpy).
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
-import pandas as pd
+if TYPE_CHECKING:
+    import pandas as pd  # used only for the annotation; runtime gets it lazily
 
 
 SkfolioMode = Literal["mean_risk", "hrp"]

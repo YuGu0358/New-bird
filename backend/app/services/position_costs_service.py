@@ -99,7 +99,12 @@ async def upsert(
     await session.execute(stmt)
     await session.commit()
     fetched = await get_one(session, broker_account_id=broker_account_id, ticker=ticker)
-    assert fetched is not None
+    if fetched is None:
+        # Should be unreachable post-INSERT-ON-CONFLICT, but explicit > assert
+        # so `python -O` doesn't strip the postcondition into a None return.
+        raise RuntimeError(
+            f"position_costs upsert lost the row for {broker_account_id}/{ticker}"
+        )
     return fetched
 
 

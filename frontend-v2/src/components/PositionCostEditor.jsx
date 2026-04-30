@@ -34,6 +34,7 @@ export default function PositionCostEditor({ accountPk, ticker, onClose }) {
   const [buyQty, setBuyQty] = useState('');
 
   useEffect(() => {
+    // Reset on ticker change so a row from one ticker can't leak into another.
     if (existing) {
       setAvgCost(String(existing.avg_cost_basis ?? ''));
       setTotalShares(String(existing.total_shares ?? ''));
@@ -42,23 +43,37 @@ export default function PositionCostEditor({ accountPk, ticker, onClose }) {
       setNotes(existing.notes ?? '');
     } else if (isNotFound) {
       setAvgCost(''); setTotalShares(''); setStopLoss(''); setTakeProfit(''); setNotes('');
+    } else {
+      // Loading or transient state — clear so we don't show last ticker's values.
+      setAvgCost(''); setTotalShares(''); setStopLoss(''); setTakeProfit(''); setNotes('');
     }
-  }, [existing, isNotFound]);
+    setBuyPrice(''); setBuyQty('');
+  }, [ticker, existing, isNotFound]);
 
   const invalidate = () => Promise.all([
     queryClient.invalidateQueries({ queryKey: ['position-cost', accountPk, ticker] }),
     queryClient.invalidateQueries({ queryKey: ['position-costs', accountPk] }),
   ]);
 
+  const canSaveAvgAndShares = avgCost.trim() !== '' && totalShares.trim() !== '';
   const upsertMut = useMutation({
-    mutationFn: () => upsertPositionCost({
-      broker_account_id: accountPk, ticker,
-      avg_cost_basis: Number.parseFloat(avgCost) || 0,
-      total_shares: Number.parseFloat(totalShares) || 0,
-      custom_stop_loss: stopLoss === '' ? null : Number.parseFloat(stopLoss),
-      custom_take_profit: takeProfit === '' ? null : Number.parseFloat(takeProfit),
-      notes,
-    }),
+    mutationFn: () => {
+      // Refuse to silently zero-overwrite cost basis on empty input. The
+      // user must enter both avg cost and total shares (or use "Add buy"
+      // for incremental). Setting only stops/TP through this form is not
+      // supported — that path also requires both anchor values.
+      if (!canSaveAvgAndShares) {
+        throw new Error('avg_cost_basis and total_shares are required');
+      }
+      return upsertPositionCost({
+        broker_account_id: accountPk, ticker,
+        avg_cost_basis: Number.parseFloat(avgCost),
+        total_shares: Number.parseFloat(totalShares),
+        custom_stop_loss: stopLoss === '' ? null : Number.parseFloat(stopLoss),
+        custom_take_profit: takeProfit === '' ? null : Number.parseFloat(takeProfit),
+        notes,
+      });
+    },
     onSuccess: async () => { await invalidate(); },
   });
   const buyMut = useMutation({
@@ -107,7 +122,9 @@ export default function PositionCostEditor({ accountPk, ticker, onClose }) {
 
       <div className="flex items-center gap-2">
         <button className="btn-primary btn-sm inline-flex items-center gap-1"
-          onClick={() => upsertMut.mutate()} disabled={upsertMut.isPending}>
+          onClick={() => upsertMut.mutate()}
+          disabled={upsertMut.isPending || !canSaveAvgAndShares}
+          title={canSaveAvgAndShares ? 'Save cost basis' : 'Enter avg cost AND total shares first'}>
           <Save size={12} /> Save
         </button>
         {existing && (

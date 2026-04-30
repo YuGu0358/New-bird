@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Path
 
 from app.dependencies import SessionDep, service_error
 from app.models import TradeRecommendationView, TradeStanceView
@@ -11,11 +11,13 @@ from app.services import trade_recommendation_service
 
 router = APIRouter(prefix="/api/trade-recommendations", tags=["trade-recommendations"])
 
+_SYMBOL_PATTERN = r"^[A-Za-z0-9.\-]{1,16}$"
+
 
 @router.get("/{symbol}", response_model=TradeRecommendationView)
 async def get_recommendation(
-    symbol: str,
     session: SessionDep,
+    symbol: str = Path(..., pattern=_SYMBOL_PATTERN),
     broker_account_id: Optional[int] = None,
     range: str = "3mo",
 ) -> TradeRecommendationView:

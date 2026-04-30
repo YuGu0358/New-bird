@@ -81,12 +81,13 @@ function PositionBlock({ rec }) {
 function StanceBlock({ stance }) {
   const tone = ACTION_TONE[stance.action] || ACTION_TONE.wait;
   const Icon = tone.icon;
+  const confPct = ((stance.confidence ?? 0) * 100).toFixed(0);
   return (
     <div className={classNames('border p-3 space-y-2', tone.classes)}>
       <div className="flex items-center gap-2">
         <Icon size={14} />
         <span className="font-mono text-[11px] tracking-[0.15em] uppercase">{tone.label}</span>
-        <span className="text-caption text-text-muted">conf {(stance.confidence * 100).toFixed(0)}%</span>
+        <span className="text-caption text-text-muted">conf {confPct}%</span>
       </div>
       <div className="text-body-sm font-medium">{stance.headline}</div>
       <ul className="text-caption text-text-secondary space-y-1">

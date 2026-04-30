@@ -21,7 +21,9 @@ async def compute_for_symbol(symbol: str, *, range_name: str = "3mo") -> dict[st
     for fn in (detect_macd_crosses, detect_rsi_signals,
                detect_volume_signals, detect_breakouts):
         signals.extend(fn(bars))
-    signals.sort(key=lambda s: s.ts)
+    # Sort by ts ascending; treat None ts as min so they sort first rather
+    # than crash with TypeError comparing datetime to None.
+    signals.sort(key=lambda s: s.ts or datetime.min.replace(tzinfo=timezone.utc))
 
     return {
         "symbol": (chart or {}).get("symbol", symbol),
