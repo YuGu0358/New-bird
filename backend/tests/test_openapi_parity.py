@@ -148,6 +148,12 @@ EXPECTED_ROUTES: set[tuple[str, str]] = {
     ("DELETE", "/api/portfolio/overrides/{broker_account_id}/{ticker}"),
     # --- Position snapshots (Phase 2.4) ---
     ("GET",    "/api/portfolio/snapshots"),
+    # --- Position costs (cost basis + custom stops) ---
+    ("GET",    "/api/position-costs"),
+    ("PUT",    "/api/position-costs"),
+    ("GET",    "/api/position-costs/{broker_account_id}/{ticker}"),
+    ("DELETE", "/api/position-costs/{broker_account_id}/{ticker}"),
+    ("POST",   "/api/position-costs/buy"),
     # --- Equity heatmap (Phase 2.6) ---
     ("GET",    "/api/heatmap/symbols"),
     ("GET",    "/api/heatmap/sectors"),
