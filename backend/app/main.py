@@ -23,6 +23,7 @@ from app.routers import bot as bot_router
 from app.routers import broker_accounts as broker_accounts_router
 from app.routers import code as code_router
 from app.routers import crypto as crypto_router
+from app.routers import datahub as datahub_router
 from app.routers import dbnomics as dbnomics_router
 from app.routers import docs as docs_router
 from app.routers import geopolitics as geopolitics_router
@@ -186,6 +187,7 @@ app.include_router(indicators_router.router)
 app.include_router(kraken_router.router)
 app.include_router(onchain_router.router)
 app.include_router(stream_router.router)
+app.include_router(datahub_router.router)
 app.include_router(broker_accounts_router.router)
 app.include_router(symbols_router.router)
 app.include_router(trade_recommendation_router.router)
