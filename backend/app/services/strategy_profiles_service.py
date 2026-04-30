@@ -616,6 +616,82 @@ async def analyze_strategy(
     return draft
 
 
+def _build_market_observation_text(contexts: list) -> str:
+    """Synthesize the rich AnalysisContext list into a structured Chinese
+    description block that fits the existing strategy-rewrite prompt.
+    """
+    parts: list[str] = [
+        "请基于以下当前市场快照，给出一个适合现在市场状态的 Strategy B 参数化。",
+        "重点：根据各 symbol 的成交量、技术指标、期权 flow 和行业相对强度，"
+        "调整 entry_drop_percent / stop_loss_percent / take_profit_target / max_hold_days。",
+        "如果观察到高波动（成交量倍率显著、bbands 宽、IV 高），收紧 stop_loss 和缩短 hold_days。",
+        "如果观察到横盘（RSI 中性、量缩、Sector 排名中游），降低 entry_drop_percent，"
+        "因为大幅回撤不会出现。",
+        "",
+        "市场快照：",
+        "",
+    ]
+    for ctx in contexts:
+        parts.append(f"=== {ctx.symbol} ===")
+        parts.append(ctx.to_json_block())
+        parts.append("")
+    return "\n".join(parts)
+
+
+async def analyze_market_observation(
+    symbols: list[str],
+) -> StrategyAnalysisDraft:
+    """Phase B: LLM observes the current market for `symbols` and proposes
+    a Strategy B parameterization tuned to that observation.
+
+    Reuses the existing strategy-rewrite OpenAI path — we just feed it a
+    synthesized "market observation" instead of a user description. Falls
+    back to deterministic defaults if OpenAI isn't configured.
+    """
+    cleaned = [str(s).strip().upper() for s in (symbols or []) if str(s).strip()]
+    if not cleaned:
+        raise ValueError("请提供至少一个 symbol。")
+    if len(cleaned) > 8:
+        raise ValueError("一次最多观察 8 个 symbol，请精简列表。")
+
+    # Local import to avoid a top-level cycle with agents_service (which
+    # imports from app.services). Same-process app code, OK at call time.
+    from app.services.agents_service import LiveContextBuilder
+
+    builder = LiveContextBuilder()
+    contexts = []
+    for sym in cleaned:
+        try:
+            ctx = await builder.build(sym)
+            contexts.append(ctx)
+        except Exception:
+            # One bad symbol shouldn't kill the whole observation.
+            continue
+    if not contexts:
+        raise ValueError("无法为任何 symbol 构建市场上下文，请稍后再试。")
+
+    description = _build_market_observation_text(contexts)
+
+    if not openai_service.is_configured():
+        draft = _fallback_strategy_analysis(description)
+        draft.risk_warnings.insert(
+            0, "OPENAI_API_KEY 未配置，以下结果由本地回退规则生成。"
+        )
+    else:
+        try:
+            draft = await asyncio.to_thread(_analyze_strategy_sync, description)
+        except Exception:
+            draft = _fallback_strategy_analysis(description)
+            draft.risk_warnings.insert(0, "GPT 当前不可用，以下结果由本地回退规则生成。")
+
+    draft.original_description = (
+        f"市场观察生成 — {len(contexts)} 个 symbol："
+        + ", ".join(c.symbol for c in contexts)
+    )
+    draft.source_documents = []
+    return draft
+
+
 async def analyze_factor_code_strategy(
     code: str,
     *,

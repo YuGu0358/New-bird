@@ -146,6 +146,10 @@ export const listRegisteredStrategies = () => request('/api/strategies/registere
 export const analyzeStrategy = (body) =>
   request('/api/strategies/analyze', { method: 'POST', body });
 
+/** @param {string[]} symbols 1-8 tickers; LLM observes their current state and proposes a strategy. */
+export const observeMarket = (symbols) =>
+  request('/api/strategies/observe-market', { method: 'POST', body: { symbols } });
+
 /** @param {File[]} files */
 export const analyzeStrategyUpload = (files) => {
   const fd = new FormData();

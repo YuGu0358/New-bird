@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { Power, Trash2, GitBranch, BookOpen, Sparkles, Upload, Code2, Play, Save, X } from 'lucide-react';
+import { Power, Trash2, GitBranch, BookOpen, Sparkles, Upload, Code2, Play, Save, X, Eye } from 'lucide-react';
 import {
   listStrategies,
   listRegisteredStrategies,
@@ -11,6 +11,7 @@ import {
   analyzeStrategyUpload,
   analyzeFactorCode,
   analyzeFactorUpload,
+  observeMarket,
   previewStrategy,
   saveStrategy,
 } from '../lib/api.js';
@@ -129,6 +130,7 @@ const TABS = [
   { id: 'describe', label: 'Describe',    icon: Sparkles },
   { id: 'upload',   label: 'Upload',      icon: Upload },
   { id: 'factor',   label: 'Factor code', icon: Code2 },
+  { id: 'observe',  label: 'Observe market', icon: Eye },
 ];
 
 /** @param {{ onSaved: () => void }} props */
@@ -155,6 +157,10 @@ function GenerateStrategyCard({ onSaved }) {
   });
   const analyzeCode = useMutation({
     mutationFn: (body) => analyzeFactorCode(body),
+    onSuccess: setDraftFromResponse,
+  });
+  const analyzeObserve = useMutation({
+    mutationFn: (symbols) => observeMarket(symbols),
     onSuccess: setDraftFromResponse,
   });
 
@@ -186,9 +192,10 @@ function GenerateStrategyCard({ onSaved }) {
     },
   });
 
-  const anyAnalyzing = analyzeText.isPending || analyzeFiles.isPending || analyzeCode.isPending;
+  const anyAnalyzing = analyzeText.isPending || analyzeFiles.isPending
+    || analyzeCode.isPending || analyzeObserve.isPending;
   const anyError = analyzeText.error || analyzeFiles.error || analyzeCode.error
-    || previewMut.error || saveMut.error;
+    || analyzeObserve.error || previewMut.error || saveMut.error;
 
   return (
     <div className="card">
@@ -234,6 +241,12 @@ function GenerateStrategyCard({ onSaved }) {
         <FactorCodeForm
           onSubmit={(body) => analyzeCode.mutate(body)}
           pending={analyzeCode.isPending}
+        />
+      )}
+      {tab === 'observe' && (
+        <ObserveMarketForm
+          onSubmit={(symbols) => analyzeObserve.mutate(symbols)}
+          pending={analyzeObserve.isPending}
         />
       )}
 
@@ -304,6 +317,37 @@ function UploadForm({ onSubmit, pending }) {
         <button type="submit" className="btn-primary btn-sm inline-flex items-center gap-2"
           disabled={!file || pending}>
           <Upload size={12} /> Generate
+        </button>
+      </div>
+    </form>
+  );
+}
+
+function ObserveMarketForm({ onSubmit, pending }) {
+  const [text, setText] = useState('SPY, QQQ, NVDA, AAPL, MSFT');
+  function commit(e) {
+    e.preventDefault();
+    const symbols = text
+      .split(/[\s,]+/)
+      .map((s) => s.trim().toUpperCase())
+      .filter((s) => /^[A-Z]{1,6}$/.test(s));
+    if (symbols.length > 0) onSubmit(symbols);
+  }
+  return (
+    <form onSubmit={commit} className="space-y-3">
+      <textarea
+        className="input min-h-[80px] font-mono uppercase"
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        placeholder="SPY, QQQ, NVDA, AAPL, MSFT — comma or space separated, up to 8 symbols"
+      />
+      <div className="flex justify-between items-center">
+        <span className="text-caption text-text-muted">
+          LLM 会读取每个 symbol 的成交量 / 技术指标 / 期权 flow / 行业相对强度，给出适合当前市场状态的策略参数。
+        </span>
+        <button type="submit" className="btn-primary btn-sm inline-flex items-center gap-2"
+          disabled={!text.trim() || pending}>
+          <Eye size={12} /> Observe
         </button>
       </div>
     </form>

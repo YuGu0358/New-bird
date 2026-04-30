@@ -4,6 +4,7 @@ from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 
 from app.dependencies import SessionDep, service_error
 from app.models import (
+    MarketObservationRequest,
     QuantBrainFactorAnalysisRequest,
     RegisteredStrategiesResponse,
     RegisteredStrategyEntry,
@@ -33,6 +34,21 @@ async def get_strategy_library(session: SessionDep) -> StrategyLibraryResponse:
 async def analyze_strategy(request: StrategyAnalysisRequest) -> StrategyAnalysisDraft:
     try:
         payload = await strategy_profiles_service.analyze_strategy(request.description)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise service_error(exc) from exc
+    return StrategyAnalysisDraft(**payload.model_dump())
+
+
+@router.post("/observe-market", response_model=StrategyAnalysisDraft)
+async def observe_market(request: MarketObservationRequest) -> StrategyAnalysisDraft:
+    """Phase B — LLM observes the supplied symbols and proposes a Strategy B
+    parameterization tuned to the current market state."""
+    try:
+        payload = await strategy_profiles_service.analyze_market_observation(
+            request.symbols
+        )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:

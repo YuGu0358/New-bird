@@ -25,6 +25,13 @@ class StrategyAnalysisRequest(BaseModel):
     description: str
 
 
+class MarketObservationRequest(BaseModel):
+    """Phase B input — list of symbols the LLM should observe before
+    proposing a Strategy B parameterization."""
+
+    symbols: list[str] = Field(..., min_length=1, max_length=8)
+
+
 class QuantBrainFactorAnalysis(BaseModel):
     source_name: str = "pasted-factor.py"
     factor_names: list[str] = Field(default_factory=list)

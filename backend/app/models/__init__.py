@@ -122,6 +122,7 @@ from app.models.social import (
     SocialSignalSource,
 )
 from app.models.strategies import (
+    MarketObservationRequest,
     QuantBrainFactorAnalysis,
     QuantBrainFactorAnalysisRequest,
     RegisteredStrategiesResponse,
@@ -167,6 +168,7 @@ __all__ = [
     "JournalEntryUpdateRequest",
     "JournalEntryView",
     "JournalListResponse",
+    "MarketObservationRequest",
     "MonitoringOverview",
     "NewsArticle",
     "NewsClusterRow",
