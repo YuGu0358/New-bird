@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useMutationState, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Plus,
   Play,
@@ -36,6 +36,25 @@ import { classNames, fmtRelativeTime } from '../lib/format.js';
  */
 
 const EMPTY_DEFINITION = { nodes: [], edges: [] };
+// mutationKey lets a remount re-attach to in-flight runs after navigation.
+const WORKFLOW_RUN_KEY = ['workflow-run'];
+const RUN_RESULT_LS_KEY = 'workflows.lastRunResult';
+const RUN_ERROR_LS_KEY = 'workflows.lastRunError';
+
+function _wfLoad(key, fallback) {
+  if (typeof window === 'undefined') return fallback;
+  try {
+    const raw = window.localStorage.getItem(key);
+    return raw == null ? fallback : JSON.parse(raw);
+  } catch { return fallback; }
+}
+function _wfSave(key, value) {
+  if (typeof window === 'undefined') return;
+  try {
+    if (value == null) window.localStorage.removeItem(key);
+    else window.localStorage.setItem(key, JSON.stringify(value));
+  } catch { /* quota — silent */ }
+}
 
 /** Initial state for a freshly-clicked "New workflow". */
 const NEW_DRAFT = {
@@ -51,8 +70,17 @@ export default function WorkflowsPage() {
 
   // Editor state. `mode === 'new'` → name editable; `mode === 'edit'` → name locked.
   const [editor, setEditor] = useState(null);
-  const [runResult, setRunResult] = useState(null);
-  const [runError, setRunError] = useState(null);
+  // Persist last run result/error to localStorage so navigating away and
+  // coming back doesn't lose the panel that took 30s+ to compute.
+  const [runResult, setRunResultRaw] = useState(() => _wfLoad(RUN_RESULT_LS_KEY, null));
+  const [runError, setRunErrorRaw] = useState(() => _wfLoad(RUN_ERROR_LS_KEY, null));
+  const setRunResult = (v) => { setRunResultRaw(v); _wfSave(RUN_RESULT_LS_KEY, v); };
+  const setRunError = (v) => {
+    setRunErrorRaw(v);
+    // ApiError instances don't JSON.stringify cleanly; persist a plain copy.
+    const persistable = v ? { message: v.message, status: v.status, detail: v.detail } : null;
+    _wfSave(RUN_ERROR_LS_KEY, persistable);
+  };
 
   const invalidateList = async () => {
     await queryClient.invalidateQueries({ queryKey: ['workflows'] });
@@ -70,7 +98,18 @@ export default function WorkflowsPage() {
       await invalidateList();
     },
   });
-  const runMut = useMutation({ mutationFn: runWorkflow });
+  const runMut = useMutation({
+    mutationKey: WORKFLOW_RUN_KEY,
+    mutationFn: runWorkflow,
+  });
+
+  // Cross-mount visibility into in-flight workflow runs so a remount after
+  // navigation can show "Running..." instead of "no recent run".
+  const matchingRuns = useMutationState({
+    filters: { mutationKey: WORKFLOW_RUN_KEY },
+  });
+  const lastRun = matchingRuns[matchingRuns.length - 1];
+  const isRunPending = lastRun?.status === 'pending' || runMut.isPending;
   const enableMut = useMutation({
     mutationFn: enableWorkflow,
     onSuccess: async () => {
@@ -219,7 +258,7 @@ export default function WorkflowsPage() {
                     type="button"
                     className="btn-secondary btn-sm inline-flex items-center gap-1.5"
                     onClick={runNow}
-                    disabled={runMut.isPending}
+                    disabled={isRunPending}
                   >
                     <Play size={14} /> Run now
                   </button>
@@ -251,6 +290,11 @@ export default function WorkflowsPage() {
               onChange={updateDefinition}
             />
           </div>
+          {isRunPending && !runResult && !runError && (
+            <div className="mt-4 border border-cyan/40 bg-cyan/5 p-3 text-body-sm">
+              Workflow is still running… you can navigate away; the result will land here when it finishes.
+            </div>
+          )}
           {runError && (
             <div className="mt-4">
               <ErrorState error={runError} />

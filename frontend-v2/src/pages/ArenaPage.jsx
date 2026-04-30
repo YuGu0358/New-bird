@@ -8,7 +8,7 @@
 // IntelligencePage. No new dependencies.
 
 import { useEffect, useMemo, useState } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useMutationState, useQueryClient } from '@tanstack/react-query';
 import { Trophy, Send, Check, BarChart3 } from 'lucide-react';
 
 import {
@@ -28,6 +28,30 @@ import { classNames, fmtRelativeTime } from '../lib/format.js';
 
 const DEFAULT_SYMBOLS = 'SPY, QQQ, NVDA, AAPL, MSFT';
 const MAX_SYMBOLS = 5;
+// mutationKey lets a remount of this page (after navigating away) re-attach
+// to an in-flight Arena run via useMutationState, instead of seeing it as
+// "no result yet" while the LLM round-trips on the prior fetch.
+const ARENA_MUTATION_KEY = ['arena-run'];
+const SYMBOL_LS_KEY = 'arena.symbolText';
+const PERSONAS_LS_KEY = 'arena.selectedPersonas';
+
+function loadLocal(key, fallback) {
+  if (typeof window === 'undefined') return fallback;
+  try {
+    const raw = window.localStorage.getItem(key);
+    return raw == null ? fallback : JSON.parse(raw);
+  } catch {
+    return fallback;
+  }
+}
+function saveLocal(key, value) {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    /* quota / private browsing — silent */
+  }
+}
 
 function parseSymbols(text) {
   return text
@@ -66,13 +90,19 @@ export default function ArenaPage() {
     refetchInterval: 60_000,
   });
 
-  const [symbolText, setSymbolText] = useState(DEFAULT_SYMBOLS);
-  const [selectedPersonas, setSelectedPersonas] = useState(null); // null = all
+  const [symbolText, setSymbolText] = useState(() => loadLocal(SYMBOL_LS_KEY, DEFAULT_SYMBOLS));
+  const [selectedPersonas, setSelectedPersonas] = useState(() => loadLocal(PERSONAS_LS_KEY, null));
+
+  // Persist the form selection so navigating away mid-run and coming back
+  // still shows the same symbols/personas the user picked.
+  useEffect(() => { saveLocal(SYMBOL_LS_KEY, symbolText); }, [symbolText]);
+  useEffect(() => { saveLocal(PERSONAS_LS_KEY, selectedPersonas); }, [selectedPersonas]);
 
   const allPersonas = personasQ.data?.items || [];
   const effectivePersonaIds = selectedPersonas ?? allPersonas.map((p) => p.id);
 
   const runMut = useMutation({
+    mutationKey: ARENA_MUTATION_KEY,
     mutationFn: runArena,
     onSuccess: async () => {
       try {
@@ -83,6 +113,21 @@ export default function ArenaPage() {
       }
     },
   });
+
+  // Subscribe to the mutation's state independently of the local handle so
+  // a remount after navigation re-attaches to whatever's in flight (or
+  // shows the latest completed result) instead of starting blank.
+  const matchingMutations = useMutationState({
+    filters: { mutationKey: ARENA_MUTATION_KEY },
+  });
+  const lastMutation = matchingMutations[matchingMutations.length - 1];
+  const runState = {
+    isPending: lastMutation?.status === 'pending' || runMut.isPending,
+    data: (lastMutation?.status === 'success' ? lastMutation.data : null) || runMut.data,
+    error: (lastMutation?.status === 'error' ? lastMutation.error : null) || runMut.error,
+    isError: lastMutation?.status === 'error' || runMut.isError,
+    variables: lastMutation?.variables ?? runMut.variables,
+  };
 
   const symbols = parseSymbols(symbolText);
 
@@ -113,15 +158,22 @@ export default function ArenaPage() {
   // Index current verdicts by (persona_id, symbol) for the grid.
   const verdictMap = useMemo(() => {
     const out = new Map();
-    for (const c of runMut.data?.current || []) {
+    for (const c of runState.data?.current || []) {
       out.set(`${c.persona_id}::${c.symbol}`, c);
     }
     return out;
-  }, [runMut.data]);
+  }, [runState.data]);
+
+  // What symbols did the in-flight or last-completed run use? — important
+  // when the user changed the textarea before navigating away and back; we
+  // want the grid to reflect what was actually submitted.
+  const runSymbols = runState.variables?.symbols || symbols;
+  const runPersonaIds =
+    runState.variables?.persona_ids ?? effectivePersonaIds;
 
   // Prefer the freshly-run scoreboard if available; otherwise fall back to
   // the standalone /scoreboard query so the page is useful before any run.
-  const scoreboard = runMut.data?.scoreboard || scoreboardQ.data?.scoreboard || [];
+  const scoreboard = runState.data?.scoreboard || scoreboardQ.data?.scoreboard || [];
 
   return (
     <div className="space-y-8">
@@ -144,23 +196,23 @@ export default function ArenaPage() {
         selectedPersonas={selectedPersonas}
         togglePersona={togglePersona}
         selectAll={selectAll}
-        runMut={runMut}
+        runMut={{ isPending: runState.isPending }}
         onSubmit={submit}
         effectiveCount={effectivePersonaIds.length}
       />
 
-      {runMut.isError && <ApiErrorBanner error={runMut.error} label="Arena run" />}
+      {runState.isError && <ApiErrorBanner error={runState.error} label="Arena run" />}
 
-      {runMut.isPending && (
+      {runState.isPending && (
         <ArenaProgressCard
-          totalCalls={effectivePersonaIds.length * symbols.length}
+          totalCalls={runPersonaIds.length * runSymbols.length}
         />
       )}
 
-      {runMut.data && (
+      {runState.data && (
         <CurrentVerdictsGrid
-          symbols={symbols}
-          personas={allPersonas.filter((p) => effectivePersonaIds.includes(p.id))}
+          symbols={runSymbols}
+          personas={allPersonas.filter((p) => runPersonaIds.includes(p.id))}
           verdictMap={verdictMap}
         />
       )}
