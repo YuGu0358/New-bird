@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react';
 import { init, dispose } from 'klinecharts';
 
 const DEFAULT_STYLES = {
@@ -66,13 +66,18 @@ function mapPointsToBars(points) {
 }
 
 /**
+ * @typedef {{
+ *   getChart: () => any,
+ *   drawShape: (descriptor: any) => string | null,
+ * }} KLineChartHandle
+ *
  * @param {{
  *   symbol: string,
  *   points: Array<{timestamp: string|number, open: number, high: number, low: number, close: number, volume: number}>,
  *   indicators?: string[]
  * }} props
  */
-function KLineChart({ symbol, points, indicators = DEFAULT_INDICATORS }) {
+const KLineChart = forwardRef(function KLineChart({ symbol, points, indicators = DEFAULT_INDICATORS }, ref) {
   const containerRef = useRef(null);
   const chartRef = useRef(null);
   const indicatorPanesRef = useRef(new Map()); // name -> paneId
@@ -120,6 +125,18 @@ function KLineChart({ symbol, points, indicators = DEFAULT_INDICATORS }) {
     }
   }, [indicators]);
 
+  // Factory runs once; methods close over chartRef lazily. Do not add deps —
+  // refs aren't reactive, and a non-empty deps array would force the handle to
+  // recreate (breaking referential equality for Plan #3 consumers).
+  useImperativeHandle(ref, () => ({
+    getChart: () => chartRef.current,
+    drawShape: (descriptor) => {
+      const chart = chartRef.current;
+      if (!chart || !descriptor) return null;
+      return chart.createOverlay(descriptor);
+    },
+  }), []);
+
   return (
     <div
       ref={containerRef}
@@ -127,6 +144,6 @@ function KLineChart({ symbol, points, indicators = DEFAULT_INDICATORS }) {
       className="w-full h-full min-h-[420px]"
     />
   );
-}
+});
 
 export default KLineChart;
