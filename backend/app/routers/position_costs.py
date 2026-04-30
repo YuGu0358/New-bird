@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException
 
-from app.dependencies import SessionDep, service_error
+from app.dependencies import AdminTokenDep, SessionDep, service_error
 from app.models import (
     PositionCostBuyRequest,
     PositionCostListResponse,
@@ -39,7 +39,7 @@ async def get_cost(broker_account_id: int, ticker: str, session: SessionDep) -> 
     return PositionCostView(**view)
 
 
-@router.put("", response_model=PositionCostView)
+@router.put("", response_model=PositionCostView, dependencies=[AdminTokenDep])
 async def upsert_cost(request: PositionCostUpsertRequest, session: SessionDep) -> PositionCostView:
     try:
         view = await position_costs_service.upsert(
@@ -59,7 +59,7 @@ async def upsert_cost(request: PositionCostUpsertRequest, session: SessionDep) -
     return PositionCostView(**view)
 
 
-@router.post("/buy", response_model=PositionCostView)
+@router.post("/buy", response_model=PositionCostView, dependencies=[AdminTokenDep])
 async def record_buy(request: PositionCostBuyRequest, session: SessionDep) -> PositionCostView:
     try:
         view = await position_costs_service.record_buy(
@@ -76,7 +76,7 @@ async def record_buy(request: PositionCostBuyRequest, session: SessionDep) -> Po
     return PositionCostView(**view)
 
 
-@router.delete("/{broker_account_id}/{ticker}", status_code=204)
+@router.delete("/{broker_account_id}/{ticker}", status_code=204, dependencies=[AdminTokenDep])
 async def delete_cost(broker_account_id: int, ticker: str, session: SessionDep) -> None:
     try:
         deleted = await position_costs_service.delete(

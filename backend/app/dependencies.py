@@ -44,3 +44,29 @@ RequestLang = Annotated[str, Depends(_resolve_request_lang)]
 def service_error(exc: Exception) -> HTTPException:
     """Wrap an unexpected service-layer exception as a 503 with a user-safe detail."""
     return HTTPException(status_code=503, detail=friendly_service_error_detail(exc))
+
+
+def _require_admin_token(
+    x_admin_token: str | None = Header(default=None, alias="X-Admin-Token"),
+) -> None:
+    """Gate write endpoints behind SETTINGS_ADMIN_TOKEN when it is configured.
+
+    When the env var is unset (default for solo developers running locally),
+    this is a no-op — preserves the existing single-user pattern. When set
+    on a shared deploy, every write request must carry the matching value
+    in the ``X-Admin-Token`` header or the request is rejected with 401.
+
+    Apply via ``router.get(..., dependencies=[Depends(AdminTokenDep)])``
+    or ``Depends(AdminTokenDep)`` in the handler signature.
+    """
+    from app import runtime_settings
+
+    if not runtime_settings.is_admin_token_required():
+        return
+    try:
+        runtime_settings.validate_admin_token(x_admin_token)
+    except PermissionError as exc:
+        raise HTTPException(status_code=401, detail=str(exc)) from exc
+
+
+AdminTokenDep = Depends(_require_admin_token)

@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException
 
-from app.dependencies import SessionDep, service_error
+from app.dependencies import AdminTokenDep, SessionDep, service_error
 from app.models.workflow import (
     WorkflowListResponse,
     WorkflowRunView,
@@ -42,7 +42,7 @@ async def get_workflow(name: str, session: SessionDep) -> WorkflowView:
     return WorkflowView(**payload)
 
 
-@router.put("", response_model=WorkflowView)
+@router.put("", response_model=WorkflowView, dependencies=[AdminTokenDep])
 async def upsert_workflow(
     request: WorkflowUpsertRequest,
     session: SessionDep,
@@ -63,7 +63,7 @@ async def upsert_workflow(
     return WorkflowView(**payload)
 
 
-@router.delete("/{name}", status_code=204)
+@router.delete("/{name}", status_code=204, dependencies=[AdminTokenDep])
 async def delete_workflow(name: str, session: SessionDep) -> None:
     try:
         deleted = await workflow_service.delete_workflow(session, name)
@@ -74,7 +74,7 @@ async def delete_workflow(name: str, session: SessionDep) -> None:
     return None
 
 
-@router.post("/{name}/run", response_model=WorkflowRunView)
+@router.post("/{name}/run", response_model=WorkflowRunView, dependencies=[AdminTokenDep])
 async def run_workflow(name: str, session: SessionDep) -> WorkflowRunView:
     try:
         payload = await workflow_service.run_workflow_by_name(session, name)
@@ -85,7 +85,7 @@ async def run_workflow(name: str, session: SessionDep) -> WorkflowRunView:
     return WorkflowRunView(**payload)
 
 
-@router.post("/{name}/enable", response_model=WorkflowView)
+@router.post("/{name}/enable", response_model=WorkflowView, dependencies=[AdminTokenDep])
 async def enable_workflow(name: str, session: SessionDep) -> WorkflowView:
     try:
         payload = await workflow_service.enable_workflow(session, name)
@@ -96,7 +96,7 @@ async def enable_workflow(name: str, session: SessionDep) -> WorkflowView:
     return WorkflowView(**payload)
 
 
-@router.post("/{name}/disable", response_model=WorkflowView)
+@router.post("/{name}/disable", response_model=WorkflowView, dependencies=[AdminTokenDep])
 async def disable_workflow(name: str, session: SessionDep) -> WorkflowView:
     try:
         payload = await workflow_service.disable_workflow(session, name)
