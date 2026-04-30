@@ -62,6 +62,7 @@ from app.routers import workflow as workflow_router
 from app.routers import workspace as workspace_router
 from app.services import (
     bot_controller,
+    datahub_service,
     polygon_ws_publisher,
     scheduled_jobs,
 )
@@ -98,6 +99,7 @@ async def lifespan(app: FastAPI):
             "register_workflow_jobs failed at startup"
         )
 
+    await datahub_service.start()
     await polygon_ws_publisher.start()
 
     # Re-register user-uploaded strategies after DB is up.
@@ -115,6 +117,7 @@ async def lifespan(app: FastAPI):
         yield
     finally:
         await polygon_ws_publisher.shutdown()
+        await datahub_service.shutdown()
         await app_scheduler.shutdown()
         await bot_controller.shutdown_bot()
 
