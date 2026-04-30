@@ -68,6 +68,25 @@ class KeyFactor:
 
 
 @dataclass(frozen=True)
+class ActionPlan:
+    """Concrete buy/sell timing the user can actually act on.
+
+    Every field is optional so a persona that genuinely doesn't have a
+    view (e.g. a Graham analysis on a name well outside his framework)
+    can return an empty plan rather than fabricated levels. The UI
+    falls back to a "no plan" message when all primary fields are None.
+    """
+
+    should_buy_now: Optional[bool] = None
+    entry_zone_low: Optional[float] = None
+    entry_zone_high: Optional[float] = None
+    stop_loss: Optional[float] = None
+    take_profit: Optional[float] = None
+    time_horizon: Optional[str] = None       # e.g. "intraday" / "1-3 months"
+    trigger_condition: Optional[str] = None  # the WHEN — free-text rule
+
+
+@dataclass(frozen=True)
 class PersonaResponse:
     """Structured output of a single Analyzer.run() call."""
 
@@ -78,5 +97,6 @@ class PersonaResponse:
     reasoning_summary: str
     key_factors: list[KeyFactor] = field(default_factory=list)
     follow_up_questions: list[str] = field(default_factory=list)
+    action_plan: Optional[ActionPlan] = None
     raw_question: Optional[str] = None
     generated_at: Optional[datetime] = None

@@ -35,11 +35,33 @@ Return ONLY a single valid JSON object with this exact shape:
     },
     ... (3-6 items)
   ],
+  "action_plan": {
+    "should_buy_now":     <true if the user should enter a position right now at the
+                           current price, false if they should wait or skip>,
+    "entry_zone_low":     <lower bound of a buy zone in USD, or null>,
+    "entry_zone_high":    <upper bound of a buy zone in USD, or null>,
+    "stop_loss":          <protective stop price in USD, or null>,
+    "take_profit":        <first take-profit target in USD, or null>,
+    "time_horizon":       "intraday" | "1-5 days" | "1-4 weeks" | "1-3 months" |
+                           "6-12 months" | "1+ year" | null,
+    "trigger_condition":  "<one specific WHEN rule, e.g. 'buy on close above 186 with
+                            volume > 1.5x avg' — null only if you genuinely have no
+                            timing view>"
+  },
   "follow_up_questions": [
     "<question to deepen analysis>",
     ... (1-3 items)
   ]
 }
+
+action_plan rules:
+- Anchor the price levels to the *current price* in the supplied context, not to
+  arbitrary round numbers.
+- entry_zone_low must be <= entry_zone_high when both are non-null.
+- For verdict="hold" or "sell", set should_buy_now=false and put the relevant
+  exit/avoid rule in trigger_condition (e.g. "trim if breaks below 178").
+- If your analysis genuinely cannot defend a specific price (e.g. outside your
+  circle of competence), use null for the price fields rather than fabricating.
 
 Do NOT include markdown fences, explanatory prose outside the JSON, or any
 other text. The first character of your response must be `{` and the last

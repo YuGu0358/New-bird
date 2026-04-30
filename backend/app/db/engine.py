@@ -45,3 +45,28 @@ async def init_database() -> None:
 
     async with engine.begin() as connection:
         await connection.run_sync(Base.metadata.create_all)
+        await _apply_additive_migrations(connection)
+
+
+async def _apply_additive_migrations(connection) -> None:
+    """SQLite-friendly idempotent ADD-COLUMN migrations.
+
+    `create_all` only creates missing tables; it never adds columns to
+    existing ones. For schema additions on existing dev/prod DBs we
+    inspect `PRAGMA table_info` and ADD COLUMN when the column is
+    absent. Defaults backfill historical rows transparently.
+    """
+    from sqlalchemy import text
+
+    # (table, column, ddl) — append rows here to land additive migrations.
+    pending = [
+        ("agent_analyses", "action_plan_json",
+         "ALTER TABLE agent_analyses ADD COLUMN action_plan_json TEXT NOT NULL DEFAULT '{}'"),
+    ]
+
+    for table_name, column_name, ddl in pending:
+        info = await connection.exec_driver_sql(f"PRAGMA table_info({table_name})")
+        existing = {row[1] for row in info.fetchall()}  # row[1] is column name
+        if column_name in existing:
+            continue
+        await connection.execute(text(ddl))

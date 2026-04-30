@@ -262,6 +262,9 @@ class AgentAnalysis(Base):
     reasoning_summary: Mapped[str] = mapped_column(Text, nullable=False, default="")
     key_factors_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
     follow_up_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
+    # action_plan_json holds the structured ActionPlan (entry zone, stop, target,
+    # time horizon, trigger). Empty {} when the persona declined to give a plan.
+    action_plan_json: Mapped[str] = mapped_column(Text, nullable=False, default="{}")
     context_json: Mapped[str] = mapped_column(Text, nullable=False, default="{}")
     model: Mapped[str] = mapped_column(String(64), nullable=False, default="")
     created_at: Mapped[datetime] = mapped_column(

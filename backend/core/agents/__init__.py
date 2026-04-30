@@ -11,7 +11,7 @@ Public API:
 from __future__ import annotations
 
 from core.agents.analyzer import Analyzer, AnalyzerParseError
-from core.agents.base import KeyFactor, Persona, PersonaResponse, SignalWeights
+from core.agents.base import ActionPlan, KeyFactor, Persona, PersonaResponse, SignalWeights
 from core.agents.context import (
     AnalysisContext,
     ContextBuilder,
@@ -35,6 +35,7 @@ from core.agents.personas import (
 )
 
 __all__ = [
+    "ActionPlan",
     "AnalysisContext",
     "Analyzer",
     "AnalyzerParseError",

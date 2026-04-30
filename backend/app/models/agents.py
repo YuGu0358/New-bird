@@ -47,6 +47,18 @@ class KeyFactorView(BaseModel):
     interpretation: str
 
 
+class ActionPlanView(BaseModel):
+    """Concrete buy/sell timing surfaced to the UI."""
+
+    should_buy_now: Optional[bool] = None
+    entry_zone_low: Optional[float] = None
+    entry_zone_high: Optional[float] = None
+    stop_loss: Optional[float] = None
+    take_profit: Optional[float] = None
+    time_horizon: Optional[str] = None
+    trigger_condition: Optional[str] = None
+
+
 class AnalysisView(BaseModel):
     id: int
     persona_id: str
@@ -57,6 +69,7 @@ class AnalysisView(BaseModel):
     reasoning_summary: str
     key_factors: list[KeyFactorView] = Field(default_factory=list)
     follow_up_questions: list[str] = Field(default_factory=list)
+    action_plan: Optional[ActionPlanView] = None
     model: str = ""
     created_at: datetime
 

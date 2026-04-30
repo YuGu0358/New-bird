@@ -272,6 +272,7 @@ async def analyze(
         reasoning_summary=response.reasoning_summary,
         key_factors_json=json.dumps([asdict(k) for k in response.key_factors]),
         follow_up_json=json.dumps(response.follow_up_questions),
+        action_plan_json=_action_plan_json(response),
         context_json=ctx.to_json_block(),
         model=model or "",
     )
@@ -318,6 +319,7 @@ async def council(
             reasoning_summary=response.reasoning_summary,
             key_factors_json=json.dumps([asdict(k) for k in response.key_factors]),
             follow_up_json=json.dumps(response.follow_up_questions),
+            action_plan_json=_action_plan_json(response),
             context_json=ctx.to_json_block(),
             model=model or "",
         )
@@ -361,9 +363,30 @@ def _serialize(row: AgentAnalysis, response: PersonaResponse) -> dict[str, Any]:
         "reasoning_summary": response.reasoning_summary,
         "key_factors": [asdict(k) for k in response.key_factors],
         "follow_up_questions": list(response.follow_up_questions),
+        "action_plan": asdict(response.action_plan) if response.action_plan else None,
         "model": row.model,
         "created_at": row.created_at,
     }
+
+
+def _action_plan_json(response: PersonaResponse) -> str:
+    """Serialize ActionPlan to JSON. Empty {} when persona declined."""
+    if response.action_plan is None:
+        return "{}"
+    return json.dumps(asdict(response.action_plan))
+
+
+def _action_plan_dict(blob: str | None) -> dict[str, Any] | None:
+    """Best-effort deserialize from agent_analyses.action_plan_json."""
+    if not blob or blob == "{}":
+        return None
+    try:
+        decoded = json.loads(blob)
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(decoded, dict) or not decoded:
+        return None
+    return decoded
 
 
 def _serialize_row(row: AgentAnalysis) -> dict[str, Any]:
@@ -385,6 +408,7 @@ def _serialize_row(row: AgentAnalysis) -> dict[str, Any]:
         "reasoning_summary": row.reasoning_summary,
         "key_factors": key_factors,
         "follow_up_questions": follow_up,
+        "action_plan": _action_plan_dict(getattr(row, "action_plan_json", None)),
         "model": row.model,
         "created_at": row.created_at,
     }

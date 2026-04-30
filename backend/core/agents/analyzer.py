@@ -5,7 +5,7 @@ import json
 from datetime import datetime, timezone
 from typing import Optional
 
-from core.agents.base import KeyFactor, Persona, PersonaResponse
+from core.agents.base import ActionPlan, KeyFactor, Persona, PersonaResponse
 from core.agents.context import AnalysisContext
 from core.agents.llm_router import LLMRouter
 from core.i18n import DEFAULT_LANG, language_instruction, normalize_lang
@@ -116,6 +116,8 @@ class Analyzer:
             if isinstance(q, (str, int, float)) and str(q).strip()
         ]
 
+        action_plan = _parse_action_plan(payload.get("action_plan"))
+
         return PersonaResponse(
             persona_id=persona.id,
             symbol=ctx.symbol,
@@ -124,6 +126,57 @@ class Analyzer:
             reasoning_summary=reasoning_summary,
             key_factors=key_factors,
             follow_up_questions=follow_up,
+            action_plan=action_plan,
             raw_question=ctx.question,
             generated_at=datetime.now(timezone.utc),
         )
+
+
+def _parse_action_plan(raw: object) -> Optional[ActionPlan]:
+    """Best-effort parse of the LLM's action_plan block.
+
+    Missing/malformed → None rather than raising so the user still gets
+    the verdict + reasoning even if the model was sloppy with the
+    structured plan. Numeric fields use safe coercion; strings are
+    stripped; booleans accept JSON true/false only.
+    """
+    if not isinstance(raw, dict):
+        return None
+
+    def _opt_float(key: str) -> Optional[float]:
+        v = raw.get(key)
+        if v is None:
+            return None
+        try:
+            return float(v)
+        except (TypeError, ValueError):
+            return None
+
+    def _opt_str(key: str) -> Optional[str]:
+        v = raw.get(key)
+        if v is None:
+            return None
+        text = str(v).strip()
+        return text or None
+
+    should_buy = raw.get("should_buy_now")
+    should_buy_now = bool(should_buy) if isinstance(should_buy, bool) else None
+
+    plan = ActionPlan(
+        should_buy_now=should_buy_now,
+        entry_zone_low=_opt_float("entry_zone_low"),
+        entry_zone_high=_opt_float("entry_zone_high"),
+        stop_loss=_opt_float("stop_loss"),
+        take_profit=_opt_float("take_profit"),
+        time_horizon=_opt_str("time_horizon"),
+        trigger_condition=_opt_str("trigger_condition"),
+    )
+
+    # If literally every field is None, treat as "no plan" so the UI can
+    # render an empty-state badge rather than a row of em-dashes.
+    if all(getattr(plan, f) is None for f in (
+        "should_buy_now", "entry_zone_low", "entry_zone_high",
+        "stop_loss", "take_profit", "time_horizon", "trigger_condition",
+    )):
+        return None
+    return plan
