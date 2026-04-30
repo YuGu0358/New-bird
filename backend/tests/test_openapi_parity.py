@@ -121,6 +121,8 @@ EXPECTED_ROUTES: set[tuple[str, str]] = {
     ("GET",    "/api/docs/{slug}"),
     # --- Technical indicators ---
     ("GET",    "/api/indicators/{symbol}"),
+    # --- Technical signal engine ---
+    ("GET",    "/api/signals/{symbol}"),
     # --- Application scheduler observability ---
     ("GET",    "/api/scheduler/jobs"),
     # --- GlassNode on-chain metrics (opt-in) ---

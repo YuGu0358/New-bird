@@ -197,6 +197,10 @@ export const observeMarket = (symbols) =>
 export const getSymbolContext = (symbol) =>
   request(`/api/symbols/${encodeURIComponent(symbol)}/context`);
 
+/** @param {string} symbol @param {string} [range] */
+export const getSignals = (symbol, range = '3mo') =>
+  request(`/api/signals/${encodeURIComponent(symbol)}?range=${encodeURIComponent(range)}`);
+
 /** @param {File[]} files */
 export const analyzeStrategyUpload = (files) => {
   const fd = new FormData();

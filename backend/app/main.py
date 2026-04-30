@@ -46,6 +46,7 @@ from app.routers import quantlib as quantlib_router
 from app.routers import reports as reports_router
 from app.routers import screener as screener_router
 from app.routers import sectors as sectors_router
+from app.routers import signals as signals_router
 from app.routers import research as research_router
 from app.routers import risk as risk_router
 from app.routers import scheduler as scheduler_router
@@ -172,6 +173,7 @@ app.include_router(reports_router.router)
 app.include_router(scheduler_router.router)
 app.include_router(screener_router.router)
 app.include_router(sectors_router.router)
+app.include_router(signals_router.router)
 app.include_router(dbnomics_router.router)
 app.include_router(docs_router.router)
 app.include_router(geopolitics_router.router)

@@ -87,6 +87,7 @@ from app.models.position_costs import (
     PositionCostUpsertRequest,
     PositionCostView,
 )
+from app.models.signals import SignalView, SignalsResponse
 from app.models.quantlib import (
     BondAnalyticsRequest,
     BondRiskResponse,
@@ -227,6 +228,8 @@ __all__ = [
     "RuntimeSettingItem",
     "RuntimeSettingsStatus",
     "SettingsUpdateRequest",
+    "SignalView",
+    "SignalsResponse",
     "SocialCountBucket",
     "SocialPostAuthor",
     "SocialPostItem",

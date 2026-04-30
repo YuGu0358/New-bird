@@ -14,8 +14,9 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import { getChart, getSymbolContext } from '../lib/api.js';
+import { getChart, getSignals, getSymbolContext } from '../lib/api.js';
 import { LoadingState, ErrorState, EmptyState } from './primitives.jsx';
+import SignalsMarkers from './SignalsMarkers.jsx';
 import { fmtUsd, classNames } from '../lib/format.js';
 import {
   TechnicalsCard,
@@ -48,6 +49,14 @@ export default function SymbolPreview({ symbol, defaultRange = '1mo' }) {
     retry: false,
   });
 
+  const sigQ = useQuery({
+    queryKey: ['signals', symbol, range],
+    queryFn: () => getSignals(symbol, range),
+    enabled: !!symbol,
+    staleTime: 60_000,
+    retry: false,
+  });
+
   if (!symbol) return null;
   if (ctxQ.isLoading) return <LoadingState rows={4} label={`Loading ${symbol}…`} />;
   if (ctxQ.isError) return <ErrorState error={ctxQ.error} onRetry={ctxQ.refetch} />;
@@ -59,7 +68,7 @@ export default function SymbolPreview({ symbol, defaultRange = '1mo' }) {
       <Header ctx={ctx} />
       <div>
         <RangeBar value={range} onChange={setRange} />
-        <ChartBlock q={chartQ} />
+        <ChartBlock q={chartQ} signals={sigQ.data?.signals} />
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <TechnicalsCard tech={ctx.technicals} />
@@ -119,7 +128,7 @@ function RangeBar({ value, onChange }) {
   );
 }
 
-function ChartBlock({ q }) {
+function ChartBlock({ q, signals }) {
   if (q.isLoading) return <LoadingState rows={3} />;
   if (q.isError) return <ErrorState error={q.error} onRetry={q.refetch} />;
   const points = (q.data?.points || []).map((p) => ({
@@ -159,6 +168,9 @@ function ChartBlock({ q }) {
             isAnimationActive={false}
             dot={false}
           />
+          {signals && signals.length > 0 && (
+            <SignalsMarkers signals={signals} bars={points} />
+          )}
         </AreaChart>
       </ResponsiveContainer>
     </div>
