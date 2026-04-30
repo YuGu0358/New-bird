@@ -64,6 +64,21 @@ const DEFAULT_RANGE = '3mo';
 const TABS = ['overview', 'financials', 'technicals', 'news', 'sentiment', 'options'];
 const INDICATOR_RANGE = '3mo';
 const TOP_GEX_STRIKES = 5;
+const ALL_INDICATORS = ['MA', 'BOLL', 'MACD', 'RSI', 'KDJ', 'VOL'];
+const INDICATORS_STORAGE_KEY = 'research.chart.indicators';
+
+function loadIndicators() {
+  try {
+    const raw = localStorage.getItem(INDICATORS_STORAGE_KEY);
+    if (!raw) return ['MA', 'VOL'];
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return ['MA', 'VOL'];
+    const filtered = parsed.filter((x) => ALL_INDICATORS.includes(x));
+    return filtered.length ? filtered : ['MA', 'VOL'];
+  } catch {
+    return ['MA', 'VOL'];
+  }
+}
 
 const tooltipStyle = {
   background: '#0F1923',
@@ -236,12 +251,29 @@ function OverviewTab({ symbol, ctx, range, onRange }) {
     enabled: !!symbol,
     retry: false,
   });
+  const [selectedIndicators, setSelectedIndicators] = useState(loadIndicators);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(INDICATORS_STORAGE_KEY, JSON.stringify(selectedIndicators));
+    } catch {}
+  }, [selectedIndicators]);
+
+  function toggleIndicator(name) {
+    setSelectedIndicators((prev) =>
+      prev.includes(name) ? prev.filter((x) => x !== name) : [...prev, name],
+    );
+  }
+
   return (
     <div className="space-y-4">
       <TradeRecommendationCard symbol={symbol} />
       <SectionHeader title="Price" subtitle="historical close" />
-      <RangeBar value={range} onChange={onRange} />
-      <BigChart q={chartQ} />
+      <div className="flex flex-wrap items-center gap-3">
+        <RangeBar value={range} onChange={onRange} />
+        <IndicatorBar selected={selectedIndicators} onToggle={toggleIndicator} />
+      </div>
+      <BigChart q={chartQ} selected={selectedIndicators} />
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <TechnicalsCard tech={ctx?.technicals} />
         <VolumeCard volume={ctx?.volume_profile} />
@@ -275,15 +307,39 @@ function RangeBar({ value, onChange }) {
   );
 }
 
-/** @param {{ q: any }} props */
-function BigChart({ q }) {
+/** @param {{ selected: string[], onToggle: (name: string) => void }} props */
+function IndicatorBar({ selected, onToggle }) {
+  return (
+    <div className="inline-flex flex-wrap gap-1 font-mono text-[10px] tracking-[0.15em] uppercase">
+      {ALL_INDICATORS.map((name) => (
+        <button
+          key={name}
+          type="button"
+          aria-pressed={selected.includes(name)}
+          onClick={() => onToggle(name)}
+          className={classNames(
+            'px-2 py-1 border',
+            selected.includes(name)
+              ? 'border-cyan text-cyan bg-cyan/10'
+              : 'border-border-subtle text-text-secondary hover:text-text-primary',
+          )}
+        >
+          {name}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/** @param {{ q: any, selected: string[] }} props */
+function BigChart({ q, selected }) {
   if (q.isLoading) return <LoadingState rows={4} />;
   if (q.isError) return <ErrorState error={q.error} onRetry={q.refetch} />;
   const points = q.data?.points || [];
   if (!points.length) return <EmptyState title="No price data" />;
   return (
     <div className="h-[480px]">
-      <KLineChart symbol={q.data?.symbol || ''} points={q.data?.points || []} />
+      <KLineChart symbol={q.data?.symbol || ''} points={q.data?.points || []} indicators={selected} />
     </div>
   );
 }
