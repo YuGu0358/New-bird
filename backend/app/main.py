@@ -4,9 +4,9 @@ import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from core.observability import configure_logging
@@ -140,6 +140,25 @@ app.add_middleware(
 )
 app.add_middleware(CorrelationIdMiddleware)
 app.add_middleware(HttpMetricsMiddleware)
+
+
+# yfinance/upstream guards (rate_limiter.py) surface as friendly HTTP errors
+# instead of opaque 500s.
+from app.services.rate_limiter import RateLimitedError, UpstreamTimeoutError
+
+
+@app.exception_handler(RateLimitedError)
+async def _rate_limited_handler(_request: Request, exc: RateLimitedError) -> JSONResponse:
+    return JSONResponse(
+        status_code=429,
+        content={"detail": str(exc)},
+        headers={"Retry-After": f"{max(int(exc.retry_after), 1)}"},
+    )
+
+
+@app.exception_handler(UpstreamTimeoutError)
+async def _upstream_timeout_handler(_request: Request, exc: UpstreamTimeoutError) -> JSONResponse:
+    return JSONResponse(status_code=504, content={"detail": str(exc)})
 
 if FRONTEND_ASSETS_DIR.exists():
     app.mount("/assets", StaticFiles(directory=FRONTEND_ASSETS_DIR), name="assets")
