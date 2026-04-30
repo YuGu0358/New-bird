@@ -169,6 +169,9 @@ EXPECTED_ROUTES: set[tuple[str, str]] = {
     ("POST",   "/api/workflows/{name}/run"),
     ("POST",   "/api/workflows/{name}/enable"),
     ("POST",   "/api/workflows/{name}/disable"),
+    # --- Alpha Arena (leaderboard for AI Council personas) ---
+    ("POST",   "/api/arena/run"),
+    ("GET",    "/api/arena/scoreboard"),
 }
 
 

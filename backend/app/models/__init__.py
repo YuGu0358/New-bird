@@ -32,6 +32,14 @@ from app.models.alerts import (
     PriceAlertRuleUpdateRequest,
     PriceAlertRuleView,
 )
+from app.models.arena import (
+    ArenaCallSnapshot,
+    ArenaCurrentVerdict,
+    ArenaRunRequest,
+    ArenaRunResponse,
+    ArenaScoreboardEntry,
+    ArenaScoreboardResponse,
+)
 from app.models.backtest import (
     BacktestEquityCurveResponse,
     BacktestEquityPoint,
@@ -143,6 +151,12 @@ __all__ = [
     "AnalysisHistoryResponse",
     "AnalysisRequest",
     "AnalysisView",
+    "ArenaCallSnapshot",
+    "ArenaCurrentVerdict",
+    "ArenaRunRequest",
+    "ArenaRunResponse",
+    "ArenaScoreboardEntry",
+    "ArenaScoreboardResponse",
     "AssetUniverseItem",
     "BacktestEquityCurveResponse",
     "BacktestEquityPoint",

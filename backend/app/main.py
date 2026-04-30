@@ -17,6 +17,7 @@ from app.middleware.metrics import HttpMetricsMiddleware
 from app.routers import account as account_router
 from app.routers import agents as agents_router
 from app.routers import alerts as alerts_router
+from app.routers import arena as arena_router
 from app.routers import backtest as backtest_router
 from app.routers import bot as bot_router
 from app.routers import broker_accounts as broker_accounts_router
@@ -155,6 +156,7 @@ app.include_router(metrics_router.router)
 app.include_router(settings_router.router)
 app.include_router(strategy_health_router.router)
 # Tradewell-inspired additions
+app.include_router(arena_router.router)
 app.include_router(crypto_router.router)
 app.include_router(macro_router.router)
 app.include_router(valuation_router.router)
