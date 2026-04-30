@@ -15,10 +15,14 @@ from core.agents.base import ActionPlan, KeyFactor, Persona, PersonaResponse, Si
 from core.agents.context import (
     AnalysisContext,
     ContextBuilder,
+    MarketRegime,
     NewsItem,
+    OptionsFlowSnapshot,
     PositionSnapshot,
     PriceSnapshot,
     SocialSignalSnapshot,
+    TechnicalsSnapshot,
+    VolumeProfile,
 )
 from core.agents.llm_router import (
     LLMResponse,
@@ -46,8 +50,10 @@ __all__ = [
     "LLMRouter",
     "LLMRouterError",
     "LLMRouterUnavailableError",
+    "MarketRegime",
     "NewsItem",
     "OpenAILLMRouter",
+    "OptionsFlowSnapshot",
     "PERSONA_INDEX",
     "Persona",
     "PersonaResponse",
@@ -55,6 +61,8 @@ __all__ = [
     "PriceSnapshot",
     "SignalWeights",
     "SocialSignalSnapshot",
+    "TechnicalsSnapshot",
+    "VolumeProfile",
     "get_persona",
     "list_personas",
 ]

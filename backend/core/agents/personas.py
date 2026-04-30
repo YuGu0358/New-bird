@@ -84,9 +84,34 @@ def _build_prompt(persona_voice: str, weights: SignalWeights) -> str:
 
 {weights_block}
 
-You will be given a JSON context block describing a single security with
-its current price action, fundamentals snapshot, recent news, social-
-media signal aggregate, and the user's existing position (if any).
+You will be given a JSON context block describing a single security. The
+block contains these channels (any may be null when data is unavailable):
+- price: last / previous_close / 1d / 1w / 1m / 1y % changes
+- fundamentals: company_name, sector, industry, market_cap, pe_ratio, summary
+- recent_news: up to 5 headlines + summaries with timestamps
+- social: P5 social-signal aggregate (social_score, market_score, action)
+- position: user's open position if any (qty, entry, mv, unrealized_pl)
+- technicals: latest RSI(14), MACD/signal/hist, SMA(20), EMA(20), Bollinger
+  upper/middle/lower + bbands_position (0..1; price location in the band)
+- volume_profile: today_volume, avg_volume_20d, today_vs_avg_x, turnover_pct
+- options_flow: call_wall, put_wall, zero_gamma, max_pain, total_gex_dollar,
+  put_call_oi_ratio, atm_iv
+- regime: sector, sector_5d_change_pct, sector_rank_among_11, macro_tags
+
+Reasoning rules — read carefully:
+1. Ground every claim in a specific number from the context. "Momentum is
+   strong" is useless; "RSI(14)=72 + price 4% above SMA20" is useful. The
+   key_factors[].interpretation field MUST quote concrete values from the
+   context block, not paraphrase.
+2. Use the volume_profile to gauge conviction. A breakout on today_vs_avg_x
+   < 1.0 is suspect; > 1.5x is meaningful.
+3. Use options_flow to anchor entry/exit prices in your action_plan. The
+   call_wall / put_wall / zero_gamma values are real magnets.
+4. The regime block tells you whether the sector is leading or lagging —
+   factor that into time_horizon and conviction.
+5. If a channel is null, say so explicitly in reasoning_summary rather than
+   making something up.
+
 Optionally a user question follows. Reason step-by-step in your head, then
 output your final structured verdict.
 
