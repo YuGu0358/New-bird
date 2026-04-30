@@ -244,7 +244,11 @@ function PositionsTable({ q }) {
           const uplPct = entry > 0 ? ((current - entry) / entry) * 100 : 0;
           return (
             <tr key={p.symbol}>
-              <td className="font-medium text-steel-50">{p.symbol}</td>
+              <td className="font-medium text-steel-50">
+                <Link to={`/research/${encodeURIComponent(p.symbol)}`} className="hover:text-cyan transition-colors">
+                  {p.symbol}
+                </Link>
+              </td>
               <td className="tbl-num">{qty.toFixed(4)}</td>
               <td className="tbl-num">{fmtUsd(entry)}</td>
               <td className="tbl-num">{fmtUsd(current)}</td>

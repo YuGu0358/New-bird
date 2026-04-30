@@ -5,6 +5,7 @@ import MarketsPage from './pages/MarketsPage.jsx';
 import PortfolioPage from './pages/PortfolioPage.jsx';
 import NewsPage from './pages/NewsPage.jsx';
 import IntelligencePage from './pages/IntelligencePage.jsx';
+import ArenaPage from './pages/ArenaPage.jsx';
 import BacktestPage from './pages/BacktestPage.jsx';
 import AlgorithmsPage from './pages/AlgorithmsPage.jsx';
 import QuantLabPage from './pages/QuantLabPage.jsx';
@@ -18,6 +19,7 @@ import ValuationPage from './pages/ValuationPage.jsx';
 import OptionsChainPage from './pages/OptionsChainPage.jsx';
 import AccountDetailPage from './pages/AccountDetailPage.jsx';
 import WorkflowsPage from './pages/WorkflowsPage.jsx';
+import EquityResearchPage from './pages/EquityResearchPage.jsx';
 import NotFoundPage from './pages/NotFoundPage.jsx';
 
 export default function App() {
@@ -34,6 +36,7 @@ export default function App() {
         <Route path="/valuation" element={<ValuationPage />} />
         <Route path="/options" element={<OptionsChainPage />} />
         <Route path="/intelligence" element={<IntelligencePage />} />
+        <Route path="/arena" element={<ArenaPage />} />
         <Route path="/backtest" element={<BacktestPage />} />
         <Route path="/algo" element={<AlgorithmsPage />} />
         <Route path="/quantlib" element={<QuantLabPage />} />
@@ -41,6 +44,7 @@ export default function App() {
         <Route path="/social" element={<SocialPage />} />
         <Route path="/code" element={<CodePage />} />
         <Route path="/workflows" element={<WorkflowsPage />} />
+        <Route path="/research/:symbol" element={<EquityResearchPage />} />
         <Route path="/settings" element={<SettingsPage />} />
         <Route path="*" element={<NotFoundPage />} />
       </Routes>

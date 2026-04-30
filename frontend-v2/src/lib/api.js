@@ -112,6 +112,24 @@ export const getChart = (symbol, range = '3mo') =>
   request(`/api/chart/${encodeURIComponent(symbol)}?range=${range}`);
 export const getCompany = (symbol) => request(`/api/company/${encodeURIComponent(symbol)}`);
 
+/**
+ * Compute a single technical indicator series for a symbol.
+ * @param {string} symbol
+ * @param {{ name?: string, range?: string, period?: number, fast?: number, slow?: number, signal?: number, k?: number }} [opts]
+ * @returns {Promise<{ symbol: string, range: string, interval: string, indicator: string, params: object, timestamps: string[], series: Record<string, Array<number|null>>, generated_at: string }>}
+ */
+export const getIndicator = (symbol, opts = {}) => {
+  const qs = new URLSearchParams();
+  qs.set('name', opts.name || 'rsi');
+  qs.set('range', opts.range || '3mo');
+  if (opts.period != null) qs.set('period', String(opts.period));
+  if (opts.fast != null) qs.set('fast', String(opts.fast));
+  if (opts.slow != null) qs.set('slow', String(opts.slow));
+  if (opts.signal != null) qs.set('signal', String(opts.signal));
+  if (opts.k != null) qs.set('k', String(opts.k));
+  return request(`/api/indicators/${encodeURIComponent(symbol)}?${qs.toString()}`);
+};
+
 // ----------------------------------------------------------- strategies
 // `request` always sets Content-Type: application/json and JSON-stringifies
 // the body, which conflicts with FormData (browser must set the multipart
@@ -401,3 +419,10 @@ export const listAgentHistory = (params = {}) => {
   if (params.limit) qs.set('limit', String(params.limit));
   return request(`/api/agents/history${qs.toString() ? `?${qs}` : ''}`);
 };
+
+// ----------------------------------------------------------- alpha arena
+/** @param {{ symbols: string[], persona_ids?: string[] | null }} body */
+export const runArena = (body) => request('/api/arena/run', { method: 'POST', body });
+/** @param {number} [lookbackDays] */
+export const getArenaScoreboard = (lookbackDays = 90) =>
+  request(`/api/arena/scoreboard?lookback_days=${encodeURIComponent(lookbackDays)}`);
