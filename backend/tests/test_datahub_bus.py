@@ -190,3 +190,192 @@ async def test_bus_callback_exception_does_not_break_other_subscribers() -> None
 
     assert delivered == 2  # both callbacks were dispatched
     assert received == [{"price": 1.0}]
+
+
+# ---------- TTL / replay --------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_bus_replay_latest_to_late_subscriber_when_enabled() -> None:
+    bus = Bus()
+    bus.register(Topic(name="market:quote:SPY", replay_on_subscribe=True))
+    await bus.publish("market:quote:SPY", {"price": 410.0})
+
+    received: list[dict] = []
+
+    async def cb(topic: str, payload: dict) -> None:
+        received.append(payload)
+
+    bus.subscribe("market:quote:SPY", cb)
+    # Replay is dispatched on subscribe; give the loop one tick.
+    await asyncio.sleep(0)
+
+    assert received == [{"price": 410.0}]
+
+
+@pytest.mark.asyncio
+async def test_bus_replay_disabled_when_topic_flag_off() -> None:
+    bus = Bus()
+    bus.register(Topic(name="market:quote:SPY", replay_on_subscribe=False))
+    await bus.publish("market:quote:SPY", {"price": 1.0})
+
+    received: list[dict] = []
+
+    async def cb(topic: str, payload: dict) -> None:
+        received.append(payload)
+
+    bus.subscribe("market:quote:SPY", cb)
+    await asyncio.sleep(0)
+
+    assert received == []
+
+
+@pytest.mark.asyncio
+async def test_bus_replay_skipped_when_ttl_expired(monkeypatch: pytest.MonkeyPatch) -> None:
+    bus = Bus()
+    bus.register(
+        Topic(name="market:quote:SPY", replay_on_subscribe=True, ttl_seconds=10.0)
+    )
+    # Pin the monotonic clock so we can advance it deterministically.
+    clock = {"now": 1000.0}
+    monkeypatch.setattr("core.datahub.bus._monotonic", lambda: clock["now"])
+
+    await bus.publish("market:quote:SPY", {"price": 1.0})
+
+    # Advance past TTL.
+    clock["now"] += 11.0
+
+    received: list[dict] = []
+
+    async def cb(topic: str, payload: dict) -> None:
+        received.append(payload)
+
+    bus.subscribe("market:quote:SPY", cb)
+    await asyncio.sleep(0)
+
+    assert received == []
+
+
+# ---------- Dedupe --------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_bus_dedupes_identical_payloads_when_dedupe_fn_set() -> None:
+    bus = Bus()
+    bus.register(
+        Topic(
+            name="market:quote:SPY",
+            dedupe_key_fn=lambda payload: payload.get("price"),
+        )
+    )
+    received: list[dict] = []
+
+    async def cb(topic: str, payload: dict) -> None:
+        received.append(payload)
+
+    bus.subscribe("market:quote:SPY", cb)
+
+    delivered_a = await bus.publish("market:quote:SPY", {"price": 1.0, "ts": 1})
+    delivered_b = await bus.publish("market:quote:SPY", {"price": 1.0, "ts": 2})
+    delivered_c = await bus.publish("market:quote:SPY", {"price": 2.0, "ts": 3})
+    await asyncio.sleep(0)
+
+    assert delivered_a == 1
+    assert delivered_b == 0  # dropped: same dedupe key as previous publish
+    assert delivered_c == 1
+    assert received == [{"price": 1.0, "ts": 1}, {"price": 2.0, "ts": 3}]
+
+
+@pytest.mark.asyncio
+async def test_bus_dedupe_disabled_when_no_fn() -> None:
+    bus = Bus()
+    bus.register(Topic(name="market:quote:SPY"))
+    received: list[dict] = []
+
+    async def cb(topic: str, payload: dict) -> None:
+        received.append(payload)
+
+    bus.subscribe("market:quote:SPY", cb)
+    await bus.publish("market:quote:SPY", {"price": 1.0})
+    await bus.publish("market:quote:SPY", {"price": 1.0})
+    await asyncio.sleep(0)
+
+    assert len(received) == 2
+
+
+# ---------- Throttle ------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_bus_throttle_drops_publishes_within_window(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    bus = Bus()
+    bus.register(Topic(name="signal:SPY:rsi", throttle_seconds=5.0))
+    received: list[dict] = []
+
+    async def cb(topic: str, payload: dict) -> None:
+        received.append(payload)
+
+    bus.subscribe("signal:SPY:rsi", cb)
+
+    clock = {"now": 100.0}
+    monkeypatch.setattr("core.datahub.bus._monotonic", lambda: clock["now"])
+
+    delivered_a = await bus.publish("signal:SPY:rsi", {"value": 70})
+    clock["now"] += 1.0
+    delivered_b = await bus.publish("signal:SPY:rsi", {"value": 71})
+    clock["now"] += 5.0
+    delivered_c = await bus.publish("signal:SPY:rsi", {"value": 72})
+    await asyncio.sleep(0)
+
+    assert delivered_a == 1
+    assert delivered_b == 0  # within 5s window
+    assert delivered_c == 1
+    assert received == [{"value": 70}, {"value": 72}]
+
+
+@pytest.mark.asyncio
+async def test_bus_throttle_zero_means_no_throttle(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    bus = Bus()
+    bus.register(Topic(name="market:quote:SPY", throttle_seconds=0.0))
+    received: list[dict] = []
+
+    async def cb(topic: str, payload: dict) -> None:
+        received.append(payload)
+
+    bus.subscribe("market:quote:SPY", cb)
+    await bus.publish("market:quote:SPY", {"price": 1.0})
+    await bus.publish("market:quote:SPY", {"price": 2.0})
+    await asyncio.sleep(0)
+    assert len(received) == 2
+
+
+# ---------- Hardening -----------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_bus_publish_does_not_await_callback_completion() -> None:
+    """Publish must return immediately; a hung callback can't block the bus."""
+    bus = Bus()
+    bus.register(Topic(name="market:quote:SPY"))
+    started = asyncio.Event()
+    release = asyncio.Event()
+
+    async def slow(topic: str, payload: dict) -> None:
+        started.set()
+        await release.wait()
+
+    bus.subscribe("market:quote:SPY", slow)
+
+    delivered = await asyncio.wait_for(
+        bus.publish("market:quote:SPY", {"price": 1.0}),
+        timeout=0.5,
+    )
+    assert delivered == 1
+
+    # Confirm the callback actually started but did not block publish().
+    await asyncio.wait_for(started.wait(), timeout=0.5)
+    release.set()
