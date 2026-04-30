@@ -57,6 +57,7 @@ import {
   fmtNum,
   fmtPctLocal,
 } from '../components/symbolContextCards.jsx';
+import TradeRecommendationCard from '../components/TradeRecommendationCard.jsx';
 import { classNames, fmtRelativeTime, fmtUsd } from '../lib/format.js';
 
 const RANGES = ['1d', '5d', '1mo', '3mo', '6mo', '1y'];
@@ -200,6 +201,7 @@ function OverviewTab({ symbol, ctx, range, onRange }) {
   });
   return (
     <div className="space-y-4">
+      <TradeRecommendationCard symbol={symbol} />
       <SectionHeader title="Price" subtitle="historical close" />
       <RangeBar value={range} onChange={onRange} />
       <BigChart q={chartQ} />

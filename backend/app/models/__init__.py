@@ -88,6 +88,7 @@ from app.models.position_costs import (
     PositionCostView,
 )
 from app.models.signals import SignalView, SignalsResponse
+from app.models.trade_recommendation import TradeRecommendationView, TradeStanceView
 from app.models.quantlib import (
     BondAnalyticsRequest,
     BondRiskResponse,
@@ -255,7 +256,9 @@ __all__ = [
     "SymbolChartResponse",
     "TavilySearchResponse",
     "TavilySearchSource",
+    "TradeRecommendationView",
     "TradeRecord",
+    "TradeStanceView",
     "TrackedSymbolView",
     "TrendSnapshot",
     "UserStrategyDetail",

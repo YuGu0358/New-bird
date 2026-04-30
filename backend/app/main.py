@@ -56,6 +56,7 @@ from app.routers import stream as stream_router
 from app.routers import strategy_health as strategy_health_router
 from app.routers import strategies as strategies_router
 from app.routers import symbols as symbols_router
+from app.routers import trade_recommendation as trade_recommendation_router
 from app.routers import valuation as valuation_router
 from app.routers import workflow as workflow_router
 from app.routers import workspace as workspace_router
@@ -184,6 +185,7 @@ app.include_router(onchain_router.router)
 app.include_router(stream_router.router)
 app.include_router(broker_accounts_router.router)
 app.include_router(symbols_router.router)
+app.include_router(trade_recommendation_router.router)
 app.include_router(workflow_router.router)
 app.include_router(workspace_router.router)
 

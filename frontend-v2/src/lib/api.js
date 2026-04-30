@@ -201,6 +201,18 @@ export const getSymbolContext = (symbol) =>
 export const getSignals = (symbol, range = '3mo') =>
   request(`/api/signals/${encodeURIComponent(symbol)}?range=${encodeURIComponent(range)}`);
 
+/**
+ * @param {string} symbol
+ * @param {{ broker_account_id?: number, range?: string }} [opts]
+ */
+export const getTradeRecommendation = (symbol, opts = {}) => {
+  const qs = new URLSearchParams();
+  if (opts.broker_account_id != null) qs.set('broker_account_id', String(opts.broker_account_id));
+  if (opts.range) qs.set('range', opts.range);
+  const tail = qs.toString() ? `?${qs.toString()}` : '';
+  return request(`/api/trade-recommendations/${encodeURIComponent(symbol)}${tail}`);
+};
+
 /** @param {File[]} files */
 export const analyzeStrategyUpload = (files) => {
   const fd = new FormData();
