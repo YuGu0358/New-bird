@@ -1,0 +1,83 @@
+from __future__ import annotations
+import unittest
+from unittest.mock import patch, MagicMock
+
+
+class _StubAnnotation:
+    def __init__(self, kind, label, points):
+        self.kind = kind
+        self.label = label
+        self.points = points
+
+
+class _StubPoint:
+    def __init__(self, timestamp, price):
+        self.timestamp = timestamp
+        self.price = price
+
+
+class _StubResponse:
+    def __init__(self, annotations):
+        self.output_parsed = MagicMock(annotations=annotations)
+
+
+class ChartAnnotationServiceTests(unittest.IsolatedAsyncioTestCase):
+    async def test_annotate_returns_normalized_payload(self) -> None:
+        from app.services import chart_annotation_service as svc
+
+        bars = [
+            {"timestamp": "2026-04-01T00:00:00+00:00", "open": 100, "high": 105, "low": 99, "close": 102, "volume": 1000},
+            {"timestamp": "2026-04-02T00:00:00+00:00", "open": 102, "high": 108, "low": 101, "close": 107, "volume": 1300},
+        ]
+        annotations = [
+            _StubAnnotation("support", "200 日均线支撑", [_StubPoint("2026-04-01T00:00:00+00:00", 99.0)]),
+            _StubAnnotation(
+                "trendline",
+                "上升趋势线",
+                [
+                    _StubPoint("2026-04-01T00:00:00+00:00", 100.0),
+                    _StubPoint("2026-04-02T00:00:00+00:00", 107.0),
+                ],
+            ),
+        ]
+        fake_client = MagicMock()
+        fake_client.responses.parse.return_value = _StubResponse(annotations)
+
+        with patch("app.services.chart_annotation_service.create_client", return_value=fake_client):
+            result = await svc.annotate_chart("AAPL", "3mo", bars)
+
+        self.assertEqual(result["symbol"], "AAPL")
+        self.assertEqual(len(result["annotations"]), 2)
+        first = result["annotations"][0]
+        self.assertEqual(first["kind"], "support")
+        self.assertEqual(first["label"], "200 日均线支撑")
+        self.assertEqual(first["points"][0]["price"], 99.0)
+        self.assertIsInstance(first["points"][0]["timestamp"], int)
+
+    async def test_annotate_with_no_bars_raises_value_error(self) -> None:
+        from app.services import chart_annotation_service as svc
+        with self.assertRaises(ValueError):
+            await svc.annotate_chart("AAPL", "3mo", [])
+
+    async def test_annotate_skips_annotations_with_unparseable_timestamps(self) -> None:
+        from app.services import chart_annotation_service as svc
+
+        bars = [
+            {"timestamp": "2026-04-01T00:00:00+00:00", "open": 100, "high": 105, "low": 99, "close": 102, "volume": 1000},
+        ]
+        annotations = [
+            _StubAnnotation("support", "好的支撑", [_StubPoint("2026-04-01T00:00:00+00:00", 99.0)]),
+            _StubAnnotation("resistance", "坏的时间戳", [_StubPoint("not-a-date", 110.0)]),
+        ]
+        fake_client = MagicMock()
+        fake_client.responses.parse.return_value = _StubResponse(annotations)
+
+        with patch("app.services.chart_annotation_service.create_client", return_value=fake_client):
+            result = await svc.annotate_chart("AAPL", "3mo", bars)
+
+        self.assertEqual(len(result["annotations"]), 1)
+        self.assertEqual(result["annotations"][0]["kind"], "support")
+
+
+if __name__ == "__main__":
+    unittest.main()
