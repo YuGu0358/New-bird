@@ -2,7 +2,12 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from app.services.network_utils import run_sync_with_retries
+from app.services.rate_limiter import YF_LIMITER, guarded_fetch
+
+# Wall-clock budgets for a single chart fetch. Module-level so tests can
+# monkey-patch without touching the limiter.
+_FETCH_TIMEOUT_SEC = 8.0
+_ACQUIRE_TIMEOUT_SEC = 5.0
 
 # Range → (yfinance period, yfinance interval, cache TTL).
 # yfinance limits: 1m bars max ~7d back, ≤30m bars max ~60d back, daily+ has
@@ -110,11 +115,13 @@ async def get_symbol_chart(symbol: str, range_name: str = "3mo") -> dict[str, An
     if cached_item is not None and now - cached_item[0] <= ttl:
         return cached_item[1]
 
-    frame = await run_sync_with_retries(
-        _download_chart_frame_sync,
-        normalized_symbol,
-        range_config["period"],
-        range_config["interval"],
+    frame = await guarded_fetch(
+        f"yfinance.chart[{normalized_symbol}/{normalized_range}]",
+        limiter=YF_LIMITER,
+        fetch_timeout=_FETCH_TIMEOUT_SEC,
+        acquire_timeout=_ACQUIRE_TIMEOUT_SEC,
+        fn=_download_chart_frame_sync,
+        args=(normalized_symbol, range_config["period"], range_config["interval"]),
     )
     points = _frame_to_points(frame)
     if not points:

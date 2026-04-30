@@ -80,6 +80,21 @@ class ChartServiceTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaisesRegex(ValueError, "不支持的走势图区间"):
             await chart_service.get_symbol_chart("NVDA", "10y")
 
+    async def test_get_symbol_chart_propagates_upstream_timeout(self) -> None:
+        import time as _time
+        from app.services.rate_limiter import UpstreamTimeoutError
+
+        def slow_download(*_args, **_kwargs):
+            _time.sleep(2.0)
+            return None
+
+        with patch(
+            "app.services.chart_service._download_chart_frame_sync",
+            side_effect=slow_download,
+        ), patch("app.services.chart_service._FETCH_TIMEOUT_SEC", 0.05):
+            with self.assertRaises(UpstreamTimeoutError):
+                await chart_service.get_symbol_chart("AAPL", "1d")
+
     async def test_get_symbol_chart_supports_intraday_range(self) -> None:
         now = datetime(2026, 3, 15, 14, 0, tzinfo=timezone.utc)
         frame = _FakeFrame(
