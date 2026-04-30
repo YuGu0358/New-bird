@@ -20,6 +20,9 @@ const REQUIRED_KEYS = [
 const OPTIONAL_KEYS = [
   // Optional keys — labels & hints come from i18n via translateKey/hintKey
   { key: 'OPENAI_API_KEY', labelKey: 'settings.labels.openaiApiKey', hintKey: 'settings.labels.openaiHint', required: false },
+  { key: 'ANTHROPIC_API_KEY', labelKey: 'settings.labels.anthropicApiKey', hintKey: 'settings.labels.anthropicHint', required: false },
+  { key: 'COUNCIL_LLM_PROVIDER', labelKey: 'settings.labels.councilProvider', hintKey: 'settings.labels.councilProviderHint', required: false },
+  { key: 'ANTHROPIC_COUNCIL_MODEL', labelKey: 'settings.labels.anthropicModel', hintKey: 'settings.labels.anthropicModelHint', required: false },
   { key: 'FRED_API_KEY', labelKey: 'settings.labels.fredApiKey', hintKey: 'settings.labels.fredHint', required: false },
   { key: 'BROKER_BACKEND', labelKey: 'settings.labels.brokerBackend', hintKey: 'settings.labels.brokerBackendHint', required: false },
   { key: 'IBKR_HOST', labelKey: 'settings.labels.ibkrHost', hintKey: 'settings.labels.ibkrHostHint', required: false },

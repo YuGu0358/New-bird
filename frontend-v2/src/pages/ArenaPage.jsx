@@ -7,7 +7,7 @@
 // Reuses existing primitives + the same React Query patterns as
 // IntelligencePage. No new dependencies.
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Trophy, Send, Check, BarChart3 } from 'lucide-react';
 
@@ -152,9 +152,9 @@ export default function ArenaPage() {
       {runMut.isError && <ApiErrorBanner error={runMut.error} label="Arena run" />}
 
       {runMut.isPending && (
-        <div className="card">
-          <LoadingState rows={6} label={`Running ${effectivePersonaIds.length} personas × ${symbols.length} symbols…`} />
-        </div>
+        <ArenaProgressCard
+          totalCalls={effectivePersonaIds.length * symbols.length}
+        />
       )}
 
       {runMut.data && (
@@ -262,6 +262,52 @@ function RunControls({
 }
 
 // ---------------------------------------------------------- Current verdicts grid
+
+/**
+ * Time-based progress estimator. We can't get real per-call notifications
+ * from the backend (it's one POST that returns when all done), so we
+ * estimate elapsed against ~14s/call (measured in earlier smoke tests).
+ *
+ * @param {{ totalCalls: number }} props
+ */
+function ArenaProgressCard({ totalCalls }) {
+  const [elapsedMs, setElapsedMs] = useState(0);
+  useEffect(() => {
+    const startedAt = Date.now();
+    const id = setInterval(() => setElapsedMs(Date.now() - startedAt), 500);
+    return () => clearInterval(id);
+  }, []);
+
+  const PER_CALL_MS = 14_000;
+  const expectedMs = Math.max(totalCalls * PER_CALL_MS, 1);
+  const pct = Math.min(99, Math.round((elapsedMs / expectedMs) * 100));
+  const elapsedSec = Math.round(elapsedMs / 1000);
+  const expectedSec = Math.round(expectedMs / 1000);
+
+  return (
+    <div className="card space-y-3">
+      <div className="flex items-baseline justify-between">
+        <div className="font-mono text-[11px] tracking-[0.15em] uppercase text-text-muted">
+          Running arena · {totalCalls} LLM calls
+        </div>
+        <div className="text-caption text-text-secondary tabular">
+          {elapsedSec}s / ~{expectedSec}s
+        </div>
+      </div>
+      <div className="relative h-2 bg-border-subtle overflow-hidden">
+        <div
+          className="absolute top-0 left-0 h-2 bg-cyan transition-all duration-300"
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+      <div className="text-caption text-text-muted">
+        {pct >= 99
+          ? 'LLMs returning… results will land any second.'
+          : 'Each persona × symbol pair runs one LLM call. ~14s per call on average.'}
+      </div>
+    </div>
+  );
+}
 
 function CurrentVerdictsGrid({ symbols, personas, verdictMap }) {
   if (symbols.length === 0 || personas.length === 0) return null;

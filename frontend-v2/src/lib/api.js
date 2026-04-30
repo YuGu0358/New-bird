@@ -199,7 +199,7 @@ export const getSymbolContext = (symbol) =>
 
 /** @param {string} symbol @param {string} [range] */
 export const getSignals = (symbol, range = '3mo') =>
-  request(`/api/signals/${encodeURIComponent(symbol)}?range=${encodeURIComponent(range)}`);
+  request(`/api/signals/${encodeURIComponent(symbol)}?range=${range}`);
 
 /**
  * @param {string} symbol

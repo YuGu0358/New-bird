@@ -33,6 +33,18 @@ export default function AccountDetailPage() {
   const isValidId = Number.isFinite(accountPk) && accountPk > 0;
 
   const [selectedTicker, setSelectedTicker] = useState(/** @type {string|null} */ (null));
+  // Per-panel visibility flags so closing one panel doesn't hide the other.
+  // Selecting a row opens both by default (the user usually wants to set
+  // override AND cost basis at once for new positions).
+  const [overrideOpen, setOverrideOpen] = useState(true);
+  const [costEditorOpen, setCostEditorOpen] = useState(true);
+
+  // Reset both panels to open whenever the user picks a different ticker —
+  // otherwise a panel closed on ticker A would stay closed on ticker B.
+  useEffect(() => {
+    setOverrideOpen(true);
+    setCostEditorOpen(true);
+  }, [selectedTicker]);
 
   const accountQ = useQuery({
     queryKey: ['broker-account', accountPk],
@@ -82,11 +94,27 @@ export default function AccountDetailPage() {
           isError={snapshotsQ.isError} onRetry={snapshotsQ.refetch}
           selectedTicker={selectedTicker} onSelect={setSelectedTicker} />
       </div>
-      {selectedTicker && (
-        <OverrideEditor accountPk={accountPk} ticker={selectedTicker} onClear={() => setSelectedTicker(null)} />
+      {selectedTicker && overrideOpen && (
+        <OverrideEditor
+          accountPk={accountPk}
+          ticker={selectedTicker}
+          onClear={() => setOverrideOpen(false)}
+        />
       )}
-      {selectedTicker && (
-        <PositionCostEditor accountPk={accountPk} ticker={selectedTicker} onClose={() => setSelectedTicker(null)} />
+      {selectedTicker && costEditorOpen && (
+        <PositionCostEditor
+          accountPk={accountPk}
+          ticker={selectedTicker}
+          onClose={() => setCostEditorOpen(false)}
+        />
+      )}
+      {selectedTicker && (!overrideOpen || !costEditorOpen) && (
+        <button
+          className="btn-secondary btn-sm"
+          onClick={() => { setOverrideOpen(true); setCostEditorOpen(true); }}
+        >
+          Reopen closed panels
+        </button>
       )}
       {selectedTicker && (
         <div className="card">

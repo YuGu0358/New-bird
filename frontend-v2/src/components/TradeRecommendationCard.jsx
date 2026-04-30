@@ -70,9 +70,9 @@ function PositionBlock({ rec }) {
         </span></div>
       <div><span className="text-text-secondary">Stop / TP: </span>
         <span className="font-mono">
-          {rec.custom_stop_loss ? fmtUsd(rec.custom_stop_loss) : '—'}
+          {rec.custom_stop_loss != null ? fmtUsd(rec.custom_stop_loss) : '—'}
           {' / '}
-          {rec.custom_take_profit ? fmtUsd(rec.custom_take_profit) : '—'}
+          {rec.custom_take_profit != null ? fmtUsd(rec.custom_take_profit) : '—'}
         </span></div>
     </div>
   );
