@@ -3,8 +3,8 @@
 // NewBird's Tokyo cyberpunk aesthetic. Tabbed: Overview / Financials /
 // Technicals / News / Sentiment / Options. All endpoints reused from the
 // existing API; no backend changes.
-import { useMemo, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { useEffect, useMemo, useState } from 'react';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useQueries, useQuery } from '@tanstack/react-query';
 import {
   Activity,
@@ -123,25 +123,63 @@ export default function EquityResearchPage() {
  * @param {{ symbol: string, ctxQ: any }} props
  */
 function Header({ symbol, ctxQ }) {
-  if (ctxQ.isLoading) return <LoadingState rows={2} label={`Loading ${symbol}…`} />;
-  if (ctxQ.isError) return <ErrorState error={ctxQ.error} onRetry={ctxQ.refetch} />;
+  const navigate = useNavigate();
+  const [draft, setDraft] = useState(symbol);
+
+  // Keep the input in sync when the URL changes (e.g. user clicked another
+  // symbol elsewhere or hit the back button) without clobbering mid-edit.
+  useEffect(() => { setDraft(symbol); }, [symbol]);
+
+  function commit(e) {
+    e.preventDefault();
+    const next = draft.trim().toUpperCase();
+    if (next && /^[A-Za-z0-9.\-]{1,16}$/.test(next) && next !== symbol) {
+      navigate(`/research/${encodeURIComponent(next)}`);
+    }
+  }
+
   const ctx = ctxQ.data;
   const price = ctx?.price || {};
   const change = price.change_pct ?? 0;
   const tone = change > 0 ? 'text-bull' : change < 0 ? 'text-bear' : 'text-text-secondary';
   const Arrow = change >= 0 ? TrendingUp : TrendingDown;
+
   return (
-    <div className="card sticky top-0 z-10 backdrop-blur">
-      <div className="flex items-baseline gap-3 flex-wrap">
-        <div className="text-h2 font-semibold text-text-primary">{symbol}</div>
-        <div className="text-body font-mono">{fmtUsd(price.last)}</div>
-        <div className={classNames('inline-flex items-center gap-1 text-body-sm font-medium', tone)}>
-          <Arrow size={14} /> {fmtPctLocal(change)} 1d
+    <div className="card sticky top-0 z-10 backdrop-blur space-y-3">
+      <form onSubmit={commit} className="flex items-center gap-2">
+        <label className="font-mono text-[10px] tracking-[0.15em] uppercase text-text-muted">
+          Symbol
+        </label>
+        <input
+          className="input uppercase font-mono w-32"
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          placeholder="NVDA"
+          maxLength={16}
+        />
+        <button type="submit" className="btn-secondary btn-sm" disabled={draft.trim().toUpperCase() === symbol}>
+          Go
+        </button>
+        <span className="text-caption text-text-muted">
+          Or type the symbol directly into the URL: /research/AAPL
+        </span>
+      </form>
+      {ctxQ.isLoading ? (
+        <LoadingState rows={2} label={`Loading ${symbol}…`} />
+      ) : ctxQ.isError ? (
+        <ErrorState error={ctxQ.error} onRetry={ctxQ.refetch} />
+      ) : (
+        <div className="flex items-baseline gap-3 flex-wrap">
+          <div className="text-h2 font-semibold text-text-primary">{symbol}</div>
+          <div className="text-body font-mono">{fmtUsd(price.last)}</div>
+          <div className={classNames('inline-flex items-center gap-1 text-body-sm font-medium', tone)}>
+            <Arrow size={14} /> {fmtPctLocal(change)} 1d
+          </div>
+          <Badge label="1w" value={price.week_change_pct} />
+          <Badge label="1m" value={price.month_change_pct} />
+          <Badge label="1y" value={price.year_change_pct} />
         </div>
-        <Badge label="1w" value={price.week_change_pct} />
-        <Badge label="1m" value={price.month_change_pct} />
-        <Badge label="1y" value={price.year_change_pct} />
-      </div>
+      )}
     </div>
   );
 }
