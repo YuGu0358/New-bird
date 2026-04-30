@@ -135,6 +135,10 @@ EXPECTED_ROUTES: set[tuple[str, str]] = {
     # --- SSE event stream ---
     ("GET",    "/api/stream/{topic:path}"),
     ("GET",    "/api/stream/{topic:path}/latest"),
+    # --- DataHub pub/sub (Phase 6.1) ---
+    ("GET",    "/api/datahub/topics"),
+    ("GET",    "/api/datahub/latest/{topic:path}"),
+    ("GET",    "/api/datahub/stream/{topic_pattern:path}"),
     # --- SABR volatility model (Phase 5.2) ---
     ("POST",   "/api/quantlib/sabr/fit"),
     # --- Broker accounts (Phase 2.3) ---
