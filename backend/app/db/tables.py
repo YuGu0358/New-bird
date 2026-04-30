@@ -403,6 +403,40 @@ class PositionOverride(Base):
     )
 
 
+class PositionCost(Base):
+    """Per-(broker_account, ticker) cost basis + user-set protective levels.
+
+    A buy event UPSERTs the row by recomputing avg_cost from the old
+    aggregate plus the new fill. Sells reduce shares; we keep the same
+    avg_cost (FIFO is out of scope for the MVP).
+    """
+
+    __tablename__ = "position_costs"
+    __table_args__ = (
+        UniqueConstraint("broker_account_id", "ticker", name="uq_position_costs_account_ticker"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    broker_account_id: Mapped[int] = mapped_column(Integer, index=True, nullable=False)
+    ticker: Mapped[str] = mapped_column(String(16), index=True, nullable=False)
+    avg_cost_basis: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    total_shares: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    custom_stop_loss: Mapped[float | None] = mapped_column(Float, nullable=True)
+    custom_take_profit: Mapped[float | None] = mapped_column(Float, nullable=True)
+    notes: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+    )
+
+
 class PositionSnapshot(Base):
     """Periodic snapshot of broker positions (append-only time series).
 
