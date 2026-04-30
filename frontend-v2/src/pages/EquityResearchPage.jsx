@@ -19,8 +19,6 @@ import {
   Users,
 } from 'lucide-react';
 import {
-  Area,
-  AreaChart,
   Bar,
   BarChart,
   CartesianGrid,
@@ -57,6 +55,7 @@ import {
   fmtNum,
   fmtPctLocal,
 } from '../components/symbolContextCards.jsx';
+import KLineChart from '../components/KLineChart.jsx';
 import TradeRecommendationCard from '../components/TradeRecommendationCard.jsx';
 import { classNames, fmtRelativeTime, fmtUsd } from '../lib/format.js';
 
@@ -280,36 +279,11 @@ function RangeBar({ value, onChange }) {
 function BigChart({ q }) {
   if (q.isLoading) return <LoadingState rows={4} />;
   if (q.isError) return <ErrorState error={q.error} onRetry={q.refetch} />;
-  const points = (q.data?.points || []).map((p) => ({
-    t: p.timestamp || p.date || p.t,
-    v: parseFloat(p.close ?? p.price ?? p.v ?? 0),
-  }));
+  const points = q.data?.points || [];
   if (!points.length) return <EmptyState title="No price data" />;
   return (
-    <div className="h-80">
-      <ResponsiveContainer width="100%" height="100%">
-        <AreaChart data={points}>
-          <defs>
-            <linearGradient id="researchFill" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#5BA3C6" stopOpacity={0.45} />
-              <stop offset="100%" stopColor="#5BA3C6" stopOpacity={0} />
-            </linearGradient>
-          </defs>
-          <CartesianGrid stroke="#2A3645" strokeDasharray="3 3" />
-          <XAxis dataKey="t" stroke="#7C8A9A" fontSize={10} tickLine={false} hide />
-          <YAxis stroke="#7C8A9A" fontSize={10} tickLine={false} domain={['auto', 'auto']} />
-          <Tooltip contentStyle={tooltipStyle} formatter={(v) => fmtUsd(v)} />
-          <Area
-            type="monotone"
-            dataKey="v"
-            stroke="#5BA3C6"
-            strokeWidth={1.6}
-            fill="url(#researchFill)"
-            isAnimationActive={false}
-            dot={false}
-          />
-        </AreaChart>
-      </ResponsiveContainer>
+    <div className="h-[480px]">
+      <KLineChart symbol={q.data?.symbol || ''} points={q.data?.points || []} />
     </div>
   );
 }
