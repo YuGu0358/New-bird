@@ -7,7 +7,8 @@ from typing import Literal, Optional
 from pydantic import BaseModel, Field
 
 
-ModeLiteral = Literal["max_sharpe", "min_volatility", "efficient_return"]
+ModeLiteral = Literal["max_sharpe", "min_volatility", "efficient_return", "hrp"]
+BackendLiteral = Literal["pyportfolioopt", "skfolio"]
 
 
 class PortfolioOptimizeRequest(BaseModel):
@@ -16,6 +17,8 @@ class PortfolioOptimizeRequest(BaseModel):
     mode: ModeLiteral = "max_sharpe"
     target_return: Optional[float] = None
     risk_free_rate: float = Field(default=0.04, ge=0.0, le=0.5)
+    # Optional: switch from PyPortfolioOpt (default) to skfolio (HRP, robust covariance, …)
+    backend: BackendLiteral = "pyportfolioopt"
 
 
 class PortfolioOptimizeResponse(BaseModel):
@@ -28,4 +31,5 @@ class PortfolioOptimizeResponse(BaseModel):
     expected_return: float
     expected_volatility: float
     sharpe_ratio: float
+    backend: str = "pyportfolioopt"
     as_of: datetime

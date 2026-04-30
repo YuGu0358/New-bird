@@ -31,6 +31,7 @@ async def optimize_portfolio(
             mode=request.mode,
             target_return=request.target_return,
             risk_free_rate=request.risk_free_rate,
+            backend=request.backend,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

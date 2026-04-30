@@ -74,21 +74,28 @@ async def run_optimization(
     mode: str = "max_sharpe",
     target_return: float | None = None,
     risk_free_rate: float = 0.04,
+    backend: str = "pyportfolioopt",
 ) -> dict[str, Any]:
     """High-level entry point.
 
     Raises:
         ValueError on bad inputs / optimisation failure.
-        RuntimeError when yfinance returns no data (network or all bad
-        tickers).
+        RuntimeError when yfinance returns no data, or when skfolio
+        backend is requested but the package isn't installed.
     """
     if not tickers:
         raise ValueError("tickers is required")
     if len(tickers) < 2:
         raise ValueError("at least 2 tickers required")
-    if mode not in SUPPORTED_MODES:
+    if backend not in {"pyportfolioopt", "skfolio"}:
+        raise ValueError(f"backend must be 'pyportfolioopt' or 'skfolio', got {backend!r}")
+    if backend == "pyportfolioopt" and mode not in SUPPORTED_MODES:
         raise ValueError(
-            f"mode must be one of {SUPPORTED_MODES!r}, got {mode!r}"
+            f"PyPortfolioOpt mode must be one of {SUPPORTED_MODES!r}, got {mode!r}"
+        )
+    if backend == "skfolio" and mode not in {"max_sharpe", "mean_risk", "hrp"}:
+        raise ValueError(
+            f"skfolio mode must be one of mean_risk/max_sharpe/hrp, got {mode!r}"
         )
 
     normalized = [str(t).strip().upper() for t in tickers if str(t).strip()]
@@ -98,6 +105,26 @@ async def run_optimization(
     prices = await run_sync_with_retries(_download_blocking, normalized, lookback_days)
     if prices.empty:
         raise RuntimeError("yfinance returned no price data for the requested tickers")
+
+    if backend == "skfolio":
+        from core.portfolio_opt.skfolio_adapter import optimise as sk_optimise
+        sk_mode = "hrp" if mode == "hrp" else "mean_risk"
+        sk_result = await run_sync_with_retries(
+            sk_optimise, prices, mode=sk_mode, risk_free_rate=risk_free_rate,
+        )
+        return {
+            "tickers": normalized,
+            "lookback_days": lookback_days,
+            "mode": mode,
+            "target_return": target_return,
+            "risk_free_rate": risk_free_rate,
+            "weights": sk_result.weights,
+            "expected_return": sk_result.expected_return,
+            "expected_volatility": sk_result.expected_volatility,
+            "sharpe_ratio": sk_result.sharpe_ratio,
+            "backend": "skfolio",
+            "as_of": datetime.now(timezone.utc),
+        }
 
     result = optimise(
         prices,
@@ -116,5 +143,6 @@ async def run_optimization(
         "expected_return": result.expected_return,
         "expected_volatility": result.expected_volatility,
         "sharpe_ratio": result.sharpe_ratio,
+        "backend": "pyportfolioopt",
         "as_of": datetime.now(timezone.utc),
     }
