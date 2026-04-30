@@ -18,7 +18,7 @@ import asyncio
 
 import pytest
 
-from app.services import polygon_ws_publisher
+from app.services import datahub_service, polygon_ws_publisher
 from app.streaming import Event, event_bus
 
 
@@ -36,13 +36,14 @@ def _enable(monkeypatch: pytest.MonkeyPatch, *, enabled: bool, key: bool) -> Non
 
 @pytest.fixture(autouse=True)
 async def _reset_state() -> None:
-    """Each test starts with no task + clean bus."""
+    """Each test starts with no task + clean datahub bus."""
     polygon_ws_publisher._reset_for_tests()  # noqa: SLF001
-    event_bus.reset()
+    await datahub_service.shutdown()
+    await datahub_service.start()
     yield
     await polygon_ws_publisher.shutdown()
     polygon_ws_publisher._reset_for_tests()  # noqa: SLF001
-    event_bus.reset()
+    await datahub_service.shutdown()
 
 
 @pytest.mark.asyncio
@@ -68,7 +69,7 @@ async def test_start_runs_when_enabled_and_publishes(
     """Mock _run_sdk_stream so it calls our handler with a tick then waits."""
     _enable(monkeypatch, enabled=True, key=True)
 
-    received: list[Event] = []
+    received: list[dict] = []
 
     async def fake_stream(symbols, on_tick):
         # Simulate one tick then keep the connection alive forever.
@@ -84,24 +85,21 @@ async def test_start_runs_when_enabled_and_publishes(
 
     received_evt = asyncio.Event()
 
-    async def consume() -> None:
-        async for evt in event_bus.subscribe("quote:SPY"):
-            received.append(evt)
+    async def cb(topic: str, payload: dict) -> None:
+        if topic == "market:quote:SPY":
+            received.append({"topic": topic, "data": payload})
             received_evt.set()
-            break
 
-    consumer_task = asyncio.create_task(consume())
-    await asyncio.sleep(0)  # let the consumer register
+    datahub_service.bus().subscribe("market:quote:*", cb)
 
     await polygon_ws_publisher.start()
     assert polygon_ws_publisher.is_running()
 
     await asyncio.wait_for(received_evt.wait(), timeout=2.0)
-    await consumer_task
     assert len(received) == 1
-    assert received[0].topic == "quote:SPY"
-    assert received[0].data["symbol"] == "SPY"
-    assert received[0].data["price"] == 500.0
+    assert received[0]["topic"] == "market:quote:SPY"
+    assert received[0]["data"]["symbol"] == "SPY"
+    assert received[0]["data"]["price"] == 500.0
 
 
 @pytest.mark.asyncio
@@ -135,17 +133,13 @@ async def test_stream_error_triggers_reconnect(
 
     received_evt = asyncio.Event()
 
-    async def consume() -> None:
-        async for _ in event_bus.subscribe("quote:SPY"):
-            received_evt.set()
-            break
+    async def cb(topic: str, payload: dict) -> None:
+        received_evt.set()
 
-    consumer_task = asyncio.create_task(consume())
-    await asyncio.sleep(0)
+    datahub_service.bus().subscribe("market:quote:SPY", cb)
 
     await polygon_ws_publisher.start()
     await asyncio.wait_for(received_evt.wait(), timeout=2.0)
-    await consumer_task
 
     assert call_count["n"] >= 2  # reconnected at least once
 
