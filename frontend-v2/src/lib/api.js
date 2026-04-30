@@ -150,6 +150,10 @@ export const analyzeStrategy = (body) =>
 export const observeMarket = (symbols) =>
   request('/api/strategies/observe-market', { method: 'POST', body: { symbols } });
 
+/** Pull the same enriched context the AI Council sees for one symbol. */
+export const getSymbolContext = (symbol) =>
+  request(`/api/symbols/${encodeURIComponent(symbol)}/context`);
+
 /** @param {File[]} files */
 export const analyzeStrategyUpload = (files) => {
   const fd = new FormData();

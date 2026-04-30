@@ -23,6 +23,7 @@ import {
   EmptyState,
 } from '../components/primitives.jsx';
 import { fmtRelativeTime, classNames } from '../lib/format.js';
+import SymbolPreview from '../components/SymbolPreview.jsx';
 
 export default function AlgorithmsPage() {
   const { t } = useTranslation();
@@ -323,34 +324,51 @@ function UploadForm({ onSubmit, pending }) {
   );
 }
 
+function parseSymbolList(text) {
+  return text
+    .split(/[\s,]+/)
+    .map((s) => s.trim().toUpperCase())
+    .filter((s) => /^[A-Z]{1,6}$/.test(s))
+    .slice(0, 8);
+}
+
 function ObserveMarketForm({ onSubmit, pending }) {
   const [text, setText] = useState('SPY, QQQ, NVDA, AAPL, MSFT');
+  const symbols = parseSymbolList(text);
+
   function commit(e) {
     e.preventDefault();
-    const symbols = text
-      .split(/[\s,]+/)
-      .map((s) => s.trim().toUpperCase())
-      .filter((s) => /^[A-Z]{1,6}$/.test(s));
     if (symbols.length > 0) onSubmit(symbols);
   }
+
   return (
-    <form onSubmit={commit} className="space-y-3">
-      <textarea
-        className="input min-h-[80px] font-mono uppercase"
-        value={text}
-        onChange={(e) => setText(e.target.value)}
-        placeholder="SPY, QQQ, NVDA, AAPL, MSFT — comma or space separated, up to 8 symbols"
-      />
-      <div className="flex justify-between items-center">
-        <span className="text-caption text-text-muted">
-          LLM 会读取每个 symbol 的成交量 / 技术指标 / 期权 flow / 行业相对强度，给出适合当前市场状态的策略参数。
-        </span>
-        <button type="submit" className="btn-primary btn-sm inline-flex items-center gap-2"
-          disabled={!text.trim() || pending}>
-          <Eye size={12} /> Observe
-        </button>
-      </div>
-    </form>
+    <div className="space-y-4">
+      <form onSubmit={commit} className="space-y-3">
+        <textarea
+          className="input min-h-[80px] font-mono uppercase"
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          placeholder="SPY, QQQ, NVDA, AAPL, MSFT — comma or space separated, up to 8 symbols"
+        />
+        <div className="flex justify-between items-center">
+          <span className="text-caption text-text-muted">
+            下面每只 symbol 卡片是 LLM 看到的同一份数据 — 价格图 / RSI·MACD·BBANDS / 成交量倍率 / 期权 flow / 行业相对强度。
+          </span>
+          <button type="submit" className="btn-primary btn-sm inline-flex items-center gap-2"
+            disabled={symbols.length === 0 || pending}>
+            <Eye size={12} /> Observe
+          </button>
+        </div>
+      </form>
+
+      {symbols.length > 0 && (
+        <div className="space-y-3">
+          {symbols.map((s) => (
+            <SymbolPreview key={s} symbol={s} />
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
