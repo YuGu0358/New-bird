@@ -131,18 +131,43 @@ async def delete_workflow(session: AsyncSession, name: str) -> bool:
 # --- Engine wiring -------------------------------------------------------
 
 def _make_default_fetcher():
-    """Return a deterministic mock fetcher for the MVP.
+    """Return a real OHLC fetcher backed by chart_service (yfinance).
 
-    TODO(phase-followup): replace with a real adapter over
-    ``polygon_service.get_history`` (and a fallback to yfinance) so the
-    engine sees actual closing prices. Keeping this stub for now means
-    the workflow can run in CI with no API keys and tests stay
-    deterministic.
+    The fetcher returns the CLOSE-ONLY series for the requested lookback
+    so detectors that only care about price levels keep working as
+    before. If the live fetch fails (rate-limit, no symbol, …) we fall
+    back to the deterministic ramp so a single bad symbol doesn't stop
+    a multi-symbol workflow run.
     """
+    from app.services import chart_service
 
     async def _fetch(ticker: str, lookback_days: int) -> list[float]:
-        # Synthetic ramp; the ticker is folded in so different tickers
-        # yield different series — useful for sanity-checking pipelines.
+        # Pick the smallest yfinance period that covers the lookback.
+        if lookback_days <= 5:
+            range_name = "5d"
+        elif lookback_days <= 22:
+            range_name = "1mo"
+        elif lookback_days <= 66:
+            range_name = "3mo"
+        elif lookback_days <= 132:
+            range_name = "6mo"
+        else:
+            range_name = "1y"
+
+        try:
+            chart = await chart_service.get_symbol_chart(ticker, range_name=range_name)
+            points = list((chart or {}).get("points") or [])
+            closes = [
+                float(p.get("close") or p.get("price") or 0.0)
+                for p in points
+                if (p.get("close") or p.get("price"))
+            ]
+            if closes:
+                return closes[-lookback_days:] if len(closes) > lookback_days else closes
+        except Exception:
+            logger.exception("chart fetch failed for %s; falling back to synthetic", ticker)
+
+        # Deterministic fallback so tests + dry runs still produce something.
         seed = sum(ord(c) for c in ticker) % 17
         return [100.0 + seed + i * 0.1 for i in range(lookback_days)]
 
@@ -172,14 +197,40 @@ def _default_indicator(name: str, period: int, prices: list[float]) -> list[floa
 
 
 async def _default_paper_order(payload: dict[str, Any]) -> dict[str, Any]:
-    """No-op order dispatcher for the MVP.
+    """Real Alpaca paper-order dispatcher with safe fallback.
 
-    The Phase 5.6 spec says ``paper_order_fn`` is a hook so tests can
-    mock it; in production we just log the intent. Real broker wiring
-    is a follow-up.
+    Workflow node payloads carry ``side`` and ``qty`` (and ``paper:True``
+    by convention). We always force ``paper`` mode here regardless of
+    the node's flag — production live trading from a workflow is out of
+    scope. If Alpaca isn't configured / fails, we log the intent and
+    return ``{"accepted": True, "broker": "noop", "reason": ...}`` so
+    the workflow doesn't break.
     """
-    logger.info("workflow paper-order intent: %s", payload)
-    return {"accepted": True, "broker": "noop"}
+    side = str(payload.get("side") or "").lower()
+    if side not in {"buy", "sell"}:
+        return {"accepted": False, "broker": "noop", "reason": f"invalid side: {side!r}"}
+
+    symbol = str(payload.get("symbol") or "").upper()
+    if not symbol:
+        # Workflow order nodes may not carry a symbol; without one we
+        # can't dispatch — keep a structured no-op result.
+        logger.info("workflow paper-order without symbol: %s", payload)
+        return {"accepted": True, "broker": "noop", "reason": "no symbol in node payload"}
+
+    qty = payload.get("qty")
+    notional = payload.get("notional")
+    try:
+        from app.services import alpaca_service
+        result = await alpaca_service.submit_order(
+            symbol,
+            side,
+            qty=float(qty) if qty is not None else None,
+            notional=float(notional) if notional is not None else None,
+        )
+        return {"accepted": True, "broker": "alpaca-paper", "order": result}
+    except Exception as exc:
+        logger.warning("workflow paper-order failed for %s/%s: %s", symbol, side, exc)
+        return {"accepted": True, "broker": "noop", "reason": str(exc)}
 
 
 def _to_view(result: WorkflowRunResult) -> dict[str, Any]:

@@ -296,7 +296,20 @@ async def _run_order(
         raise ValueError("order.data.qty must be numeric") from exc
     if qty_f <= 0:
         raise ValueError("order.data.qty must be > 0")
-    payload = {"side": side, "qty": qty_f, "paper": paper}
+
+    # Inherit ticker from the closest upstream data-fetch node so the order
+    # dispatcher knows which symbol to send. Node-local override wins.
+    ticker = node.data.get("ticker")
+    if not ticker:
+        for parent_out in _ancestor_outputs(ctx, node.id).values():
+            t = parent_out.get("ticker")
+            if isinstance(t, str) and t:
+                ticker = t
+                break
+
+    payload: dict[str, Any] = {"side": side, "qty": qty_f, "paper": paper}
+    if ticker:
+        payload["symbol"] = ticker
     dispatch_result = await paper_order_fn(payload)
     return {**payload, "dispatched": True, "broker_response": dispatch_result}
 
