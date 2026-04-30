@@ -112,3 +112,102 @@ class OpenAILLMRouter(LLMRouter):
         from app import runtime_settings
 
         return runtime_settings.get_setting("OPENAI_API_KEY")
+
+
+class AnthropicLLMRouter(LLMRouter):
+    """Anthropic driver. Uses Claude Sonnet 4.5 by default — faster + cheaper
+    than Opus for the structured-JSON council prompt. Override with the
+    `model` arg or via the `ANTHROPIC_COUNCIL_MODEL` runtime setting.
+
+    Reads the API key from `runtime_settings.get_setting('ANTHROPIC_API_KEY')`.
+    """
+
+    # Hard cap on Claude reply length — generous enough for full council JSON
+    # but bounded so a runaway response can't burn through the credit pool.
+    MAX_TOKENS = 4096
+
+    def __init__(self, *, default_model: Optional[str] = None) -> None:
+        self._default_model_override = default_model
+
+    async def generate(
+        self,
+        *,
+        system: str,
+        user: str,
+        model: Optional[str] = None,
+    ) -> LLMResponse:
+        # Lazy import so unit tests that monkeypatch the service don't need
+        # the SDK installed and so backend boot tolerates a missing package.
+        from app.services import anthropic_service
+
+        if not anthropic_service.is_configured():
+            raise LLMRouterUnavailableError(
+                "ANTHROPIC_API_KEY is not configured. Set it under Settings."
+            )
+
+        try:
+            client = anthropic_service.create_client()
+        except RuntimeError as exc:
+            raise LLMRouterError(str(exc)) from exc
+
+        model_id = (
+            model
+            or self._default_model_override
+            or anthropic_service.resolve_default_model()
+        )
+
+        try:
+            # Anthropic SDK is sync; offload to the default thread pool so
+            # we don't block the event loop in the request path.
+            import asyncio
+
+            response = await asyncio.to_thread(
+                client.messages.create,
+                model=model_id,
+                system=system,
+                messages=[{"role": "user", "content": user}],
+                max_tokens=self.MAX_TOKENS,
+            )
+        except Exception as exc:  # noqa: BLE001
+            raise LLMRouterError(f"Anthropic call failed: {exc}") from exc
+
+        text = self._extract_text(response)
+        if not text.strip():
+            raise LLMRouterError("Anthropic returned empty content")
+
+        usage = getattr(response, "usage", None)
+        return LLMResponse(
+            text=text,
+            model=getattr(response, "model", model_id) or model_id,
+            tokens_in=getattr(usage, "input_tokens", None),
+            tokens_out=getattr(usage, "output_tokens", None),
+        )
+
+    @staticmethod
+    def _extract_text(response) -> str:
+        """Pull the first text block out of an Anthropic Messages response.
+
+        The SDK returns `content` as a list of typed blocks; for our
+        single-shot prompts we expect exactly one TextBlock.
+        """
+        content = getattr(response, "content", None) or []
+        for block in content:
+            text = getattr(block, "text", None)
+            if isinstance(text, str) and text:
+                return text
+        return ""
+
+
+def get_default_router() -> LLMRouter:
+    """Pick a router from runtime settings; default to OpenAI for backwards compat.
+
+    Set `COUNCIL_LLM_PROVIDER` to "anthropic" to route the council through
+    Claude. Any other value (including unset) keeps the existing OpenAI path.
+    """
+    # Lazy import to avoid a circular dep at module load.
+    from app import runtime_settings
+
+    provider = runtime_settings.get_setting("COUNCIL_LLM_PROVIDER", "openai") or "openai"
+    if provider.strip().lower() == "anthropic":
+        return AnthropicLLMRouter()
+    return OpenAILLMRouter()

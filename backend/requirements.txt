@@ -12,6 +12,7 @@ aiosqlite
 httpx
 yfinance
 openai
+anthropic>=0.40,<1
 pypdf
 QuantLib
 ib_async>=1.0.3,<2

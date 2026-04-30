@@ -25,11 +25,13 @@ from core.agents.context import (
     VolumeProfile,
 )
 from core.agents.llm_router import (
+    AnthropicLLMRouter,
     LLMResponse,
     LLMRouter,
     LLMRouterError,
     LLMRouterUnavailableError,
     OpenAILLMRouter,
+    get_default_router,
 )
 from core.agents.personas import (
     BUILTIN_PERSONAS,
@@ -43,6 +45,7 @@ __all__ = [
     "AnalysisContext",
     "Analyzer",
     "AnalyzerParseError",
+    "AnthropicLLMRouter",
     "BUILTIN_PERSONAS",
     "ContextBuilder",
     "KeyFactor",
@@ -63,6 +66,7 @@ __all__ = [
     "SocialSignalSnapshot",
     "TechnicalsSnapshot",
     "VolumeProfile",
+    "get_default_router",
     "get_persona",
     "list_personas",
 ]

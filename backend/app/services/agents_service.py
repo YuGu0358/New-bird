@@ -37,7 +37,6 @@ from core.agents import (
     ContextBuilder,
     MarketRegime,
     NewsItem,
-    OpenAILLMRouter,
     OptionsFlowSnapshot,
     PersonaResponse,
     PositionSnapshot,
@@ -45,6 +44,7 @@ from core.agents import (
     SocialSignalSnapshot,
     TechnicalsSnapshot,
     VolumeProfile,
+    get_default_router,
     get_persona,
     list_personas,
 )
@@ -481,7 +481,7 @@ async def analyze(
 ) -> dict[str, Any]:
     persona = get_persona(persona_id)
     builder = builder or LiveContextBuilder()
-    router = router or OpenAILLMRouter()
+    router = router or get_default_router()
     analyzer = Analyzer(router=router)
     target_lang = normalize_lang(lang)
 
@@ -527,7 +527,7 @@ async def council(
 
     builder = LiveContextBuilder()
     ctx = await builder.build(symbol, question=question)
-    router = OpenAILLMRouter()
+    router = get_default_router()
     analyzer = Analyzer(router=router)
     target_lang = normalize_lang(lang)
 
