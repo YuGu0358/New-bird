@@ -12,6 +12,7 @@ class ChartAnnotation(BaseModel):
     kind: Literal["support", "resistance", "trendline", "note"]
     label: str
     points: list[ChartAnnotationPoint]
+    group_id: str = "ai-annotation"
 
 
 class ChartAnnotationResponse(BaseModel):

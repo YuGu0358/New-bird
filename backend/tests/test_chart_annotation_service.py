@@ -53,6 +53,7 @@ class ChartAnnotationServiceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(first["label"], "200 日均线支撑")
         self.assertEqual(first["points"][0]["price"], 99.0)
         self.assertIsInstance(first["points"][0]["timestamp"], int)
+        self.assertEqual(first["group_id"], "ai-annotation")
 
     async def test_annotate_with_no_bars_raises_value_error(self) -> None:
         from app.services import chart_annotation_service as svc
@@ -77,6 +78,38 @@ class ChartAnnotationServiceTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(len(result["annotations"]), 1)
         self.assertEqual(result["annotations"][0]["kind"], "support")
+
+
+class PromptBuildTests(unittest.TestCase):
+    def test_prompt_includes_pivots_and_technicals(self) -> None:
+        from app.services.chart_annotation_service import _build_prompt
+
+        bars = []
+        # Synthesize a W-shape so both swing lows and swing highs exist:
+        # 30 down, 30 up (forming first low + middle high), 30 down, 30 up.
+        sequence = (
+            list(range(30, 0, -1))
+            + list(range(0, 30))
+            + list(range(30, 0, -1))
+            + list(range(0, 30))
+        )
+        for i, offset in enumerate(sequence):
+            close = 50 + offset
+            bars.append({
+                "timestamp": f"2026-01-{(i % 28) + 1:02d}T00:00:00+00:00",
+                "open": close, "high": close + 2, "low": close - 2,
+                "close": close, "volume": 1_000_000,
+            })
+
+        prompt = _build_prompt("AAPL", "6mo", bars)
+        # Sanity: contains the technicals header.
+        self.assertIn("RSI14", prompt)
+        self.assertIn("MA50", prompt)
+        self.assertIn("MA200", prompt)
+        self.assertIn("swing pivots", prompt)
+        # Pivot lines start with "  [low]" or "  [high]".
+        self.assertTrue(any(line.lstrip().startswith("[low]") for line in prompt.splitlines()))
+        self.assertTrue(any(line.lstrip().startswith("[high]") for line in prompt.splitlines()))
 
 
 if __name__ == "__main__":
