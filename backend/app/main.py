@@ -26,6 +26,7 @@ from app.routers import crypto as crypto_router
 from app.routers import datahub as datahub_router
 from app.routers import dbnomics as dbnomics_router
 from app.routers import docs as docs_router
+from app.routers import factors as factors_router
 from app.routers import geopolitics as geopolitics_router
 from app.routers import health as health_router
 from app.routers import heatmap as heatmap_router
@@ -86,6 +87,17 @@ async def lifespan(app: FastAPI):
     await init_database()
     await app_scheduler.start()
     scheduled_jobs.register_default_jobs()
+
+    # Daily Factor Forge evolution. Wrapped — a scheduler/import failure
+    # here must never block app boot.
+    try:
+        from app.services import factor_pipeline as ff_pipeline
+        await ff_pipeline.schedule_default_jobs()
+    except Exception:
+        import logging
+        logging.getLogger(__name__).exception(
+            "factor_pipeline.schedule_default_jobs failed at startup"
+        )
 
     # Register any active scheduled workflows. Needs a DB session, so it
     # can't live inside register_default_jobs() — see workflow_service.
@@ -200,6 +212,7 @@ app.include_router(sectors_router.router)
 app.include_router(signals_router.router)
 app.include_router(dbnomics_router.router)
 app.include_router(docs_router.router)
+app.include_router(factors_router.router)
 app.include_router(geopolitics_router.router)
 app.include_router(heatmap_router.router)
 app.include_router(indicators_router.router)

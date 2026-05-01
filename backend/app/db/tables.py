@@ -682,6 +682,33 @@ class DailyActiveUniverse(Base):
     range_score: Mapped[float] = mapped_column(Float, nullable=False)
 
 
+class FactorEvolutionRun(Base):
+    """One row per Factor Forge daily evolution run.
+
+    Created in ``running`` state at the start of the pipeline; updated in
+    place when the pipeline finishes (``completed``) or aborts
+    (``failed``). The ``stats_json`` blob stores the per-stage
+    ``GenerationStats`` records as a JSON-serialized dict so the UI can
+    show generation-by-generation progress without a separate table.
+    """
+
+    __tablename__ = "factor_evolution_runs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    started_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+    )
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="running")
+    stage1_best: Mapped[float | None] = mapped_column(Float, nullable=True)
+    stage2_best: Mapped[float | None] = mapped_column(Float, nullable=True)
+    total_persisted: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    stats_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
 class FactorRecord(Base):
     """Surviving factor stored in the Factor Forge vector library.
 
