@@ -191,42 +191,57 @@ async def _load_last_dates(symbols: list[str]) -> dict[str, date]:
 
 
 async def _persist_bars(records: list[dict]) -> int:
-    """Insert bar rows. Returns count actually persisted (best-effort)."""
+    """UPSERT bar rows (SQLite ON CONFLICT DO UPDATE). Returns count.
+
+    Naive ``session.add`` would crash on the second run because the
+    composite (symbol, date) PK already exists. SQLite's INSERT OR REPLACE
+    handles the re-fetch case (e.g., the daily incremental running twice)
+    without requiring caller-side dedupe.
+    """
     if not records:
         return 0
-    inserted = 0
-    async with AsyncSessionLocal() as session:
-        for r in records:
-            try:
-                vwap_val = r.get("vwap")
-                vwap_clean = (
-                    float(vwap_val)
-                    if vwap_val is not None and not pd.isna(vwap_val)
-                    else None
-                )
-                session.add(
-                    DailyBar(
-                        symbol=str(r["symbol"]),
-                        date=r["date"],
-                        open=float(r["open"]),
-                        high=float(r["high"]),
-                        low=float(r["low"]),
-                        close=float(r["close"]),
-                        volume=int(r["volume"]),
-                        vwap=vwap_clean,
-                    )
-                )
-                inserted += 1
-            except (KeyError, TypeError, ValueError):
-                logger.debug("Skipping malformed bar record: %s", r, exc_info=True)
-                continue
+    from sqlalchemy.dialects.sqlite import insert as sqlite_insert
+
+    rows: list[dict] = []
+    for r in records:
         try:
+            vwap_val = r.get("vwap")
+            vwap_clean = (
+                float(vwap_val)
+                if vwap_val is not None and not pd.isna(vwap_val)
+                else None
+            )
+            rows.append({
+                "symbol": str(r["symbol"]),
+                "date": r["date"],
+                "open": float(r["open"]),
+                "high": float(r["high"]),
+                "low": float(r["low"]),
+                "close": float(r["close"]),
+                "volume": int(r["volume"]),
+                "vwap": vwap_clean,
+            })
+        except (KeyError, TypeError, ValueError):
+            logger.debug("Skipping malformed bar record: %s", r, exc_info=True)
+            continue
+    if not rows:
+        return 0
+    stmt = sqlite_insert(DailyBar).values(rows)
+    update_cols = {c.name: stmt.excluded[c.name] for c in DailyBar.__table__.columns
+                   if c.name not in {"symbol", "date"}}
+    stmt = stmt.on_conflict_do_update(
+        index_elements=["symbol", "date"],
+        set_=update_cols,
+    )
+    async with AsyncSessionLocal() as session:
+        try:
+            await session.execute(stmt)
             await session.commit()
+            return len(rows)
         except Exception:
             await session.rollback()
-            logger.warning("DailyBar insert chunk failed", exc_info=True)
+            logger.warning("DailyBar upsert failed", exc_info=True)
             return 0
-    return inserted
 
 
 async def update_daily_bars(symbols: list[str] | None = None) -> int:
