@@ -89,6 +89,7 @@
     "social": "社媒",
     "code": "代码",
     "workflows": "工作流",
+    "factors": "因子工厂",
     "settings": "设置",
     "brand": "Newbird",
     "tagline": "量化控制台",
@@ -798,5 +799,10 @@
       "navigate": "↑↓ 切换 · ↵ 选择",
       "close": "Esc 关闭"
     }
+  },
+  "factors": {
+    "title": "因子工厂",
+    "universe": "活跃股",
+    "runs": "运行记录"
   }
 }

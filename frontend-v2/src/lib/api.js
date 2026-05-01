@@ -476,6 +476,26 @@ export const disableWorkflow = (name) =>
 export const getWorkflowRuns = (name, limit = 50) =>
   request(`/api/workflows/${encodeURIComponent(name)}/runs?limit=${limit}`);
 
+// ----------------------------------------------------------- factor forge
+export const listFactors = (params = {}) => {
+  const qs = new URLSearchParams();
+  if (params.limit) qs.set('limit', params.limit);
+  if (params.sort_by) qs.set('sort_by', params.sort_by);
+  if (params.min_fitness != null) qs.set('min_fitness', params.min_fitness);
+  return request(`/api/factors/library${qs.toString() ? `?${qs}` : ''}`);
+};
+export const getFactorDetail = (id) => request(`/api/factors/library/${encodeURIComponent(id)}`);
+export const getActiveUniverse = (date, topN = 100) => {
+  const qs = new URLSearchParams();
+  if (date) qs.set('date', date);
+  qs.set('top_n', topN);
+  return request(`/api/factors/active-universe?${qs}`);
+};
+export const listFactorRuns = (limit = 20) =>
+  request(`/api/factors/runs?limit=${limit}`);
+export const triggerFactorRun = () =>
+  request('/api/factors/run-evolution', { method: 'POST', body: {} });
+
 // ----------------------------------------------------------- agents (P7)
 export const listPersonas = () => request('/api/agents/personas');
 export const analyzeWithPersona = (body) => request('/api/agents/analyze', { method: 'POST', body });

@@ -89,6 +89,7 @@
     "social": "Social",
     "code": "Code",
     "workflows": "Workflows",
+    "factors": "Factor Forge",
     "settings": "Settings",
     "brand": "Newbird",
     "tagline": "Quant Console",
@@ -798,5 +799,10 @@
       "navigate": "↑↓ navigate · ↵ select",
       "close": "Esc to close"
     }
+  },
+  "factors": {
+    "title": "Factor Forge",
+    "universe": "Active universe",
+    "runs": "Runs"
   }
 }

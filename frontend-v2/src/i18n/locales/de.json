@@ -89,6 +89,7 @@
     "social": "Soziales",
     "code": "Code",
     "workflows": "Workflows",
+    "factors": "Faktor-Schmiede",
     "settings": "Einstellungen",
     "brand": "Newbird",
     "tagline": "Quant-Konsole",
@@ -798,5 +799,10 @@
       "navigate": "↑↓ navigieren · ↵ auswählen",
       "close": "Esc zum Schließen"
     }
+  },
+  "factors": {
+    "title": "Faktor-Schmiede",
+    "universe": "Aktives Universum",
+    "runs": "Läufe"
   }
 }
