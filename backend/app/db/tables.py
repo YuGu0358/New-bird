@@ -1,9 +1,9 @@
 """ORM table definitions. Imported for side effects via app.db.engine.init_database()."""
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
-from sqlalchemy import Boolean, DateTime, Float, Index, Integer, JSON, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, Date, DateTime, Float, Index, Integer, JSON, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.engine import Base
@@ -561,6 +561,51 @@ class WorkflowRun(Base):
         nullable=False,
         default=lambda: datetime.now(timezone.utc),
         index=True,
+    )
+
+
+class SymbolMeta(Base):
+    """Static-ish per-symbol metadata for factor mining (sector, industry, market cap).
+
+    Refreshed weekly from yfinance. The `refreshed_at` watermark lets the
+    refresh job skip rows that are still inside the freshness window
+    (default 7 days), so a daily run only hits yfinance for stale rows.
+    """
+
+    __tablename__ = "factor_symbol_meta"
+
+    symbol: Mapped[str] = mapped_column(String(16), primary_key=True)
+    sector: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    industry: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    market_cap: Mapped[float | None] = mapped_column(Float, nullable=True)
+    refreshed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+    )
+
+
+class DailyNewsFeatures(Base):
+    """Per-(symbol, date) news features used as factor inputs.
+
+    `news_count` is the headline count we collected for the day,
+    `sentiment` is an OpenAI-scored aggregate in [-1, +1], and
+    `headlines` is a JSON-encoded list of the top 5 headline strings
+    so downstream consumers can re-score with a different model
+    without re-fetching from Tavily.
+    """
+
+    __tablename__ = "factor_daily_news_features"
+
+    symbol: Mapped[str] = mapped_column(String(16), primary_key=True)
+    date: Mapped[date] = mapped_column(Date, primary_key=True)
+    news_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    sentiment: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    headlines: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
     )
 
 
