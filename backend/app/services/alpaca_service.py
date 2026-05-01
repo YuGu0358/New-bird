@@ -143,12 +143,18 @@ async def submit_order(
     notional: float | None = None,
     order_type: str = "market",
     time_in_force: str = "day",
+    take_profit_price: float | None = None,
+    stop_loss_price: float | None = None,
 ) -> dict[str, Any]:
     if (qty is None and notional is None) or (qty is not None and notional is not None):
         raise ValueError("Provide exactly one of qty or notional when submitting an order.")
 
+    has_bracket = take_profit_price is not None or stop_loss_price is not None
+    if has_bracket and side != "buy":
+        raise ValueError("Bracket orders require side='buy'")
+
     client = _create_client()
-    order_payload = {
+    order_payload: dict[str, Any] = {
         "symbol": symbol,
         "side": side,
         "type": order_type,
@@ -158,6 +164,13 @@ async def submit_order(
         order_payload["qty"] = qty
     if notional is not None:
         order_payload["notional"] = notional
+
+    if has_bracket:
+        order_payload["order_class"] = "bracket"
+        if take_profit_price is not None:
+            order_payload["take_profit"] = {"limit_price": take_profit_price}
+        if stop_loss_price is not None:
+            order_payload["stop_loss"] = {"stop_price": stop_loss_price}
 
     order = await asyncio.to_thread(
         client.submit_order,

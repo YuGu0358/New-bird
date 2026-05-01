@@ -310,6 +310,20 @@ async def _run_order(
     payload: dict[str, Any] = {"side": side, "qty": qty_f, "paper": paper}
     if ticker:
         payload["symbol"] = ticker
+
+    take_profit = node.data.get("take_profit")
+    stop_loss = node.data.get("stop_loss")
+    if take_profit is not None:
+        try:
+            payload["take_profit"] = float(take_profit)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("order.data.take_profit must be numeric") from exc
+    if stop_loss is not None:
+        try:
+            payload["stop_loss"] = float(stop_loss)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("order.data.stop_loss must be numeric") from exc
+
     dispatch_result = await paper_order_fn(payload)
     return {**payload, "dispatched": True, "broker_response": dispatch_result}
 

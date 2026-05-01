@@ -249,6 +249,39 @@ async def test_order_node_invalid_side_errors() -> None:
 
 
 @pytest.mark.asyncio
+async def test_order_node_forwards_bracket_params() -> None:
+    from core.workflow.engine import execute_workflow
+
+    captured: dict[str, Any] = {}
+
+    async def stub_order_fn(payload: dict[str, Any]) -> dict[str, Any]:
+        captured.update(payload)
+        return {"accepted": True, "broker": "stub"}
+
+    definition = {
+        "nodes": [
+            {"id": "f", "type": "data-fetch", "position": {"x": 0, "y": 0}, "data": {"ticker": "AAPL"}},
+            {"id": "o", "type": "order", "position": {"x": 0, "y": 0},
+             "data": {"side": "buy", "qty": 5, "take_profit": 200.0, "stop_loss": 180.0}},
+        ],
+        "edges": [{"id": "e1", "source": "f", "target": "o"}],
+    }
+
+    async def stub_fetcher(ticker: str, lookback_days: int) -> list[float]:
+        return [100.0 + i for i in range(lookback_days)]
+
+    await execute_workflow(
+        definition,
+        fetcher=stub_fetcher,
+        indicator_fn=_indicator_last_price,
+        paper_order_fn=stub_order_fn,
+    )
+    assert captured["take_profit"] == 200.0
+    assert captured["stop_loss"] == 180.0
+    assert captured["symbol"] == "AAPL"
+
+
+@pytest.mark.asyncio
 async def test_node_error_does_not_halt_subsequent_nodes() -> None:
     """A failing earlier node still lets independent later nodes run."""
     definition = {

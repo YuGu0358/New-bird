@@ -307,6 +307,17 @@ async def _default_paper_order(payload: dict[str, Any]) -> dict[str, Any]:
         await _record_workflow_run(payload, result)
         return result
 
+    take_profit = payload.get("take_profit")
+    stop_loss = payload.get("stop_loss")
+    take_profit_f = float(take_profit) if take_profit is not None else None
+    stop_loss_f = float(stop_loss) if stop_loss is not None else None
+
+    if (take_profit_f is not None or stop_loss_f is not None) and side != "buy":
+        result = {"accepted": False, "broker": "noop",
+                  "reason": "Bracket requires side='buy'"}
+        await _record_workflow_run(payload, result)
+        return result
+
     try:
         from app.services import alpaca_service
         order = await alpaca_service.submit_order(
@@ -314,6 +325,8 @@ async def _default_paper_order(payload: dict[str, Any]) -> dict[str, Any]:
             side,
             qty=qty,
             notional=notional,
+            take_profit_price=take_profit_f,
+            stop_loss_price=stop_loss_f,
         )
         result = {"accepted": True, "broker": "alpaca-paper", "order": order}
         await _record_workflow_run(payload, result)
