@@ -71,6 +71,7 @@ function mapPointsToBars(points) {
  *   drawShape: (descriptor: any) => string | null,
  *   startDrawing: (name: string) => string | null,
  *   clearOverlays: (groupId?: string) => void,
+ *   captureImage: () => string | null,
  * }} KLineChartHandle
  *
  * @param {{
@@ -157,6 +158,14 @@ const KLineChart = forwardRef(function KLineChart({ symbol, points, indicators =
       } else {
         chart.removeOverlay();
       }
+    },
+    captureImage: () => {
+      const chart = chartRef.current;
+      if (!chart) return null;
+      // klinecharts v9: getConvertPictureUrl(includeOverlay?, type?, backgroundColor?)
+      // includeOverlay=false so the AI sees the bare candles + indicators only
+      // (no AI-drawn or user-drawn overlays, since those would be circular).
+      return chart.getConvertPictureUrl(false, 'png', '#0F1923');
     },
   }), []);
 

@@ -337,7 +337,14 @@ function OverviewTab({ symbol, ctx, range, onRange }) {
   }, [chartFullscreen]);
 
   const annotateMutation = useMutation({
-    mutationFn: () => annotateChart(symbol, range),
+    mutationFn: () => {
+      const handle = chartHandleRef.current;
+      const image = handle?.captureImage?.();
+      if (!image) {
+        return Promise.reject(new Error('图表尚未就绪, 请稍候再试'));
+      }
+      return annotateChart(symbol, { range, image_base64: image });
+    },
     onSuccess: (data) => {
       const handle = chartHandleRef.current;
       if (!handle) return;
