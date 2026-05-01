@@ -26,6 +26,7 @@ import {
   runWorkflow,
   enableWorkflow,
   disableWorkflow,
+  getWorkflowRuns,
 } from '../lib/api.js';
 import { classNames, fmtRelativeTime } from '../lib/format.js';
 
@@ -70,6 +71,10 @@ export default function WorkflowsPage() {
 
   // Editor state. `mode === 'new'` → name editable; `mode === 'edit'` → name locked.
   const [editor, setEditor] = useState(null);
+  // Name of the workflow whose audit history we're showing in the
+  // "Recent runs" panel. Set when the user opens an editor or runs a
+  // workflow from the list — null means show the "select a workflow" hint.
+  const [selectedName, setSelectedName] = useState(null);
   // Persist last run result/error to localStorage so navigating away and
   // coming back doesn't lose the panel that took 30s+ to compute.
   const [runResult, setRunResultRaw] = useState(() => _wfLoad(RUN_RESULT_LS_KEY, null));
@@ -126,6 +131,7 @@ export default function WorkflowsPage() {
   const startNew = () => {
     setRunResult(null);
     setRunError(null);
+    setSelectedName(null);
     setEditor({ mode: 'new', draft: { ...NEW_DRAFT, definition: { ...EMPTY_DEFINITION } } });
   };
 
@@ -133,6 +139,7 @@ export default function WorkflowsPage() {
   const startEdit = (wf) => {
     setRunResult(null);
     setRunError(null);
+    setSelectedName(wf.name);
     setEditor({
       mode: 'edit',
       draft: {
@@ -187,10 +194,20 @@ export default function WorkflowsPage() {
     try {
       const result = await runMut.mutateAsync(editor.draft.name);
       setRunResult(result);
+      await queryClient.invalidateQueries({
+        queryKey: ['workflow-runs', editor.draft.name],
+      });
     } catch (err) {
       setRunError(err);
     }
   };
+
+  const runsQ = useQuery({
+    queryKey: ['workflow-runs', selectedName],
+    queryFn: () => getWorkflowRuns(selectedName, 50),
+    enabled: Boolean(selectedName),
+    refetchInterval: 30_000,
+  });
 
   return (
     <div className="space-y-8">
@@ -219,9 +236,12 @@ export default function WorkflowsPage() {
           onEdit={startEdit}
           onRun={async (name) => {
             setRunError(null);
+            setSelectedName(name);
             try {
               const result = await runMut.mutateAsync(name);
               setRunResult(result);
+              // Audit row will land asynchronously; refresh history shortly.
+              await queryClient.invalidateQueries({ queryKey: ['workflow-runs', name] });
             } catch (err) {
               setRunError(err);
             }
@@ -303,6 +323,88 @@ export default function WorkflowsPage() {
           {runResult && <RunResultPanel result={runResult} />}
         </div>
       )}
+
+      <div className="card">
+        <SectionHeader
+          title="Recent runs"
+          subtitle={
+            selectedName
+              ? `Last 50 paper-order dispatches for ${selectedName}`
+              : 'Audit log of paper-order dispatches'
+          }
+        />
+        <RecentRunsPanel selectedName={selectedName} q={runsQ} />
+      </div>
+    </div>
+  );
+}
+
+/**
+ * @param {{ selectedName: string|null, q: import('@tanstack/react-query').UseQueryResult }} props
+ */
+function RecentRunsPanel({ selectedName, q }) {
+  if (!selectedName) {
+    return (
+      <p className="text-body-sm text-text-secondary px-1 py-3">
+        Select a workflow to see history.
+      </p>
+    );
+  }
+  if (q.isLoading) return <LoadingState rows={3} />;
+  if (q.isError) return <ErrorState error={q.error} onRetry={q.refetch} />;
+  const items = q.data?.items ?? [];
+  if (items.length === 0) {
+    return (
+      <p className="text-body-sm text-text-secondary px-1 py-3">
+        No runs recorded yet for <span className="font-mono">{selectedName}</span>.
+      </p>
+    );
+  }
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-body-sm">
+        <thead>
+          <tr className="text-left font-mono text-[10px] tracking-[0.15em] uppercase text-text-muted border-b border-border-subtle">
+            <th className="py-2 pr-4">When</th>
+            <th className="py-2 pr-4">Symbol</th>
+            <th className="py-2 pr-4">Side</th>
+            <th className="py-2 pr-4">Qty</th>
+            <th className="py-2 pr-4">Broker</th>
+            <th className="py-2 pr-4">Result</th>
+            <th className="py-2 pr-4">Reason</th>
+          </tr>
+        </thead>
+        <tbody>
+          {items.map((row) => (
+            <tr key={row.id} className="border-b border-border-subtle/40">
+              <td className="py-2 pr-4 font-mono text-[11px] text-text-secondary">
+                {fmtRelativeTime(row.dispatched_at)}
+              </td>
+              <td className="py-2 pr-4 font-mono text-text-primary">{row.symbol ?? '—'}</td>
+              <td className="py-2 pr-4 font-mono uppercase text-text-secondary">
+                {row.side ?? '—'}
+              </td>
+              <td className="py-2 pr-4 font-mono text-text-secondary">
+                {row.qty != null ? row.qty : row.notional != null ? `$${row.notional}` : '—'}
+              </td>
+              <td className="py-2 pr-4 font-mono text-[11px] text-text-secondary">
+                {row.broker ?? '—'}
+              </td>
+              <td className="py-2 pr-4">
+                <span className={row.accepted ? 'pill-cyan' : 'pill-default'}>
+                  {row.accepted ? 'accepted' : 'rejected'}
+                </span>
+              </td>
+              <td
+                className="py-2 pr-4 text-text-muted truncate max-w-[280px]"
+                title={row.reason ?? ''}
+              >
+                {row.reason ?? '—'}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }

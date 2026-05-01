@@ -542,6 +542,28 @@ class Workflow(Base):
     )
 
 
+class WorkflowRun(Base):
+    """Append-only log of paper-order dispatches issued by workflows."""
+
+    __tablename__ = "workflow_runs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    workflow_name: Mapped[str] = mapped_column(String(120), index=True, nullable=False)
+    symbol: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
+    side: Mapped[str | None] = mapped_column(String(8), nullable=True)
+    qty: Mapped[float | None] = mapped_column(Float, nullable=True)
+    notional: Mapped[float | None] = mapped_column(Float, nullable=True)
+    accepted: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    broker: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    reason: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    dispatched_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+        index=True,
+    )
+
+
 class JournalEntry(Base):
     """User-authored investment journal entry (markdown body + symbol tags + mood).
 

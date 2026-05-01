@@ -20,6 +20,7 @@ the TODO inside the function.
 """
 from __future__ import annotations
 
+import contextvars
 import json
 import logging
 from datetime import datetime, timezone
@@ -36,6 +37,15 @@ from core.indicators import compute_indicator
 from core.workflow import NodeResult, WorkflowRunResult, execute_workflow
 
 logger = logging.getLogger(__name__)
+
+
+# ContextVar set by ``run_workflow_by_name`` so the paper-order hook can
+# attribute its audit row to the originating workflow without changing
+# the ``paper_order_fn`` signature on the engine (preserves Phase 7
+# compatibility).
+_CURRENT_WORKFLOW_NAME: contextvars.ContextVar[str | None] = contextvars.ContextVar(
+    "_current_workflow_name", default=None
+)
 
 
 # --- Serialisation -------------------------------------------------------
@@ -196,6 +206,56 @@ def _default_indicator(name: str, period: int, prices: list[float]) -> list[floa
     return next(iter(series_map.values()))
 
 
+async def _record_workflow_run(
+    payload: dict[str, Any], result: dict[str, Any]
+) -> None:
+    """Best-effort: write one ``workflow_runs`` row per paper-order dispatch.
+
+    Reads the originating workflow name from the ``_CURRENT_WORKFLOW_NAME``
+    ContextVar, set by ``run_workflow_by_name``. Silently no-ops when the
+    var is unset (e.g., direct calls from tests / other code paths).
+
+    Wraps everything in try/except so a DB hiccup never breaks workflow
+    execution — the caller relies on this contract.
+    """
+    workflow_name = _CURRENT_WORKFLOW_NAME.get()
+    if workflow_name is None:
+        return
+
+    try:
+        from app.db.engine import AsyncSessionLocal
+        from app.db.tables import WorkflowRun
+
+        symbol_raw = payload.get("symbol")
+        side_raw = payload.get("side")
+        qty_raw = payload.get("qty")
+        notional_raw = payload.get("notional")
+
+        symbol = str(symbol_raw).upper() if symbol_raw else None
+        side = str(side_raw).lower() if side_raw else None
+        qty = float(qty_raw) if qty_raw is not None else None
+        notional = float(notional_raw) if notional_raw is not None else None
+        reason = result.get("reason")
+        # Truncate reason defensively to fit the 512-char column.
+        reason_str = str(reason)[:512] if reason is not None else None
+
+        row = WorkflowRun(
+            workflow_name=workflow_name,
+            symbol=symbol,
+            side=side,
+            qty=qty,
+            notional=notional,
+            accepted=bool(result.get("accepted")),
+            broker=result.get("broker"),
+            reason=reason_str,
+        )
+        async with AsyncSessionLocal() as session:
+            session.add(row)
+            await session.commit()
+    except Exception:  # noqa: BLE001 — audit must never break execution
+        logger.warning("workflow audit insert failed for %s", workflow_name, exc_info=True)
+
+
 async def _default_paper_order(payload: dict[str, Any]) -> dict[str, Any]:
     """Real Alpaca paper-order dispatcher with safe fallback.
 
@@ -205,17 +265,24 @@ async def _default_paper_order(payload: dict[str, Any]) -> dict[str, Any]:
     scope. If Alpaca isn't configured / fails, we log the intent and
     return ``{"accepted": True, "broker": "noop", "reason": ...}`` so
     the workflow doesn't break.
+
+    Every dispatch — accepted or rejected — is best-effort logged to the
+    ``workflow_runs`` audit table (when invoked through ``run_workflow_by_name``).
     """
     side = str(payload.get("side") or "").lower()
     if side not in {"buy", "sell"}:
-        return {"accepted": False, "broker": "noop", "reason": f"invalid side: {side!r}"}
+        result = {"accepted": False, "broker": "noop", "reason": f"invalid side: {side!r}"}
+        await _record_workflow_run(payload, result)
+        return result
 
     symbol = str(payload.get("symbol") or "").upper()
     if not symbol:
         # Workflow order nodes may not carry a symbol; without one we
         # can't dispatch — keep a structured no-op result.
         logger.info("workflow paper-order without symbol: %s", payload)
-        return {"accepted": True, "broker": "noop", "reason": "no symbol in node payload"}
+        result = {"accepted": True, "broker": "noop", "reason": "no symbol in node payload"}
+        await _record_workflow_run(payload, result)
+        return result
 
     # Hard caps so a malformed workflow definition can't request a
     # 1B-share paper trade that bloats the broker's logs and obscures
@@ -230,24 +297,32 @@ async def _default_paper_order(payload: dict[str, Any]) -> dict[str, Any]:
     notional = float(notional_raw) if notional_raw is not None else None
 
     if qty is not None and (qty <= 0 or qty > MAX_QTY):
-        return {"accepted": False, "broker": "noop",
-                "reason": f"qty {qty} outside (0, {MAX_QTY}]"}
+        result = {"accepted": False, "broker": "noop",
+                  "reason": f"qty {qty} outside (0, {MAX_QTY}]"}
+        await _record_workflow_run(payload, result)
+        return result
     if notional is not None and (notional <= 0 or notional > MAX_NOTIONAL):
-        return {"accepted": False, "broker": "noop",
-                "reason": f"notional {notional} outside (0, {MAX_NOTIONAL}]"}
+        result = {"accepted": False, "broker": "noop",
+                  "reason": f"notional {notional} outside (0, {MAX_NOTIONAL}]"}
+        await _record_workflow_run(payload, result)
+        return result
 
     try:
         from app.services import alpaca_service
-        result = await alpaca_service.submit_order(
+        order = await alpaca_service.submit_order(
             symbol,
             side,
             qty=qty,
             notional=notional,
         )
-        return {"accepted": True, "broker": "alpaca-paper", "order": result}
+        result = {"accepted": True, "broker": "alpaca-paper", "order": order}
+        await _record_workflow_run(payload, result)
+        return result
     except Exception as exc:
         logger.warning("workflow paper-order failed for %s/%s: %s", symbol, side, exc)
-        return {"accepted": True, "broker": "noop", "reason": str(exc)}
+        result = {"accepted": True, "broker": "noop", "reason": str(exc)}
+        await _record_workflow_run(payload, result)
+        return result
 
 
 def _to_view(result: WorkflowRunResult) -> dict[str, Any]:
@@ -281,12 +356,16 @@ async def run_workflow_by_name(
     row = await get_workflow(session, name)
     if row is None:
         return None
-    result = await execute_workflow(
-        row["definition"],
-        fetcher=_make_default_fetcher(),
-        indicator_fn=_default_indicator,
-        paper_order_fn=_default_paper_order,
-    )
+    token = _CURRENT_WORKFLOW_NAME.set(name)
+    try:
+        result = await execute_workflow(
+            row["definition"],
+            fetcher=_make_default_fetcher(),
+            indicator_fn=_default_indicator,
+            paper_order_fn=_default_paper_order,
+        )
+    finally:
+        _CURRENT_WORKFLOW_NAME.reset(token)
     return _to_view(result)
 
 

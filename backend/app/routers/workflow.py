@@ -7,13 +7,19 @@ verbatim and only validates structure when the engine runs.
 from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException
+from sqlalchemy import desc, select
 
+from app.db.tables import WorkflowRun
 from app.dependencies import AdminTokenDep, SessionDep, service_error
 from app.models.workflow import (
     WorkflowListResponse,
     WorkflowRunView,
     WorkflowUpsertRequest,
     WorkflowView,
+)
+from app.models.workflow_runs import (
+    WorkflowRunsResponse,
+    WorkflowRunView as WorkflowRunAuditView,
 )
 from app.services import workflow_service
 
@@ -105,3 +111,25 @@ async def disable_workflow(name: str, session: SessionDep) -> WorkflowView:
     if payload is None:
         raise HTTPException(status_code=404, detail="Workflow not found")
     return WorkflowView(**payload)
+
+
+@router.get("/{name}/runs", response_model=WorkflowRunsResponse)
+async def list_workflow_runs(
+    name: str, session: SessionDep, limit: int = 50
+) -> WorkflowRunsResponse:
+    """Return the most-recent N audit rows for one workflow.
+
+    Read-only — rows are produced by ``workflow_service._record_workflow_run``
+    every time a workflow run dispatches a paper order.
+    """
+    bounded_limit = max(1, min(int(limit), 200))
+    stmt = (
+        select(WorkflowRun)
+        .where(WorkflowRun.workflow_name == name)
+        .order_by(desc(WorkflowRun.dispatched_at))
+        .limit(bounded_limit)
+    )
+    rows = (await session.execute(stmt)).scalars().all()
+    return WorkflowRunsResponse(
+        items=[WorkflowRunAuditView.model_validate(row) for row in rows]
+    )

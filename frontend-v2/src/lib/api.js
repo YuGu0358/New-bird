@@ -453,6 +453,28 @@ export const enableWorkflow = (name) =>
 export const disableWorkflow = (name) =>
   request(`/api/workflows/${encodeURIComponent(name)}/disable`, { method: 'POST' });
 
+/**
+ * @typedef {Object} WorkflowRunAudit
+ * @property {number} id
+ * @property {string} workflow_name
+ * @property {string|null} symbol
+ * @property {string|null} side
+ * @property {number|null} qty
+ * @property {number|null} notional
+ * @property {boolean} accepted
+ * @property {string|null} broker
+ * @property {string|null} reason
+ * @property {string} dispatched_at
+ */
+
+/**
+ * @param {string} name
+ * @param {number} [limit=50]
+ * @returns {Promise<{ items: WorkflowRunAudit[] }>}
+ */
+export const getWorkflowRuns = (name, limit = 50) =>
+  request(`/api/workflows/${encodeURIComponent(name)}/runs?limit=${limit}`);
+
 // ----------------------------------------------------------- agents (P7)
 export const listPersonas = () => request('/api/agents/personas');
 export const analyzeWithPersona = (body) => request('/api/agents/analyze', { method: 'POST', body });
