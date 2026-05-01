@@ -31,16 +31,17 @@ class _AIResponse(BaseModel):
 
 
 _INSTRUCTIONS = (
-    "你是一位资深的技术分析师。给定一段已降采样的 OHLCV K 线序列、自动识别的 swing pivots、以及当前的核心技术指标，"
-    "请最多给出 5 条**有价值的**标注。规则:\n"
-    "1) 支撑位 (support) 必须画在过去出现过明显反弹的低点附近, 而不是当前价附近。\n"
-    "2) 阻力位 (resistance) 必须画在过去多次被压制的高点附近。\n"
-    "3) 趋势线 (trendline) 必须连接两个真实存在的同向 pivot (例: 两个递增的 swing low 形成上升趋势线)。\n"
-    "4) 形态备注 (note) 用于双底/双顶/头肩等形态, 必须带有简短的判断依据。\n"
-    "5) 标注的 timestamp 字段必须严格等于 supplied bars 或 pivots 列表中出现过的 timestamp 字符串, 不要编造。\n"
-    "6) 价格字段保留两位小数。\n"
-    "7) 如果当前没有足够清晰的形态, 宁可少画 (返回 1-2 条) 也不要硬凑 5 条。\n"
-    "8) 不要给出任何交易指令; label 用一句简短中文说明判断依据。"
+    "你是一位资深的技术分析师, 你正在看一张专业的 K 线图 (蜡烛图)。"
+    "图上 y 轴是价格, x 轴是时间, 红色蜡烛为下跌, 绿色为上涨。下方还有 MA 副图和成交量副图。"
+    "请基于你看到的整张图, 给出最多 5 条**真正有价值**的标注:\n"
+    "1) 支撑位 (support) — 画在图上多次反弹的低点附近;\n"
+    "2) 阻力位 (resistance) — 画在图上多次被压制的高点附近;\n"
+    "3) 趋势线 (trendline) — 必须连接两个真实的同向 pivot, 画出延伸方向;\n"
+    "4) 形态备注 (note) — 双底/双顶/头肩/三角形等, 必须标在图上能看出形态的位置, 并写明判断依据;\n"
+    "5) 标注的 timestamp 字段必须严格等于用户给你的合法时间戳列表中的某个值, 不要编造时间;\n"
+    "6) 价格保留两位小数;\n"
+    "7) 如果整张图没有清晰可标的形态, 宁可只返回 1-2 条, 不要为了凑数硬画;\n"
+    "8) 不要给出任何交易指令; label 用一句简短中文说明你为什么标在这里。"
 )
 
 
@@ -113,25 +114,27 @@ def _build_prompt(symbol: str, range_name: str, bars: list[dict[str, Any]]) -> s
     last = bars[-1]
 
     lines: list[str] = [
-        f"标的: {symbol}, 区间: {range_name}, 共 {len(bars)} 根 K 线 (已降采样到 {len(sampled)} 根供你阅读)。",
-        f"当前价: {last['close']:.2f} | RSI14: {tech.get('rsi14')} | MACD hist: {tech.get('macd_hist')} | "
-        f"MA50: {tech.get('ma50')} | MA200: {tech.get('ma200')}",
+        f"标的: {symbol}, 区间: {range_name}, 共 {len(bars)} 根 K 线。",
+        f"当前价: {last['close']:.2f} | RSI14: {tech.get('rsi14')} | "
+        f"MACD hist: {tech.get('macd_hist')} | MA50: {tech.get('ma50')} | MA200: {tech.get('ma200')}",
         "",
-        "降采样后的 K 线序列 (timestamp / O / H / L / C / V):",
+        "你看到的图就是这条 K 线序列的渲染。请在图上识别支撑/阻力/趋势线/形态。",
+        "返回时, timestamp 必须从下面这份合法时间戳列表中选 (这是图上每根 K 线对应的真实时间, ISO-8601):",
     ]
     for b in sampled:
-        lines.append(
-            f"  {b['timestamp']} {b['open']:.2f} {b['high']:.2f} {b['low']:.2f} {b['close']:.2f} {b['volume']}"
-        )
+        lines.append(f"  {b['timestamp']}  close={b['close']:.2f}")
     lines.append("")
-    lines.append("已自动识别的 swing pivots (你画线时优先使用这些点):")
-    for idx, b, kind in pivots[-12:]:  # cap to last 12 to keep prompt size bounded
-        lines.append(f"  [{kind}] index={idx} timestamp={b['timestamp']} close={b['close']:.2f}")
+    lines.append("已自动识别的近期 swing pivots (画支撑/阻力/趋势线时优先用这些):")
+    for idx, b, kind in pivots[-12:]:
+        lines.append(f"  [{kind}] {b['timestamp']} close={b['close']:.2f}")
     return "\n".join(lines)
 
 
 def _annotate_chart_sync(
-    symbol: str, range_name: str, bars: list[dict[str, Any]]
+    symbol: str,
+    range_name: str,
+    bars: list[dict[str, Any]],
+    image_data_url: str,
 ) -> dict[str, Any]:
     client = create_client()
     model_name = (
@@ -142,12 +145,21 @@ def _annotate_chart_sync(
     response = client.responses.parse(
         model=model_name,
         instructions=_INSTRUCTIONS,
-        input=[{"role": "user", "content": prompt}],
+        input=[
+            {
+                "role": "user",
+                "content": [
+                    {"type": "input_text", "text": prompt},
+                    {"type": "input_image", "image_url": image_data_url},
+                ],
+            }
+        ],
         text_format=_AIResponse,
     )
     parsed = response.output_parsed
     if parsed is None:
         raise RuntimeError("OpenAI returned no structured chart annotations.")
+
     annotations: list[dict[str, Any]] = []
     for item in parsed.annotations[:5]:
         try:
@@ -161,22 +173,27 @@ def _annotate_chart_sync(
             continue
         if not points:
             continue
-        annotations.append(
-            {
-                "kind": item.kind,
-                "label": item.label.strip(),
-                "points": points,
-                "group_id": "ai-annotation",
-            }
-        )
+        annotations.append({
+            "kind": item.kind,
+            "label": item.label.strip(),
+            "points": points,
+            "group_id": "ai-annotation",
+        })
     return {"symbol": symbol.upper(), "range": range_name, "annotations": annotations}
 
 
 async def annotate_chart(
-    symbol: str, range_name: str, bars: list[dict[str, Any]]
+    symbol: str,
+    range_name: str,
+    bars: list[dict[str, Any]],
+    image_data_url: str,
 ) -> dict[str, Any]:
-    """Ask OpenAI to annotate the supplied OHLCV bars with support/resistance/trendlines."""
+    """Ask OpenAI vision to annotate the rendered chart image."""
 
     if not bars:
         raise ValueError("Cannot annotate an empty chart.")
-    return await asyncio.to_thread(_annotate_chart_sync, symbol, range_name, bars)
+    if not image_data_url or not image_data_url.startswith("data:image/"):
+        raise ValueError("image_data_url must be a data URL (data:image/...)")
+    return await asyncio.to_thread(
+        _annotate_chart_sync, symbol, range_name, bars, image_data_url
+    )

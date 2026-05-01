@@ -16,7 +16,7 @@ from app.models import (
     SymbolChartResponse,
     TavilySearchResponse,
 )
-from app.models.chart_annotation import ChartAnnotationResponse
+from app.models.chart_annotation import ChartAnnotateRequest, ChartAnnotationResponse
 from app.services import (
     chart_annotation_service,
     chart_service,
@@ -190,9 +190,10 @@ async def get_symbol_chart(
 
 
 @router.post("/research/chart-annotate/{symbol}", response_model=ChartAnnotationResponse)
-async def chart_annotate(symbol: str, range: str = "3mo") -> ChartAnnotationResponse:
+async def chart_annotate(symbol: str, body: ChartAnnotateRequest) -> ChartAnnotationResponse:
+    range_name = body.range or "3mo"
     try:
-        chart = await chart_service.get_symbol_chart(symbol, range_name=range)
+        chart = await chart_service.get_symbol_chart(symbol, range_name=range_name)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
@@ -214,7 +215,9 @@ async def chart_annotate(symbol: str, range: str = "3mo") -> ChartAnnotationResp
         for p in bars
     ]
     try:
-        payload = await chart_annotation_service.annotate_chart(symbol.upper(), range, bar_dicts)
+        payload = await chart_annotation_service.annotate_chart(
+            symbol.upper(), range_name, bar_dicts, body.image_base64
+        )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:

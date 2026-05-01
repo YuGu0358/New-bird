@@ -21,6 +21,12 @@ class _StubResponse:
         self.output_parsed = MagicMock(annotations=annotations)
 
 
+_TEST_IMAGE_DATA_URL = (
+    "data:image/png;base64,"
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+P+/HgAFhAJ/wlseKgAAAABJRU5ErkJggg=="
+)
+
+
 class ChartAnnotationServiceTests(unittest.IsolatedAsyncioTestCase):
     async def test_annotate_returns_normalized_payload(self) -> None:
         from app.services import chart_annotation_service as svc
@@ -44,7 +50,7 @@ class ChartAnnotationServiceTests(unittest.IsolatedAsyncioTestCase):
         fake_client.responses.parse.return_value = _StubResponse(annotations)
 
         with patch("app.services.chart_annotation_service.create_client", return_value=fake_client):
-            result = await svc.annotate_chart("AAPL", "3mo", bars)
+            result = await svc.annotate_chart("AAPL", "3mo", bars, _TEST_IMAGE_DATA_URL)
 
         self.assertEqual(result["symbol"], "AAPL")
         self.assertEqual(len(result["annotations"]), 2)
@@ -58,7 +64,7 @@ class ChartAnnotationServiceTests(unittest.IsolatedAsyncioTestCase):
     async def test_annotate_with_no_bars_raises_value_error(self) -> None:
         from app.services import chart_annotation_service as svc
         with self.assertRaises(ValueError):
-            await svc.annotate_chart("AAPL", "3mo", [])
+            await svc.annotate_chart("AAPL", "3mo", [], _TEST_IMAGE_DATA_URL)
 
     async def test_annotate_skips_annotations_with_unparseable_timestamps(self) -> None:
         from app.services import chart_annotation_service as svc
@@ -74,10 +80,18 @@ class ChartAnnotationServiceTests(unittest.IsolatedAsyncioTestCase):
         fake_client.responses.parse.return_value = _StubResponse(annotations)
 
         with patch("app.services.chart_annotation_service.create_client", return_value=fake_client):
-            result = await svc.annotate_chart("AAPL", "3mo", bars)
+            result = await svc.annotate_chart("AAPL", "3mo", bars, _TEST_IMAGE_DATA_URL)
 
         self.assertEqual(len(result["annotations"]), 1)
         self.assertEqual(result["annotations"][0]["kind"], "support")
+
+    async def test_annotate_rejects_missing_image_url(self) -> None:
+        from app.services import chart_annotation_service as svc
+        bars = [{"timestamp": "2026-04-01T00:00:00+00:00", "open":100,"high":105,"low":99,"close":102,"volume":1000}]
+        with self.assertRaises(ValueError):
+            await svc.annotate_chart("AAPL", "3mo", bars, "")
+        with self.assertRaises(ValueError):
+            await svc.annotate_chart("AAPL", "3mo", bars, "not-a-data-url")
 
 
 class PromptBuildTests(unittest.TestCase):

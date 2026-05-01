@@ -19,3 +19,8 @@ class ChartAnnotationResponse(BaseModel):
     symbol: str
     range: str
     annotations: list[ChartAnnotation]
+
+
+class ChartAnnotateRequest(BaseModel):
+    range: str = "3mo"
+    image_base64: str  # data URL form: "data:image/png;base64,..."
