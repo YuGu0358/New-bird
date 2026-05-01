@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from datetime import date, datetime, timezone
 
-from sqlalchemy import Boolean, Date, DateTime, Float, Index, Integer, JSON, String, Text, UniqueConstraint
+from sqlalchemy import BigInteger, Boolean, Date, DateTime, Float, Index, Integer, JSON, LargeBinary, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.engine import Base
@@ -636,4 +636,80 @@ class JournalEntry(Base):
         nullable=False,
         default=lambda: datetime.now(timezone.utc),
         onupdate=lambda: datetime.now(timezone.utc),
+    )
+
+
+class DailyBar(Base):
+    """Daily OHLCV bar from Alpaca for the Factor Forge data pipeline.
+
+    Composite primary key on (symbol, date) — one row per ticker per
+    trading day. Bars are append-only; in practice we never UPDATE
+    because Alpaca's adjusted closes are stable.
+    """
+
+    __tablename__ = "factor_daily_bars"
+
+    symbol: Mapped[str] = mapped_column(String(16), primary_key=True)
+    date: Mapped[date] = mapped_column(Date, primary_key=True)
+    open: Mapped[float] = mapped_column(Float, nullable=False)
+    high: Mapped[float] = mapped_column(Float, nullable=False)
+    low: Mapped[float] = mapped_column(Float, nullable=False)
+    close: Mapped[float] = mapped_column(Float, nullable=False)
+    volume: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    vwap: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+    __table_args__ = (
+        Index("ix_factor_daily_bars_date", "date"),
+    )
+
+
+class DailyActiveUniverse(Base):
+    """Per-day top-N most-active universe ranked by composite activity score.
+
+    Composite primary key on (date, rank). rank is 1-based and dense
+    within a date. The factor mining pipeline filters bars to this set
+    before running operators, so we keep it small (typically 100).
+    """
+
+    __tablename__ = "factor_daily_active_universe"
+
+    date: Mapped[date] = mapped_column(Date, primary_key=True)
+    rank: Mapped[int] = mapped_column(Integer, primary_key=True)
+    symbol: Mapped[str] = mapped_column(String(16), nullable=False, index=True)
+    activity_score: Mapped[float] = mapped_column(Float, nullable=False)
+    dollar_volume: Mapped[float] = mapped_column(Float, nullable=False)
+    vol_return_score: Mapped[float] = mapped_column(Float, nullable=False)
+    range_score: Mapped[float] = mapped_column(Float, nullable=False)
+
+
+class FactorRecord(Base):
+    """Surviving factor stored in the Factor Forge vector library.
+
+    Holds the formula text plus two embeddings (formula text and
+    return-series), used by the dedupe path to reject near-duplicates
+    before insertion. Embeddings are persisted as raw float32 bytes via
+    ``LargeBinary`` — cheap to read back into a numpy array without a
+    JSON parse step.
+    """
+
+    __tablename__ = "factor_records"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    formula: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
+    fitness: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    ic_1d: Mapped[float | None] = mapped_column(Float, nullable=True)
+    ic_5d: Mapped[float | None] = mapped_column(Float, nullable=True)
+    ic_20d: Mapped[float | None] = mapped_column(Float, nullable=True)
+    icir: Mapped[float | None] = mapped_column(Float, nullable=True)
+    sharpe: Mapped[float | None] = mapped_column(Float, nullable=True)
+    max_drawdown: Mapped[float | None] = mapped_column(Float, nullable=True)
+    turnover: Mapped[float | None] = mapped_column(Float, nullable=True)
+    formula_embedding: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
+    return_embedding: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
+    metadata_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    generation: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
     )
