@@ -276,6 +276,32 @@ function annotationToOverlay(annotation) {
   };
 }
 
+const DRAWING_TOOLS = [
+  { name: 'horizontalRayLine', label: '横线' },
+  { name: 'straightLine', label: '趋势线' },
+  { name: 'segment', label: '段' },
+  { name: 'priceLine', label: '价格线' },
+  { name: 'simpleAnnotation', label: '文字' },
+];
+
+/** @param {{ onPick: (name: string) => void }} props */
+function DrawingTools({ onPick }) {
+  return (
+    <div className="inline-flex flex-wrap gap-1 font-mono text-[10px] tracking-[0.15em] uppercase">
+      {DRAWING_TOOLS.map((tool) => (
+        <button
+          key={tool.name}
+          type="button"
+          onClick={() => onPick(tool.name)}
+          className="px-2 py-1 border border-border-subtle text-text-secondary hover:text-text-primary"
+        >
+          {tool.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 /** @param {{ symbol: string, ctx: any, range: string, onRange: (r: string) => void }} props */
 function OverviewTab({ symbol, ctx, range, onRange }) {
   const chartQ = useQuery({
@@ -314,11 +340,13 @@ function OverviewTab({ symbol, ctx, range, onRange }) {
 
   function clearAnnotations() {
     const handle = chartHandleRef.current;
-    const chart = handle?.getChart();
-    if (chart && typeof chart.removeOverlay === 'function') {
-      chart.removeOverlay();
-    }
+    handle?.clearOverlays('ai-annotation');
     annotateMutation.reset();
+  }
+
+  function clearUserDrawings() {
+    const handle = chartHandleRef.current;
+    handle?.clearOverlays('user');
   }
 
   return (
@@ -341,7 +369,18 @@ function OverviewTab({ symbol, ctx, range, onRange }) {
           onClick={clearAnnotations}
           className="px-2 py-1 border border-border-subtle text-text-secondary hover:text-text-primary font-mono text-[10px] tracking-[0.15em] uppercase"
         >
-          清除
+          清除 AI
+        </button>
+        <span className="font-mono text-[10px] text-text-muted tracking-[0.15em] uppercase ml-2">
+          画线:
+        </span>
+        <DrawingTools onPick={(name) => chartHandleRef.current?.startDrawing(name)} />
+        <button
+          type="button"
+          onClick={clearUserDrawings}
+          className="px-2 py-1 border border-border-subtle text-text-secondary hover:text-text-primary font-mono text-[10px] tracking-[0.15em] uppercase"
+        >
+          清除手画
         </button>
         {annotateMutation.isError && (
           <span className="font-mono text-[10px] text-rose-400">
