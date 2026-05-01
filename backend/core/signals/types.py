@@ -9,6 +9,7 @@ from typing import Literal, Optional
 SignalKind = Literal[
     "macd_bull_cross", "macd_bear_cross",
     "rsi_oversold_bounce", "rsi_overbought_fade",
+    "rsi_bullish_divergence", "rsi_bearish_divergence",
     "volume_breakout", "volume_breakdown",
     "price_breakout_high", "price_breakdown_low",
 ]
