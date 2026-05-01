@@ -325,6 +325,16 @@ function OverviewTab({ symbol, ctx, range, onRange }) {
   }
 
   const chartHandleRef = useRef(null);
+  const [chartFullscreen, setChartFullscreen] = useState(false);
+
+  useEffect(() => {
+    if (!chartFullscreen) return undefined;
+    const onKey = (e) => {
+      if (e.key === 'Escape') setChartFullscreen(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [chartFullscreen]);
 
   const annotateMutation = useMutation({
     mutationFn: () => annotateChart(symbol, range),
@@ -387,8 +397,35 @@ function OverviewTab({ symbol, ctx, range, onRange }) {
             {String(annotateMutation.error?.message || '调用失败')}
           </span>
         )}
+        <button
+          type="button"
+          onClick={() => setChartFullscreen((v) => !v)}
+          className="px-2 py-1 border border-border-subtle text-text-secondary hover:text-text-primary font-mono text-[10px] tracking-[0.15em] uppercase ml-2"
+        >
+          {chartFullscreen ? '退出全屏' : '全屏'}
+        </button>
       </div>
-      <BigChart q={chartQ} selected={selectedIndicators} chartRef={chartHandleRef} />
+      {chartFullscreen ? (
+        <div className="fixed inset-0 z-50 bg-bg-base p-4 flex flex-col gap-2">
+          <div className="flex items-center justify-between">
+            <div className="font-mono text-[11px] tracking-[0.15em] uppercase text-text-muted">
+              {symbol} · {range} · 全屏模式 (按 Esc 退出)
+            </div>
+            <button
+              type="button"
+              onClick={() => setChartFullscreen(false)}
+              className="px-3 py-1 border border-border-subtle text-text-secondary hover:text-text-primary font-mono text-[10px] tracking-[0.15em] uppercase"
+            >
+              退出全屏
+            </button>
+          </div>
+          <div className="flex-1 min-h-0">
+            <BigChart q={chartQ} selected={selectedIndicators} chartRef={chartHandleRef} fullHeight />
+          </div>
+        </div>
+      ) : (
+        <BigChart q={chartQ} selected={selectedIndicators} chartRef={chartHandleRef} />
+      )}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <TechnicalsCard tech={ctx?.technicals} />
         <VolumeCard volume={ctx?.volume_profile} />
@@ -446,14 +483,14 @@ function IndicatorBar({ selected, onToggle }) {
   );
 }
 
-/** @param {{ q: any, selected: string[], chartRef?: import('react').Ref<any> }} props */
-function BigChart({ q, selected, chartRef }) {
+/** @param {{ q: any, selected: string[], chartRef?: import('react').Ref<any>, fullHeight?: boolean }} props */
+function BigChart({ q, selected, chartRef, fullHeight = false }) {
   if (q.isLoading) return <LoadingState rows={4} />;
   if (q.isError) return <ErrorState error={q.error} onRetry={q.refetch} />;
   const points = q.data?.points || [];
   if (!points.length) return <EmptyState title="No price data" />;
   return (
-    <div className="h-[480px]">
+    <div className={fullHeight ? 'h-full w-full' : 'h-[480px]'}>
       <KLineChart
         ref={chartRef}
         symbol={q.data?.symbol || ''}
