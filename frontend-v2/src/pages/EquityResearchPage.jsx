@@ -3,9 +3,9 @@
 // NewBird's Tokyo cyberpunk aesthetic. Tabbed: Overview / Financials /
 // Technicals / News / Sentiment / Options. All endpoints reused from the
 // existing API; no backend changes.
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { useQueries, useQuery } from '@tanstack/react-query';
+import { useMutation, useQueries, useQuery } from '@tanstack/react-query';
 import {
   Activity,
   ArrowUpRight,
@@ -30,6 +30,7 @@ import {
   YAxis,
 } from 'recharts';
 import {
+  annotateChart,
   getChart,
   getCompany,
   getIndicator,
@@ -243,6 +244,38 @@ function TabBar({ value, onChange }) {
   );
 }
 
+const KIND_TO_OVERLAY = {
+  support: 'priceLine',
+  resistance: 'priceLine',
+  trendline: 'straightLine',
+  note: 'simpleAnnotation',
+};
+
+function annotationToOverlay(annotation) {
+  const name = KIND_TO_OVERLAY[annotation?.kind];
+  if (!name) return null;
+  const rawPoints = Array.isArray(annotation.points) ? annotation.points : [];
+  const points = rawPoints
+    .filter((p) => Number.isFinite(p?.timestamp) && Number.isFinite(p?.price))
+    .map((p) => ({ timestamp: p.timestamp, value: p.price }));
+  if (!points.length) return null;
+  if (name === 'straightLine' && points.length < 2) return null;
+  return {
+    name,
+    points,
+    extendData: annotation.label,
+    styles: {
+      line: {
+        color:
+          annotation.kind === 'resistance' ? '#EF4444'
+          : annotation.kind === 'support' ? '#22C55E'
+          : '#3D7FA5',
+      },
+      text: { color: '#E8ECF1', backgroundColor: '#0F1923' },
+    },
+  };
+}
+
 /** @param {{ symbol: string, ctx: any, range: string, onRange: (r: string) => void }} props */
 function OverviewTab({ symbol, ctx, range, onRange }) {
   const chartQ = useQuery({
@@ -265,6 +298,29 @@ function OverviewTab({ symbol, ctx, range, onRange }) {
     );
   }
 
+  const chartHandleRef = useRef(null);
+
+  const annotateMutation = useMutation({
+    mutationFn: () => annotateChart(symbol, range),
+    onSuccess: (data) => {
+      const handle = chartHandleRef.current;
+      if (!handle) return;
+      const overlays = (data?.annotations || [])
+        .map(annotationToOverlay)
+        .filter(Boolean);
+      overlays.forEach((descriptor) => handle.drawShape(descriptor));
+    },
+  });
+
+  function clearAnnotations() {
+    const handle = chartHandleRef.current;
+    const chart = handle?.getChart();
+    if (chart && typeof chart.removeOverlay === 'function') {
+      chart.removeOverlay();
+    }
+    annotateMutation.reset();
+  }
+
   return (
     <div className="space-y-4">
       <TradeRecommendationCard symbol={symbol} />
@@ -272,8 +328,28 @@ function OverviewTab({ symbol, ctx, range, onRange }) {
       <div className="flex flex-wrap items-center gap-3">
         <RangeBar value={range} onChange={onRange} />
         <IndicatorBar selected={selectedIndicators} onToggle={toggleIndicator} />
+        <button
+          type="button"
+          onClick={() => annotateMutation.mutate()}
+          disabled={annotateMutation.isPending}
+          className="px-2 py-1 border border-cyan/40 text-cyan font-mono text-[10px] tracking-[0.15em] uppercase hover:bg-cyan/10 disabled:opacity-50"
+        >
+          {annotateMutation.isPending ? 'AI 思考中…' : 'AI 画线'}
+        </button>
+        <button
+          type="button"
+          onClick={clearAnnotations}
+          className="px-2 py-1 border border-border-subtle text-text-secondary hover:text-text-primary font-mono text-[10px] tracking-[0.15em] uppercase"
+        >
+          清除
+        </button>
+        {annotateMutation.isError && (
+          <span className="font-mono text-[10px] text-rose-400">
+            {String(annotateMutation.error?.message || '调用失败')}
+          </span>
+        )}
       </div>
-      <BigChart q={chartQ} selected={selectedIndicators} />
+      <BigChart q={chartQ} selected={selectedIndicators} chartRef={chartHandleRef} />
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <TechnicalsCard tech={ctx?.technicals} />
         <VolumeCard volume={ctx?.volume_profile} />
@@ -331,15 +407,20 @@ function IndicatorBar({ selected, onToggle }) {
   );
 }
 
-/** @param {{ q: any, selected: string[] }} props */
-function BigChart({ q, selected }) {
+/** @param {{ q: any, selected: string[], chartRef?: import('react').Ref<any> }} props */
+function BigChart({ q, selected, chartRef }) {
   if (q.isLoading) return <LoadingState rows={4} />;
   if (q.isError) return <ErrorState error={q.error} onRetry={q.refetch} />;
   const points = q.data?.points || [];
   if (!points.length) return <EmptyState title="No price data" />;
   return (
     <div className="h-[480px]">
-      <KLineChart symbol={q.data?.symbol || ''} points={q.data?.points || []} indicators={selected} />
+      <KLineChart
+        ref={chartRef}
+        symbol={q.data?.symbol || ''}
+        points={q.data?.points || []}
+        indicators={selected}
+      />
     </div>
   );
 }
