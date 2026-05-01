@@ -69,6 +69,8 @@ function mapPointsToBars(points) {
  * @typedef {{
  *   getChart: () => any,
  *   drawShape: (descriptor: any) => string | null,
+ *   startDrawing: (name: string) => string | null,
+ *   clearOverlays: (groupId?: string) => void,
  * }} KLineChartHandle
  *
  * @param {{
@@ -127,13 +129,34 @@ const KLineChart = forwardRef(function KLineChart({ symbol, points, indicators =
 
   // Factory runs once; methods close over chartRef lazily. Do not add deps —
   // refs aren't reactive, and a non-empty deps array would force the handle to
-  // recreate (breaking referential equality for Plan #3 consumers).
+  // recreate (breaking referential equality for consumers).
   useImperativeHandle(ref, () => ({
     getChart: () => chartRef.current,
     drawShape: (descriptor) => {
       const chart = chartRef.current;
       if (!chart || !descriptor) return null;
-      return chart.createOverlay(descriptor);
+      // Stamp groupId so callers can selectively clear.
+      const stamped = descriptor.groupId
+        ? descriptor
+        : { ...descriptor, groupId: 'ai-annotation' };
+      return chart.createOverlay(stamped);
+    },
+    startDrawing: (name) => {
+      const chart = chartRef.current;
+      if (!chart || !name) return null;
+      // Passing an OverlayCreate object with a name (no points) puts the
+      // chart into interactive placement mode; klinecharts handles the
+      // click-to-drop UX.
+      return chart.createOverlay({ name, groupId: 'user' });
+    },
+    clearOverlays: (groupId) => {
+      const chart = chartRef.current;
+      if (!chart) return;
+      if (groupId) {
+        chart.removeOverlay({ groupId });
+      } else {
+        chart.removeOverlay();
+      }
     },
   }), []);
 
