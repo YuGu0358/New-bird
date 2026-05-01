@@ -79,7 +79,10 @@ async def refresh_symbol_meta(
                 )
             )
         ).all()
-    fresh = {sym for sym, refreshed_at in rows if refreshed_at >= cutoff}
+    # SQLite returns naive datetimes; coerce to UTC-aware for comparison.
+    def _aware(dt):
+        return dt.replace(tzinfo=timezone.utc) if dt and dt.tzinfo is None else dt
+    fresh = {sym for sym, refreshed_at in rows if refreshed_at and _aware(refreshed_at) >= cutoff}
     stale = [s for s in normalized if s not in fresh]
 
     updated = 0

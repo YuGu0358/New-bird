@@ -32,20 +32,14 @@ class FactorMetaServiceTests(unittest.IsolatedAsyncioTestCase):
             db_path.unlink()
         from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-        from app.db import engine as engine_module
-
         self._engine = create_async_engine(
             f"sqlite+aiosqlite:///{db_path}", echo=False, future=True
         )
         self._session_factory = async_sessionmaker(self._engine, expire_on_commit=False)
-        self._patches = [
-            patch.object(engine_module, "engine", self._engine),
-            patch.object(engine_module, "AsyncSessionLocal", self._session_factory),
-        ]
-        for p in self._patches:
-            p.start()
 
-        # Patch the names re-exported into the service module too.
+        # Service module imports AsyncSessionLocal at module load time, so
+        # patching only the service's own reference is sufficient and avoids
+        # the engine-module shadowing weirdness in app/db/__init__.py.
         from app.services import factor_meta_service as svc
 
         self._svc_patch = patch.object(svc, "AsyncSessionLocal", self._session_factory)
@@ -59,8 +53,6 @@ class FactorMetaServiceTests(unittest.IsolatedAsyncioTestCase):
 
     async def asyncTearDown(self) -> None:
         self._svc_patch.stop()
-        for p in self._patches:
-            p.stop()
         await self._engine.dispose()
 
     async def test_refresh_inserts_new_rows(self) -> None:

@@ -31,18 +31,10 @@ class FactorNewsServiceTests(unittest.IsolatedAsyncioTestCase):
             db_path.unlink()
         from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-        from app.db import engine as engine_module
-
         self._engine = create_async_engine(
             f"sqlite+aiosqlite:///{db_path}", echo=False, future=True
         )
         self._session_factory = async_sessionmaker(self._engine, expire_on_commit=False)
-        self._patches = [
-            patch.object(engine_module, "engine", self._engine),
-            patch.object(engine_module, "AsyncSessionLocal", self._session_factory),
-        ]
-        for p in self._patches:
-            p.start()
 
         from app.services import factor_news_service as svc
 
@@ -57,8 +49,6 @@ class FactorNewsServiceTests(unittest.IsolatedAsyncioTestCase):
 
     async def asyncTearDown(self) -> None:
         self._svc_patch.stop()
-        for p in self._patches:
-            p.stop()
         await self._engine.dispose()
 
     async def test_update_news_features_persists_row(self) -> None:
