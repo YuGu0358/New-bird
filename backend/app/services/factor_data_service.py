@@ -300,8 +300,24 @@ async def update_active_universe(target_date: date, top_n: int = 100) -> int:
                 select(DailyBar).where(DailyBar.date == target_date)
             )
         ).scalars().all()
+        # On weekends / holidays target_date won't have bars yet; fall back
+        # to the most recent trading day so the user still sees a universe.
         if not rows:
-            return 0
+            most_recent = (
+                await session.execute(
+                    select(func.max(DailyBar.date)).where(DailyBar.date <= target_date)
+                )
+            ).scalar()
+            if most_recent is None:
+                return 0
+            target_date = most_recent
+            rows = (
+                await session.execute(
+                    select(DailyBar).where(DailyBar.date == target_date)
+                )
+            ).scalars().all()
+            if not rows:
+                return 0
 
         # If yesterday isn't a trading day (weekend/holiday), fall back to
         # the most recent prior date with bars stored.
