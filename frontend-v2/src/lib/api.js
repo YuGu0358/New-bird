@@ -135,6 +135,10 @@ export const tavilySearch = (query) => request(`/api/tavily/search?query=${encod
 // Backend expects yfinance-style range strings: 1d / 5d / 1mo / 3mo / 6mo / 1y / 2y.
 export const getChart = (symbol, range = '3mo') =>
   request(`/api/chart/${encodeURIComponent(symbol)}?range=${range}`);
+export const annotateChart = (symbol, range = '3mo') =>
+  request(`/api/research/chart-annotate/${encodeURIComponent(symbol)}?range=${encodeURIComponent(range)}`, {
+    method: 'POST',
+  });
 export const getCompany = (symbol) => request(`/api/company/${encodeURIComponent(symbol)}`);
 
 /**

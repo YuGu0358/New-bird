@@ -16,7 +16,9 @@ from app.models import (
     SymbolChartResponse,
     TavilySearchResponse,
 )
+from app.models.chart_annotation import ChartAnnotationResponse
 from app.services import (
+    chart_annotation_service,
     chart_service,
     company_profile_service,
     market_research_service,
@@ -185,6 +187,39 @@ async def get_symbol_chart(
     except Exception as exc:
         raise service_error(exc) from exc
     return SymbolChartResponse(**payload)
+
+
+@router.post("/research/chart-annotate/{symbol}", response_model=ChartAnnotationResponse)
+async def chart_annotate(symbol: str, range: str = "3mo") -> ChartAnnotationResponse:
+    try:
+        chart = await chart_service.get_symbol_chart(symbol, range_name=range)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise service_error(exc) from exc
+
+    bars = chart.get("points") or []
+    if not bars:
+        raise HTTPException(status_code=404, detail=f"{symbol} 没有可用的走势图数据。")
+
+    bar_dicts = [
+        {
+            "timestamp": p["timestamp"].isoformat() if hasattr(p["timestamp"], "isoformat") else str(p["timestamp"]),
+            "open": p["open"],
+            "high": p["high"],
+            "low": p["low"],
+            "close": p["close"],
+            "volume": p["volume"],
+        }
+        for p in bars
+    ]
+    try:
+        payload = await chart_annotation_service.annotate_chart(symbol.upper(), range, bar_dicts)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise service_error(exc) from exc
+    return ChartAnnotationResponse.model_validate(payload)
 
 
 @router.get("/company/{symbol}", response_model=CompanyProfileResponse)
