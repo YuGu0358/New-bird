@@ -493,8 +493,14 @@ export const getActiveUniverse = (date, topN = 100) => {
 };
 export const listFactorRuns = (limit = 20) =>
   request(`/api/factors/runs?limit=${limit}`);
-export const triggerFactorRun = () =>
-  request('/api/factors/run-evolution', { method: 'POST', body: {} });
+export const getEvolutionStatus = () =>
+  request('/api/factors/evolution/status');
+
+export const startEvolution = () =>
+  request('/api/factors/evolution/start', { method: 'POST', body: {} });
+
+export const stopEvolution = () =>
+  request('/api/factors/evolution/stop', { method: 'POST', body: {} });
 
 // ----------------------------------------------------------- agents (P7)
 export const listPersonas = () => request('/api/agents/personas');

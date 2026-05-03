@@ -4,7 +4,8 @@ import { useTranslation } from 'react-i18next';
 import { Activity, Database, Cpu, Play } from 'lucide-react';
 import {
   listFactors, getFactorDetail, getActiveUniverse,
-  listFactorRuns, triggerFactorRun,
+  listFactorRuns,
+  getEvolutionStatus, startEvolution, stopEvolution,
 } from '../lib/api.js';
 import {
   PageHeader, SectionHeader, LoadingState, ErrorState, EmptyState,
@@ -27,7 +28,7 @@ export default function FactorsPage() {
         title={t('factors.title', '因子工厂')}
         segments={[{ label: 'FACTOR', accent: true }, { label: 'FORGE' }]}
       />
-      <ManualRunBar />
+      <StatusBanner />
       <TabBar value={tab} onChange={setTab} />
       <div className="card">
         {tab === 'library' && <LibraryTab />}
@@ -38,26 +39,77 @@ export default function FactorsPage() {
   );
 }
 
-function ManualRunBar() {
+function StatusBanner() {
   const qc = useQueryClient();
-  const m = useMutation({
-    mutationFn: triggerFactorRun,
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['factor-runs'] }),
+  const statusQ = useQuery({
+    queryKey: ['evolution-status'],
+    queryFn: getEvolutionStatus,
+    refetchInterval: 5_000,
   });
+  const startM = useMutation({
+    mutationFn: startEvolution,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['evolution-status'] }),
+  });
+  const stopM = useMutation({
+    mutationFn: stopEvolution,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['evolution-status'] }),
+  });
+
+  const s = statusQ.data;
+  const running = !!s?.is_running;
+  const dotClass = running ? 'bg-bull animate-pulse' : 'bg-text-muted';
+  const lastDone = s?.last_generation_completed_at
+    ? new Date(s.last_generation_completed_at).toLocaleString()
+    : '—';
+
   return (
-    <div className="card flex items-center justify-between">
-      <div className="text-body-sm text-text-secondary">
-        每天 16:35 ET 自动运行一次。也可以手动触发。
+    <div className="card flex items-center justify-between flex-wrap gap-3">
+      <div className="flex items-center gap-3 flex-wrap">
+        <span className={classNames('w-2.5 h-2.5 rounded-full', dotClass)} />
+        <span className="font-mono text-[11px] tracking-[0.15em] uppercase text-text-secondary">
+          {running ? '进化中' : '已停止'}
+        </span>
+        <Stat label="代" value={s?.current_generation ?? 0} />
+        <Stat label="best" value={s?.best_fitness_recent != null ? s.best_fitness_recent.toFixed(4) : '—'} />
+        <Stat label="种群" value={s?.population_size ?? 0} />
+        <Stat label="库" value={s?.library_count ?? 0} />
+        <Stat label="last gen" value={lastDone} />
       </div>
-      <button
-        type="button"
-        onClick={() => m.mutate()}
-        disabled={m.isPending}
-        className="px-3 py-1 border border-cyan/40 text-cyan font-mono text-[10px] tracking-[0.15em] uppercase hover:bg-cyan/10 disabled:opacity-50 inline-flex items-center gap-1"
-      >
-        <Play size={12} />
-        {m.isPending ? '排队中…' : '立即运行一代'}
-      </button>
+      <div className="flex items-center gap-2">
+        {running ? (
+          <button
+            type="button"
+            onClick={() => stopM.mutate()}
+            disabled={stopM.isPending}
+            className="px-3 py-1 border border-bear/40 text-bear font-mono text-[10px] tracking-[0.15em] uppercase hover:bg-bear/10 disabled:opacity-50"
+          >
+            {stopM.isPending ? '停止中…' : '停止'}
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={() => startM.mutate()}
+            disabled={startM.isPending}
+            className="px-3 py-1 border border-cyan/40 text-cyan font-mono text-[10px] tracking-[0.15em] uppercase hover:bg-cyan/10 disabled:opacity-50"
+          >
+            {startM.isPending ? '启动中…' : '启动'}
+          </button>
+        )}
+      </div>
+      {s?.error ? (
+        <div className="basis-full text-rose-400 text-caption font-mono">
+          上次出错: {String(s.error).slice(0, 200)}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function Stat({ label, value }) {
+  return (
+    <div className="flex items-baseline gap-1">
+      <span className="text-text-muted text-caption uppercase tracking-[0.1em]">{label}</span>
+      <span className="font-mono text-body-sm">{value}</span>
     </div>
   );
 }
