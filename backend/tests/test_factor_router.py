@@ -46,27 +46,31 @@ class FactorRouterTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(body["items"][0]["formula"], "rank(close)")
         self.assertEqual(body["items"][0]["generation"], 1)
 
-    def test_run_evolution_queues_background_task(self) -> None:
+    def test_evolution_status_endpoint(self) -> None:
         from fastapi.testclient import TestClient
 
         from app.main import app
-        from app.routers import factors as factors_router
         from app.services import factor_pipeline
 
+        fake_status = {
+            "is_running": True,
+            "current_generation": 12,
+            "best_fitness_recent": 0.054,
+            "last_generation_completed_at": None,
+            "population_size": 50,
+            "library_count": 7,
+            "error": None,
+        }
         with patch.object(
-            factor_pipeline, "_create_run", new=AsyncMock(return_value=99)
-        ), patch.object(
-            factors_router,
-            "_runner_then_finish",
-            new=AsyncMock(return_value=None),
+            factor_pipeline, "evolution_status", new=AsyncMock(return_value=fake_status)
         ):
             client = TestClient(app)
-            response = client.post("/api/factors/run-evolution")
+            response = client.get("/api/factors/evolution/status")
 
         self.assertEqual(response.status_code, 200)
         body = response.json()
-        self.assertEqual(body["run_id"], 99)
-        self.assertEqual(body["status"], "queued")
+        self.assertEqual(body["current_generation"], 12)
+        self.assertTrue(body["is_running"])
 
 
 if __name__ == "__main__":  # pragma: no cover

@@ -740,3 +740,38 @@ class FactorRecord(Base):
         nullable=False,
         default=lambda: datetime.now(timezone.utc),
     )
+
+
+class FactorPopulationState(Base):
+    """Persistent slot-based snapshot of the current GP population.
+
+    One row per slot in the population. Wiped+rewritten at the end of each
+    generation so the loop can resume without restarting from scratch.
+    """
+
+    __tablename__ = "factor_population_state"
+
+    slot: Mapped[int] = mapped_column(Integer, primary_key=True)
+    formula: Mapped[str] = mapped_column(Text, nullable=False)
+    fitness: Mapped[float] = mapped_column(Float, nullable=False, default=-99.0)
+    generation: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+    )
+
+
+class FactorEvolutionStateSingleton(Base):
+    """Holds engine-level state (single row, id=1)."""
+
+    __tablename__ = "factor_evolution_singleton"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, default=1)
+    current_generation: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    best_fitness_recent: Mapped[float | None] = mapped_column(Float, nullable=True)
+    last_generation_completed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    is_paused: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)

@@ -131,6 +131,15 @@ async def lifespan(app: FastAPI):
     finally:
         await polygon_ws_publisher.shutdown()
         await datahub_service.shutdown()
+        # Stop Factor Forge continuous loop before scheduler shutdown.
+        try:
+            from app.services import factor_pipeline as ff_pipeline
+            await ff_pipeline.stop_loop(timeout=5.0)
+        except Exception:
+            import logging
+            logging.getLogger(__name__).exception(
+                "factor_pipeline.stop_loop failed at shutdown"
+            )
         await app_scheduler.shutdown()
         await bot_controller.shutdown_bot()
 

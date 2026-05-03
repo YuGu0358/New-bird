@@ -59,3 +59,18 @@ class FactorEvolutionRunsResponse(BaseModel):
 class RunEvolutionResponse(BaseModel):
     run_id: int
     status: str
+
+
+class EvolutionStatusResponse(BaseModel):
+    is_running: bool
+    current_generation: int
+    best_fitness_recent: float | None = None
+    last_generation_completed_at: datetime | None = None
+    population_size: int
+    library_count: int
+    error: str | None = None
+
+
+class EvolutionControlResponse(BaseModel):
+    is_running: bool
+    message: str

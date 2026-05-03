@@ -10,7 +10,7 @@ from __future__ import annotations
 import logging
 from datetime import date as date_cls
 
-from fastapi import APIRouter, BackgroundTasks, HTTPException
+from fastapi import APIRouter, HTTPException
 from sqlalchemy import desc, select
 
 from app.db.engine import AsyncSessionLocal
@@ -18,11 +18,12 @@ from app.db.tables import DailyActiveUniverse, FactorEvolutionRun, FactorRecord
 from app.models.factors import (
     ActiveUniverseItem,
     ActiveUniverseResponse,
+    EvolutionControlResponse,
+    EvolutionStatusResponse,
     FactorEvolutionRunsResponse,
     FactorEvolutionRunView,
     FactorLibraryResponse,
     FactorRecordView,
-    RunEvolutionResponse,
 )
 from app.services import factor_pipeline, factor_vector_store
 
@@ -117,31 +118,22 @@ async def get_run(run_id: int) -> FactorEvolutionRunView:
     return FactorEvolutionRunView.model_validate(row)
 
 
-@router.post("/run-evolution", response_model=RunEvolutionResponse)
-async def run_evolution(background_tasks: BackgroundTasks) -> RunEvolutionResponse:
-    """Queue a manual evolution run; returns immediately with the run id."""
-    run_id = await factor_pipeline._create_run()
-    background_tasks.add_task(_runner_then_finish, run_id)
-    return RunEvolutionResponse(run_id=run_id, status="queued")
+@router.get("/evolution/status", response_model=EvolutionStatusResponse)
+async def get_evolution_status() -> EvolutionStatusResponse:
+    """Live status of the continuous Factor Forge evolution loop."""
+    payload = await factor_pipeline.evolution_status()
+    return EvolutionStatusResponse(**payload)
 
 
-async def _runner_then_finish(placeholder_run_id: int) -> None:
-    """Background body: clear the placeholder row, then run the full pipeline.
+@router.post("/evolution/start", response_model=EvolutionControlResponse)
+async def start_evolution() -> EvolutionControlResponse:
+    """Start the continuous evolution loop (idempotent)."""
+    msg = await factor_pipeline.start_loop()
+    return EvolutionControlResponse(is_running=True, message=msg)
 
-    The placeholder is created synchronously in ``run_evolution`` so the
-    HTTP caller gets a real, persisted id back. ``run_full_pipeline``
-    creates its own row, so we delete the placeholder first to avoid a
-    duplicate ``running`` entry hanging around.
-    """
-    async with AsyncSessionLocal() as session:
-        row = (
-            await session.execute(
-                select(FactorEvolutionRun).where(
-                    FactorEvolutionRun.id == placeholder_run_id
-                )
-            )
-        ).scalar_one_or_none()
-        if row is not None:
-            await session.delete(row)
-            await session.commit()
-    await factor_pipeline.run_full_pipeline()
+
+@router.post("/evolution/stop", response_model=EvolutionControlResponse)
+async def stop_evolution() -> EvolutionControlResponse:
+    """Stop the continuous evolution loop (idempotent)."""
+    msg = await factor_pipeline.stop_loop()
+    return EvolutionControlResponse(is_running=False, message=msg)
