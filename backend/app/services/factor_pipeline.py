@@ -304,7 +304,7 @@ def _shutdown_executor() -> None:
 def _resolve_db_url() -> str:
     """The same SQLite URL the main process uses, so the subprocess
     reads from / writes to the same DB file."""
-    from app.db import engine as engine_module
+    import app.db.engine as engine_module  # see _run_generation_subprocess for why
 
     return str(engine_module.engine.url)
 
@@ -356,7 +356,13 @@ def _run_generation_subprocess(
         create_async_engine as _create_async_engine,
     )
 
-    from app.db import engine as engine_module
+    # NB: ``app.db.__init__.py`` re-exports the AsyncEngine instance as
+    # ``engine``, which shadows the submodule of the same name. ``from
+    # app.db import engine as X`` therefore binds X to the AsyncEngine
+    # instance — assignment to ``X.engine`` then hits AsyncEngine's
+    # ``engine`` property which has no setter (= 500). Use an explicit
+    # ``import app.db.engine`` to bind the SUBMODULE.
+    import app.db.engine as engine_module  # noqa: PLC0415
 
     # Open a fresh engine bound to the same SQLite file. Patch the
     # module-level AsyncSessionLocal so factor_data_service /
