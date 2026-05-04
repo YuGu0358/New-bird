@@ -952,8 +952,20 @@ async def schedule_default_jobs() -> None:
     else:
         logger.info("[FactorForge] scheduler not running; skipping daily refresh job")
 
-    # Always start the loop on boot. User can stop it via API if they want.
-    await start_loop()
+    # Loop autostart is opt-in via env. Default off so a fresh dev/Railway
+    # boot doesn't start grinding immediately — user explicitly hits
+    # /api/factors/evolution/start when ready. Helps avoid runaway compute
+    # cost on cloud and sidesteps macOS multiprocessing-stability issues.
+    import os
+    autostart = os.getenv("FACTOR_EVOLUTION_AUTOSTART", "false").strip().lower()
+    if autostart in {"1", "true", "yes", "on"}:
+        await start_loop()
+        logger.info("[FactorForge] continuous loop auto-started (FACTOR_EVOLUTION_AUTOSTART=true)")
+    else:
+        logger.info(
+            "[FactorForge] continuous loop NOT auto-started — set "
+            "FACTOR_EVOLUTION_AUTOSTART=true to enable, or POST /api/factors/evolution/start"
+        )
 
 
 # ----- Status query ---------------------------------------------------------
