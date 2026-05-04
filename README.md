@@ -296,3 +296,40 @@ See `CONTRIBUTING.md` for setup and contribution expectations.
 ## License
 
 MIT. See `LICENSE`.
+
+## Deploy on Railway
+
+### Single-service Dockerfile deploy
+
+1. Create a new project in Railway, link it to this GitHub repo. Railway auto-detects the `Dockerfile` and `railway.json`.
+
+2. **Add a persistent volume** at `/app/data` (Railway dashboard → service → Settings → Volumes). The factor library, daily bars, and recommendation history live in SQLite at `/app/data/trading_platform.db`. Without the volume every redeploy wipes data.
+
+3. **Set required environment variables** (Settings → Variables):
+   - `ALPACA_API_KEY` + `ALPACA_SECRET_KEY` — paper trading + price data
+   - `OPENAI_API_KEY` — AI features
+   - Optional: `POLYGON_API_KEY`, `TAVILY_API_KEY`, `ANTHROPIC_API_KEY`
+   - `CORS_ALLOW_ORIGINS=https://<your-railway-domain>.up.railway.app,https://yourdomain.com`
+   - `FACTOR_EVOLUTION_AUTOSTART` — keep `false` to avoid runaway compute; user starts the loop manually via the UI
+
+4. Railway sets `PORT` automatically. The `Dockerfile`'s `CMD` reads it.
+
+5. **Healthcheck** is at `/api/health` (configured in `railway.json`). Railway will retire unhealthy replicas automatically.
+
+### Cost notes
+
+- **Free tier insufficient** — 512MB RAM is too tight for pandas + GP backtests. Use Hobby ($5/mo) minimum; Pro ($20/mo, 8GB) for headroom.
+- **Loop default off** — to keep cloud CPU usage near zero until you actively use the dashboard.
+- **OpenAI cost** — defaults are `gpt-4o-mini` for high-volume calls (factor variants, Q&A) but `gpt-4o` for vision (chart annotation). Override per-model env vars to tune.
+- **yfinance ban risk** — Railway shared IPs sometimes get rate-limited by Yahoo. Configure `POLYGON_API_KEY` for the primary data path; yfinance is the fallback.
+
+### First-boot checklist
+
+- [ ] Volume mounted at `/app/data`
+- [ ] `ALPACA_API_KEY` + `ALPACA_SECRET_KEY` set
+- [ ] `OPENAI_API_KEY` set
+- [ ] `CORS_ALLOW_ORIGINS` restricted to your domain
+- [ ] `/api/health` returns 200 (Railway will block deploy otherwise)
+- [ ] Visit `/factors` and trigger initial data backfill via the button
+- [ ] Start factor evolution loop manually when ready
+
