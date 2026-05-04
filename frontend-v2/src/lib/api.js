@@ -514,6 +514,9 @@ export const getFactorLandscape = (limit = 500) =>
 export const getTodayRecommendations = (top_k = 10) =>
   request(`/api/factors/recommendations/today?top_k=${top_k}`);
 
+export const getTrajectories = (limit = 200) =>
+  request(`/api/factors/trajectories?limit=${limit}`);
+
 // ----------------------------------------------------------- agents (P7)
 export const listPersonas = () => request('/api/agents/personas');
 export const analyzeWithPersona = (body) => request('/api/agents/analyze', { method: 'POST', body });

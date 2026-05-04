@@ -1,11 +1,13 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { Activity, Database, Zap, History as HistoryIcon, Map as MapIcon, Lightbulb as LightbulbIcon } from 'lucide-react';
+import { Activity, Database, Zap, History as HistoryIcon, Map as MapIcon, Lightbulb as LightbulbIcon, GitBranch as GitBranchIcon } from 'lucide-react';
 import {
   Bar, CartesianGrid, ComposedChart, Line, ResponsiveContainer,
   Scatter, ScatterChart, Tooltip, XAxis, YAxis, ZAxis,
 } from 'recharts';
+import ReactFlow, { Background, Controls } from 'reactflow';
+import 'reactflow/dist/style.css';
 import {
   listFactors, getFactorDetail, getActiveUniverse,
   listFactorRuns,
@@ -13,6 +15,7 @@ import {
   getEvolutionHistory, getEvolutionPopulation,
   getFactorLandscape,
   getTodayRecommendations,
+  getTrajectories,
 } from '../lib/api.js';
 import {
   PageHeader, SectionHeader, LoadingState, ErrorState, EmptyState,
@@ -25,6 +28,7 @@ const TABS = [
   { id: 'library',   icon: Database,    label: '库' },
   { id: 'evolution', icon: Activity,    label: '演化曲线' },
   { id: 'landscape', icon: MapIcon,     label: '基因图谱' },
+  { id: 'lineage',   icon: GitBranchIcon, label: '演化谱系' },
   { id: 'universe',  icon: Zap,         label: '活跃股' },
   { id: 'runs',      icon: HistoryIcon, label: '运行记录' },
 ];
@@ -54,6 +58,7 @@ export default function FactorsPage() {
         {tab === 'library'   && <LibraryTab />}
         {tab === 'evolution' && <EvolutionChart />}
         {tab === 'landscape' && <LandscapeTab />}
+        {tab === 'lineage'   && <LineageTab />}
         {tab === 'universe'  && <UniverseTab />}
         {tab === 'runs'      && <RunsTab />}
       </div>
@@ -556,6 +561,93 @@ function LandscapeTab() {
         <span className="inline-flex items-center gap-1"><span className="w-2 h-2 bg-bull rounded-full" /> top 20%</span>
         <span className="inline-flex items-center gap-1"><span className="w-2 h-2 bg-text-muted rounded-full" /> middle</span>
         <span className="inline-flex items-center gap-1"><span className="w-2 h-2 bg-bear rounded-full" /> bottom 20%</span>
+      </div>
+    </div>
+  );
+}
+
+function LineageTab() {
+  const q = useQuery({
+    queryKey: ['factor-trajectories'],
+    queryFn: () => getTrajectories(200),
+    refetchInterval: 30_000,
+  });
+  if (q.isLoading) return <LoadingState rows={6} />;
+  if (q.isError) return <ErrorState error={q.error} onRetry={q.refetch} />;
+  const items = q.data?.items || [];
+  if (!items.length) {
+    return <EmptyState title="尚无谱系" hint="等待 quanta loop 跑出第一批 trajectories" />;
+  }
+
+  // Group children by parent for BFS depth assignment.
+  const byParent = new Map();
+  items.forEach((it) => {
+    const k = it.parent_id ?? 'root';
+    byParent.set(k, [...(byParent.get(k) || []), it]);
+  });
+
+  const depth = new Map();
+  const roots = items.filter((it) => it.parent_id == null);
+  roots.forEach((r) => depth.set(r.id, 0));
+  let queue = [...roots];
+  while (queue.length) {
+    const next = [];
+    for (const n of queue) {
+      const children = byParent.get(n.id) || [];
+      children.forEach((c) => {
+        if (!depth.has(c.id)) {
+          depth.set(c.id, (depth.get(n.id) || 0) + 1);
+          next.push(c);
+        }
+      });
+    }
+    queue = next;
+  }
+  // Any orphaned nodes (parent missing from current page) — drop at depth 0.
+  items.forEach((it) => {
+    if (!depth.has(it.id)) depth.set(it.id, 0);
+  });
+
+  // Group by depth for x positioning.
+  const byDepth = new Map();
+  items.forEach((it) => {
+    const d = depth.get(it.id) ?? 0;
+    byDepth.set(d, [...(byDepth.get(d) || []), it]);
+  });
+
+  const nodes = items.map((it) => {
+    const d = depth.get(it.id) ?? 0;
+    const lane = (byDepth.get(d) || []).indexOf(it);
+    const fit = it.fitness;
+    const tone = fit == null ? '#7C8A9A' : fit >= 0.04 ? '#22C55E' : fit > 0 ? '#3D7FA5' : '#EF4444';
+    return {
+      id: String(it.id),
+      data: { label: `#${it.id} ${it.evolution_step}\n${it.formula.slice(0, 28)}` },
+      position: { x: d * 220, y: lane * 90 },
+      style: {
+        fontFamily: 'monospace', fontSize: 10,
+        border: `1px solid ${tone}`, color: '#E8ECF1',
+        backgroundColor: '#0F1923', padding: 8, width: 200,
+      },
+    };
+  });
+  const edges = items
+    .filter((it) => it.parent_id != null && depth.has(it.parent_id))
+    .map((it) => ({
+      id: `e-${it.parent_id}-${it.id}`,
+      source: String(it.parent_id),
+      target: String(it.id),
+      style: { stroke: '#3D7FA5' },
+    }));
+
+  return (
+    <div className="space-y-3">
+      <SectionHeader title="演化谱系" subtitle={`${items.length} trajectories · 父→子表示 LLM 自我演化或杂交`} />
+      <div className="h-[560px] border border-border-subtle">
+        <ReactFlow nodes={nodes} edges={edges} fitView minZoom={0.2}>
+          <Background color="#2A3645" gap={20} />
+          <Controls showInteractive={false} />
+        </ReactFlow>
       </div>
     </div>
   );

@@ -150,3 +150,20 @@ class RecommendationView(BaseModel):
 class RecommendationsResponse(BaseModel):
     items: list[RecommendationView]
     generated_at: str | None = None
+
+
+class TrajectoryNodeView(BaseModel):
+    id: int
+    research_direction: str
+    math_intuition: str
+    formula: str
+    parent_id: int | None = None
+    evolution_step: str
+    fitness: float | None = None
+    ic_5d: float | None = None
+    failure_reason: str | None = None
+    created_at: str
+
+
+class TrajectoriesResponse(BaseModel):
+    items: list[TrajectoryNodeView]

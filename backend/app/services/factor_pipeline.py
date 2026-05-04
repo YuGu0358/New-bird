@@ -66,6 +66,8 @@ _DAILY_MINUTE_UTC = 35
 _PREDICTOR_RETRAIN_EVERY = 5
 _LLM_INJECT_EVERY = 5
 _LLM_VARIANT_COUNT = 5
+_QUANTA_FRACTION_HYBRID = 0.5  # in hybrid mode, this share of the pop is QuantaAlpha-driven
+_QUANTA_VARIANTS_PER_GEN = 5  # how many trajectories injected per generation
 _COLLAPSE_TOLERANCE = 1e-3
 _COLLAPSE_TOP_N = 5
 _NEWS_TOP_N = 100
@@ -79,6 +81,16 @@ _should_stop = asyncio.Event()
 
 
 # ----- Helpers ---------------------------------------------------------------
+
+
+def _evolution_mode() -> str:
+    """`gp` (legacy AST GP) / `quanta` (LLM trajectory) / `hybrid`. Default hybrid."""
+    from app import runtime_settings
+
+    raw = (
+        runtime_settings.get_setting("FACTOR_EVOLUTION_MODE", "hybrid") or "hybrid"
+    ).strip().lower()
+    return raw if raw in {"gp", "quanta", "hybrid"} else "hybrid"
 
 
 def _seeded_population(rng: random.Random, target: int) -> list[FactorNode]:
@@ -393,6 +405,57 @@ async def continuous_evolution_loop() -> None:
                 last_error=None,
             )
             logger.info("[FactorForge] gen=%d done best=%s", generation, best)
+
+            # QuantaAlpha trajectory injection (hybrid / quanta modes).
+            mode = _evolution_mode()
+            if mode in {"quanta", "hybrid"}:
+                try:
+                    from app.services import factor_quanta_service as quanta
+
+                    recent_pool = [serialize(c) for c in next_pop[:8]]
+                    library_records = await factor_vector_store.list_factors(
+                        limit=20, sort_by="fitness"
+                    )
+                    injected = 0
+                    n_to_inject = _QUANTA_VARIANTS_PER_GEN
+                    n_generate = n_to_inject // 2
+                    n_evolve = n_to_inject - n_generate
+                    for _ in range(n_generate):
+                        draft = await quanta.generate_trajectory(
+                            recent_pool=recent_pool
+                        )
+                        if draft is None:
+                            continue
+                        await quanta.persist_trajectory(draft)
+                        injected += 1
+                    if library_records and n_evolve > 0:
+                        parents = quanta.pick_parents_for_quanta(
+                            library_records, n_evolve, rng
+                        )
+                        for parent in parents:
+                            draft = await quanta.evolve_trajectory(
+                                parent,
+                                failure_reason=(
+                                    "(no specific failure — periodic refinement)"
+                                ),
+                                recent_pool=recent_pool,
+                            )
+                            if draft is None:
+                                continue
+                            await quanta.persist_trajectory(draft)
+                            injected += 1
+                    if injected:
+                        logger.info(
+                            "[FactorForge gen=%d] quanta injected %d trajectories",
+                            generation,
+                            injected,
+                        )
+                except Exception:
+                    logger.warning(
+                        "quanta injection failed at gen=%d",
+                        generation,
+                        exc_info=True,
+                    )
 
             # Retrain predictor every N generations.
             if generation % _PREDICTOR_RETRAIN_EVERY == 0:

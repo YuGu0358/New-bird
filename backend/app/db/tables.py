@@ -806,6 +806,35 @@ class DailyRecommendation(Base):
     )
 
 
+class FactorTrajectory(Base):
+    """Trajectory-level evolution record (QuantaAlpha-inspired).
+
+    Each row is one candidate produced by the trajectory loop. Holds the
+    LLM's research direction + math intuition + final AST formula plus
+    the parent it descended from. Used to render the evolution lineage
+    tree on the frontend.
+    """
+
+    __tablename__ = "factor_trajectories"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    research_direction: Mapped[str] = mapped_column(Text, nullable=False)
+    math_intuition: Mapped[str] = mapped_column(Text, nullable=False)
+    formula: Mapped[str] = mapped_column(Text, nullable=False)
+    parent_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    evolution_step: Mapped[str] = mapped_column(String(32), nullable=False, default="seed")
+    fitness: Mapped[float | None] = mapped_column(Float, nullable=True)
+    ic_5d: Mapped[float | None] = mapped_column(Float, nullable=True)
+    failure_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    factor_record_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+        index=True,
+    )
+
+
 class FactorGenerationStat(Base):
     """Per-generation summary written at the end of each evolution cycle.
 

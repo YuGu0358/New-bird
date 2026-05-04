@@ -38,10 +38,13 @@ from app.models.factors import (
     PopulationSnapshotResponse,
     RecommendationView,
     RecommendationsResponse,
+    TrajectoriesResponse,
+    TrajectoryNodeView,
 )
 from app.services import (
     factor_landscape_service,
     factor_pipeline,
+    factor_quanta_service,
     factor_vector_store,
     today_recommendations_service,
 )
@@ -220,6 +223,16 @@ async def get_today_recommendations(top_k: int = 10) -> RecommendationsResponse:
     return RecommendationsResponse(
         items=[RecommendationView.model_validate(it) for it in items[:top_k]],
         generated_at=items[0]["date"] if items else None,
+    )
+
+
+@router.get("/trajectories", response_model=TrajectoriesResponse)
+async def list_trajectories(limit: int = 200) -> TrajectoriesResponse:
+    """Recent QuantaAlpha trajectories — drives the evolution lineage tree."""
+    capped = min(max(int(limit), 1), 1000)
+    items = await factor_quanta_service.list_trajectories(limit=capped)
+    return TrajectoriesResponse(
+        items=[TrajectoryNodeView.model_validate(it) for it in items]
     )
 
 
