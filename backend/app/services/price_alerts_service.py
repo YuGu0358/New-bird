@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 import logging
 from datetime import datetime, timezone
 from typing import Any
@@ -16,8 +15,6 @@ from app.services import alpaca_service, email_service
 logger = logging.getLogger(__name__)
 
 ALERT_POLL_INTERVAL_SECONDS = 20
-_monitor_task: asyncio.Task[None] | None = None
-_monitor_lock = asyncio.Lock()
 
 _CONDITION_TYPES = {
     "price_above",
@@ -235,7 +232,7 @@ async def _execute_rule_action(
     day_change_percent: float | None,
 ) -> str:
     if rule.action_type == "email":
-        subject = f"[Trading Raven] {rule.symbol} 已触发提醒"
+        subject = f"[Newbird] {rule.symbol} 已触发提醒"
         body = "\n".join(
             [
                 f"股票：{rule.symbol}",
@@ -327,56 +324,22 @@ async def evaluate_rules_once(
                 rule.last_error = str(exc)
                 logger.exception("Price alert action failed for %s", rule.symbol)
 
+            try:
+                from app.services import notifications_service
+
+                await notifications_service.dispatch_price_alert(
+                    symbol=rule.symbol,
+                    condition=_condition_summary(rule.condition_type, rule.target_value),
+                    target_value=float(rule.target_value)
+                    if rule.target_value is not None
+                    else None,
+                    current_price=current_price,
+                    day_change_percent=day_change_percent,
+                    note=rule.note or None,
+                )
+            except Exception:
+                # Notifications must never block the monitor.
+                logger.exception("Price alert notification failed for %s", rule.symbol)
+
         await session.commit()
         return triggered_count
-
-
-async def _run_monitor() -> None:
-    while True:
-        try:
-            await evaluate_rules_once()
-        except asyncio.CancelledError:
-            raise
-        except Exception:
-            logger.exception("Price alert monitor failed unexpectedly")
-
-        await asyncio.sleep(ALERT_POLL_INTERVAL_SECONDS)
-
-
-def _is_running() -> bool:
-    return _monitor_task is not None and not _monitor_task.done()
-
-
-def _on_monitor_done(task: asyncio.Task[None]) -> None:
-    global _monitor_task
-    try:
-        task.result()
-    except asyncio.CancelledError:
-        pass
-    except Exception:
-        logger.exception("Price alert monitor stopped with an unexpected error")
-    finally:
-        _monitor_task = None
-
-
-async def start_monitor() -> None:
-    global _monitor_task
-
-    async with _monitor_lock:
-        if _is_running():
-            return
-        _monitor_task = asyncio.create_task(_run_monitor(), name="price-alert-monitor")
-        _monitor_task.add_done_callback(_on_monitor_done)
-
-
-async def shutdown_monitor() -> None:
-    async with _monitor_lock:
-        task = _monitor_task
-        if task is None or task.done():
-            return
-        task.cancel()
-
-    try:
-        await task
-    except asyncio.CancelledError:
-        pass

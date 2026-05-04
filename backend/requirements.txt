@@ -12,4 +12,12 @@ aiosqlite
 httpx
 yfinance
 openai
+anthropic>=0.40,<1
 pypdf
+QuantLib
+ib_async>=1.0.3,<2
+apscheduler>=3.10,<4
+keyring>=24,<26
+scipy>=1.10,<2
+PyPortfolioOpt>=1.5,<2
+mcp>=1.0,<2

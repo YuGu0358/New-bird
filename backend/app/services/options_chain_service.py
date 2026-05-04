@@ -1,0 +1,756 @@
+"""Options-chain analytics service — yfinance + black-scholes + GEX rollup.
+
+The yfinance option_chain API gives us strike, lastPrice, bid/ask, volume,
+openInterest, impliedVolatility, but no gamma. We compute gamma (and re-stamp
+delta) via Black-Scholes so the GEX engine has consistent inputs.
+
+Why not the QuantLib router? The /api/quantlib/option/* endpoints are for
+single-option pricing; this service is for whole-chain GEX/wall analytics.
+Two different products, two different code paths.
+
+Two distinct caches:
+- `_chain_cache` — built OptionContract list keyed by (ticker, max_expiries).
+  Shared by both `get_gex_summary()` and `get_expiry_focus()` so the second
+  call doesn't refetch yfinance.
+- `_summary_cache` — final GEX summary payloads keyed the same way.
+"""
+from __future__ import annotations
+
+import logging
+from dataclasses import asdict
+from datetime import date, datetime, timedelta, timezone
+from typing import Any
+
+from app.services.network_utils import run_sync_with_retries
+from core.options_chain import (
+    OptionContract,
+    black_scholes_greeks,
+    build_iv_surface,
+    compute_oi_float,
+    compute_put_call_oi_ratio,
+    compute_squeeze,
+    detect_wall_clusters,
+    focus_expiry,
+    read_structure,
+    scan_pinning,
+    summarize_chain,
+)
+from core.options_chain.wall_clusters import (
+    CLUSTER_OI_THRESHOLD,
+    DEFAULT_TOP_N as DEFAULT_CLUSTER_TOP_N,
+)
+
+logger = logging.getLogger(__name__)
+
+_CHAIN_CACHE_TTL = timedelta(minutes=15)
+# (ticker, max_expiries) → (cached_at, {spot, contracts, expiries})
+_chain_cache: dict[str, tuple[datetime, dict[str, Any]]] = {}
+# (ticker, max_expiries) → (cached_at, summary_payload)
+_summary_cache: dict[str, tuple[datetime, dict[str, Any]]] = {}
+
+# How many expiries to scan; deeper chains slow yfinance dramatically.
+DEFAULT_MAX_EXPIRIES = 6
+DEFAULT_RISK_FREE = 0.04
+
+
+def _build_contracts_blocking(ticker: str, max_expiries: int, r: float) -> dict[str, Any]:
+    import yfinance as yf
+
+    t = yf.Ticker(ticker)
+    try:
+        spot = float(t.fast_info.last_price or 0)
+    except Exception:  # noqa: BLE001
+        spot = 0.0
+    if spot <= 0:
+        try:
+            hist = t.history(period="5d", auto_adjust=False)
+            if not hist.empty:
+                spot = float(hist["Close"].iloc[-1])
+        except Exception:  # noqa: BLE001
+            spot = 0.0
+
+    # Average daily $-volume over the last ~21 trading days. Used by
+    # scan_pinning() to compute the GEX/ADV pressure component. Optional:
+    # if the history call fails the friday-scan just skips that one
+    # +10-point lever in the pinning score.
+    adv_dollar: float | None = None
+    try:
+        hist_1mo = t.history(period="1mo", auto_adjust=False)
+        if not hist_1mo.empty and "Volume" in hist_1mo.columns:
+            avg_vol = float(hist_1mo["Volume"].dropna().mean() or 0)
+            if avg_vol > 0 and spot > 0:
+                adv_dollar = avg_vol * spot
+    except Exception:  # noqa: BLE001
+        adv_dollar = None
+
+    expiry_strings = list(t.options or [])[:max_expiries]
+    contracts: list[OptionContract] = []
+    today = date.today()
+
+    for exp_iso in expiry_strings:
+        try:
+            chain = t.option_chain(exp_iso)
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("option_chain(%s, %s) failed: %s", ticker, exp_iso, exc)
+            continue
+        try:
+            expiry_d = date.fromisoformat(exp_iso)
+        except ValueError:
+            continue
+
+        dte_days = max((expiry_d - today).days, 1)
+        t_yrs = dte_days / 365.0
+
+        for side, frame in (("C", chain.calls), ("P", chain.puts)):
+            for _, row in frame.iterrows():
+                try:
+                    strike = float(row.get("strike") or 0)
+                    if strike <= 0:
+                        continue
+                    iv = row.get("impliedVolatility")
+                    iv_f = float(iv) if iv is not None and not (iv != iv) else None
+                    oi = int(row.get("openInterest") or 0)
+                    vol = int(row.get("volume") or 0)
+                    last = row.get("lastPrice")
+                    last_f = float(last) if last is not None and not (last != last) else None
+                    bid = row.get("bid")
+                    bid_f = float(bid) if bid is not None and not (bid != bid) else None
+                    ask = row.get("ask")
+                    ask_f = float(ask) if ask is not None and not (ask != ask) else None
+
+                    greeks = None
+                    if iv_f and iv_f > 0 and spot > 0:
+                        greeks = black_scholes_greeks(
+                            spot=spot,
+                            strike=strike,
+                            time_to_expiry_yrs=t_yrs,
+                            iv=iv_f,
+                            r=r,
+                            option_type=side,
+                        )
+
+                    contracts.append(
+                        OptionContract(
+                            expiry=expiry_d,
+                            strike=strike,
+                            option_type=side,
+                            open_interest=oi,
+                            volume=vol,
+                            iv=iv_f,
+                            delta=greeks.delta if greeks else None,
+                            gamma=greeks.gamma if greeks else None,
+                            last=last_f,
+                            bid=bid_f,
+                            ask=ask_f,
+                        )
+                    )
+                except Exception as exc:  # noqa: BLE001 — skip malformed rows
+                    logger.debug("option row parse failed for %s %s: %s", ticker, exp_iso, exc)
+                    continue
+
+    return {
+        "spot": spot,
+        "contracts": contracts,
+        "expiries": expiry_strings,
+        "adv_dollar": adv_dollar,
+    }
+
+
+async def _get_chain(
+    ticker: str,
+    *,
+    max_expiries: int,
+    risk_free: float,
+    force: bool,
+) -> dict[str, Any]:
+    """Fetch (and cache) the raw chain — used by both gex and focus endpoints."""
+    normalized = ticker.upper()
+    cache_key = f"{normalized}:{max_expiries}"
+    now = datetime.now(timezone.utc)
+    cached = _chain_cache.get(cache_key)
+    if not force and cached and now - cached[0] <= _CHAIN_CACHE_TTL:
+        return cached[1]
+    raw = await run_sync_with_retries(
+        _build_contracts_blocking, normalized, max_expiries, risk_free
+    )
+    _chain_cache[cache_key] = (now, raw)
+    return raw
+
+
+async def get_gex_summary(
+    ticker: str,
+    *,
+    max_expiries: int = DEFAULT_MAX_EXPIRIES,
+    risk_free: float = DEFAULT_RISK_FREE,
+    force: bool = False,
+) -> dict[str, Any]:
+    """Pull the chain and return the GEX rollup payload."""
+    normalized = ticker.upper()
+    cache_key = f"{normalized}:{max_expiries}"
+    now = datetime.now(timezone.utc)
+    cached = _summary_cache.get(cache_key)
+    if not force and cached and now - cached[0] <= _CHAIN_CACHE_TTL:
+        return cached[1]
+
+    raw = await _get_chain(normalized, max_expiries=max_expiries, risk_free=risk_free, force=force)
+    spot = float(raw.get("spot") or 0)
+    contracts = raw.get("contracts") or []
+
+    if not contracts or spot <= 0:
+        payload = {
+            "ticker": normalized,
+            "spot": spot,
+            "call_wall": None,
+            "put_wall": None,
+            "zero_gamma": None,
+            "max_pain": None,
+            "total_gex": 0.0,
+            "call_gex_total": 0.0,
+            "put_gex_total": 0.0,
+            "by_strike": [],
+            "by_expiry": [],
+            "expiries": raw.get("expiries") or [],
+            "generated_at": now,
+        }
+        _summary_cache[cache_key] = (now, payload)
+        return payload
+
+    summary = summarize_chain(ticker=normalized, spot=spot, contracts=contracts)
+    payload = {
+        **(asdict(summary) if summary else {}),
+        "expiries": raw.get("expiries") or [],
+        "generated_at": now,
+    }
+    _summary_cache[cache_key] = (now, payload)
+    return payload
+
+
+async def get_friday_scan(
+    ticker: str,
+    expiry_iso: str | None = None,
+    *,
+    max_expiries: int = DEFAULT_MAX_EXPIRIES,
+    risk_free: float = DEFAULT_RISK_FREE,
+) -> dict[str, Any] | None:
+    """Pinning-probability scan for one expiry.
+
+    If `expiry_iso` is None we pick the next Friday found in the chain (or
+    the next expiry within 7 days, whichever comes first). Returns the
+    score 0..100 + verdict + human-readable reasons.
+    """
+    normalized = ticker.upper()
+    raw = await _get_chain(
+        normalized, max_expiries=max_expiries, risk_free=risk_free, force=False
+    )
+    spot = float(raw.get("spot") or 0)
+    contracts = raw.get("contracts") or []
+    adv_dollar = raw.get("adv_dollar")
+    expiry_strings = raw.get("expiries") or []
+    if not contracts or spot <= 0:
+        return None
+
+    today = date.today()
+    target: date | None = None
+    if expiry_iso:
+        try:
+            target = date.fromisoformat(expiry_iso)
+        except ValueError as exc:
+            raise ValueError(f"Invalid expiry date: {expiry_iso}") from exc
+    else:
+        # Auto-pick: next Friday in the chain, else the nearest expiry.
+        candidates: list[date] = []
+        for s in expiry_strings:
+            try:
+                candidates.append(date.fromisoformat(s))
+            except ValueError:
+                continue
+        candidates.sort()
+        fridays = [d for d in candidates if d.weekday() == 4 and d >= today]
+        if fridays:
+            target = fridays[0]
+        elif candidates:
+            target = candidates[0]
+    if target is None:
+        return None
+
+    scan = scan_pinning(
+        ticker=normalized,
+        spot=spot,
+        contracts=contracts,
+        target_expiry=target,
+        today=today,
+        adv_dollar=adv_dollar,
+    )
+    return {
+        "ticker": scan.ticker,
+        "spot": scan.spot,
+        "target_expiry": scan.target_expiry,
+        "dte_calendar": scan.dte_calendar,
+        "has_data": scan.has_data,
+        "atm_iv": scan.atm_iv,
+        "expected_move": scan.expected_move,
+        "expected_low": scan.expected_low,
+        "expected_high": scan.expected_high,
+        "contract_count": scan.contract_count,
+        "total_chain_oi": scan.total_chain_oi,
+        "median_strike_oi": scan.median_strike_oi,
+        "total_friday_gex": scan.total_friday_gex,
+        "friday_gex_pressure_pct": scan.friday_gex_pressure_pct,
+        "adv_dollar": scan.adv_dollar,
+        "call_wall": _wall_dict(scan.call_wall),
+        "put_wall": _wall_dict(scan.put_wall),
+        "max_pain": scan.max_pain,
+        "put_call_oi_ratio": scan.put_call_oi_ratio,
+        "pinning_score": scan.pinning_score,
+        "verdict": scan.verdict,
+        "reasons": list(scan.reasons),
+        "suggested_short_call": scan.suggested_short_call,
+        "suggested_short_put": scan.suggested_short_put,
+        "breakeven_low": scan.breakeven_low,
+        "breakeven_high": scan.breakeven_high,
+        "generated_at": datetime.now(timezone.utc),
+    }
+
+
+def _wall_dict(w: Any) -> dict[str, Any]:
+    return {
+        "strike": w.strike,
+        "oi": w.oi,
+        "concentration_pct": w.concentration_pct,
+        "salience_mult": w.salience_mult,
+        "pressure_pct": w.pressure_pct,
+        "distance_pct": w.distance_pct,
+        "gex_dollar": w.gex_dollar,
+    }
+
+
+def _realized_vol_rank_blocking(ticker: str) -> float | None:
+    """Approximate IV rank via 252-day realized-vol percentile.
+
+    Real IV-history isn't free on yfinance. As a defensible proxy we compute
+    21-day rolling realized vol over the last ~252 trading days and return
+    the percentile of the latest value (0..1). Higher = realized vol is at
+    the upper end of its 1-year range; lower = compressed.
+    """
+    try:
+        import math
+
+        import yfinance as yf
+
+        hist = yf.Ticker(ticker).history(period="1y", auto_adjust=False)
+    except Exception:  # noqa: BLE001
+        return None
+    if hist is None or hist.empty or "Close" not in hist.columns:
+        return None
+    closes = hist["Close"].dropna()
+    if len(closes) < 30:
+        return None
+    log_returns = (closes / closes.shift(1)).apply(lambda x: math.log(x) if x and x > 0 else 0.0)
+    rolling_std = log_returns.rolling(window=21).std().dropna()
+    if rolling_std.empty:
+        return None
+    latest = float(rolling_std.iloc[-1])
+    series = rolling_std.tolist()
+    if not series:
+        return None
+    rank = sum(1 for v in series if v <= latest) / len(series)
+    return float(rank)
+
+
+def _short_interest_blocking(ticker: str) -> float | None:
+    """Pull shortPercentOfFloat from yfinance .info (when available)."""
+    try:
+        import yfinance as yf
+
+        info = yf.Ticker(ticker).info or {}
+    except Exception:  # noqa: BLE001
+        return None
+    val = info.get("shortPercentOfFloat")
+    if val is None:
+        return None
+    try:
+        return float(val)
+    except (TypeError, ValueError):
+        return None
+
+
+def _float_shares_blocking(ticker: str) -> int | None:
+    """Pull floatShares from yfinance .info (when available).
+
+    Mirrors `_short_interest_blocking`: any failure (network, missing key,
+    bad value) returns None and the caller surfaces fractions as null.
+    """
+    try:
+        import yfinance as yf
+
+        info = yf.Ticker(ticker).info or {}
+    except Exception:  # noqa: BLE001
+        return None
+    val = info.get("floatShares")
+    if val is None:
+        return None
+    try:
+        coerced = int(val)
+    except (TypeError, ValueError):
+        return None
+    return coerced if coerced > 0 else None
+
+
+async def get_squeeze_score(
+    ticker: str,
+    *,
+    max_expiries: int = DEFAULT_MAX_EXPIRIES,
+    risk_free: float = DEFAULT_RISK_FREE,
+) -> dict[str, Any] | None:
+    """Compute the 4-factor squeeze score for a ticker.
+
+    Returns a payload dict shaped for SqueezeScoreResponse, or None if the
+    chain is empty / spot is invalid.
+    """
+    normalized = ticker.upper()
+    raw = await _get_chain(
+        normalized, max_expiries=max_expiries, risk_free=risk_free, force=False
+    )
+    contracts: list[OptionContract] = raw.get("contracts") or []
+    if not contracts:
+        return None
+
+    iv_rank = await run_sync_with_retries(_realized_vol_rank_blocking, normalized)
+    short_interest = await run_sync_with_retries(_short_interest_blocking, normalized)
+
+    score = compute_squeeze(
+        contracts,
+        iv_rank=iv_rank,
+        short_interest_frac=short_interest,
+    )
+
+    return {
+        "ticker": normalized,
+        "score": score.score,
+        "level": score.level,
+        "signals": list(score.signals),
+        "factor_scores": dict(score.factor_scores),
+        "max_possible": score.max_possible,
+        "iv_rank": iv_rank,
+        "short_interest_frac": short_interest,
+        "generated_at": datetime.now(timezone.utc),
+    }
+
+
+async def get_structure_read(
+    ticker: str,
+    *,
+    max_expiries: int = DEFAULT_MAX_EXPIRIES,
+    risk_free: float = DEFAULT_RISK_FREE,
+) -> dict[str, Any] | None:
+    """Classify the chain into one of 5 structural patterns.
+
+    Reuses the cached chain (no re-fetch). Calls summarize_chain for the
+    walls/max_pain, focus_expiry on the front-month for atm_iv + expected
+    move, _realized_vol_rank_blocking for iv_rank, and scan_pinning for
+    pinning_score. Hands all of that to read_structure() and shapes the
+    output for StructureReadResponse.
+
+    Returns None if the chain is empty or spot is invalid (matches
+    get_squeeze_score's convention).
+    """
+    normalized = ticker.upper()
+    raw = await _get_chain(
+        normalized, max_expiries=max_expiries, risk_free=risk_free, force=False
+    )
+    spot = float(raw.get("spot") or 0)
+    contracts: list[OptionContract] = raw.get("contracts") or []
+    expiry_strings: list[str] = raw.get("expiries") or []
+    if not contracts or spot <= 0:
+        return None
+
+    # Walls + max_pain via summarize_chain. The summary doesn't include a
+    # chain-wide put/call OI ratio so we reuse the shared helper from the
+    # squeeze module to compute it from the same contracts.
+    summary = summarize_chain(ticker=normalized, spot=spot, contracts=contracts)
+    call_wall = summary.call_wall if summary else None
+    put_wall = summary.put_wall if summary else None
+    max_pain = summary.max_pain if summary else None
+
+    put_call_oi_ratio = compute_put_call_oi_ratio(contracts)
+
+    # Front-month expiry → atm_iv + expected_move%.
+    today = date.today()
+    atm_iv: float | None = None
+    expected_move_pct: float | None = None
+    front_expiry: date | None = None
+    front_candidates: list[date] = []
+    for s in expiry_strings:
+        try:
+            d = date.fromisoformat(s)
+        except ValueError:
+            continue
+        if d >= today:
+            front_candidates.append(d)
+    front_candidates.sort()
+    if front_candidates:
+        front_expiry = front_candidates[0]
+        focus = focus_expiry(
+            ticker=normalized,
+            spot=spot,
+            contracts=contracts,
+            expiry=front_expiry,
+            today=today,
+        )
+        if focus is not None:
+            atm_iv = focus.atm_iv
+            if focus.expected_move is not None and spot > 0:
+                expected_move_pct = float(focus.expected_move) / spot
+
+    # iv_rank proxy via 1y realized-vol percentile (same as squeeze).
+    iv_rank = await run_sync_with_retries(_realized_vol_rank_blocking, normalized)
+
+    # Pinning score: scan the same front-month expiry.
+    pinning_score: int | None = None
+    if front_expiry is not None:
+        scan = scan_pinning(
+            ticker=normalized,
+            spot=spot,
+            contracts=contracts,
+            target_expiry=front_expiry,
+            today=today,
+            adv_dollar=raw.get("adv_dollar"),
+        )
+        pinning_score = scan.pinning_score
+
+    structure = read_structure(
+        spot=spot,
+        call_wall=call_wall,
+        put_wall=put_wall,
+        max_pain=max_pain,
+        atm_iv=atm_iv,
+        expected_move_pct=expected_move_pct,
+        iv_rank=iv_rank,
+        put_call_oi_ratio=put_call_oi_ratio,
+        pinning_score=pinning_score,
+    )
+
+    return {
+        "ticker": normalized,
+        "pattern": structure.pattern,
+        "winning_player": structure.winning_player,
+        "confidence": structure.confidence,
+        "signals_fired": list(structure.signals_fired),
+        "rationale": list(structure.rationale),
+        "inputs_used": dict(structure.inputs_used),
+        "generated_at": datetime.now(timezone.utc),
+    }
+
+
+async def get_oi_float(
+    ticker: str,
+    *,
+    max_expiries: int = DEFAULT_MAX_EXPIRIES,
+    risk_free: float = DEFAULT_RISK_FREE,
+) -> dict[str, Any] | None:
+    """Notional + delta-adjusted OI as a fraction of public float.
+
+    The pure compute lives in `core.options_chain.oi_float.compute_oi_float`;
+    this function is the I/O boundary — it pulls (or reuses) the cached chain
+    and yfinance's `floatShares`, then assembles the response payload. Returns
+    None when no contracts are available.
+    """
+    normalized = ticker.upper()
+    raw = await _get_chain(
+        normalized, max_expiries=max_expiries, risk_free=risk_free, force=False
+    )
+    spot = float(raw.get("spot") or 0)
+    contracts: list[OptionContract] = raw.get("contracts") or []
+    if not contracts:
+        return None
+
+    float_shares = await run_sync_with_retries(_float_shares_blocking, normalized)
+    breakdown = compute_oi_float(contracts, float_shares=float_shares)
+
+    return {
+        "ticker": normalized,
+        "spot": spot,
+        "float_shares": float_shares,
+        "total_call_oi": breakdown.total_call_oi,
+        "total_put_oi": breakdown.total_put_oi,
+        "notional_call_shares": breakdown.notional_call_shares,
+        "notional_put_shares": breakdown.notional_put_shares,
+        "notional_total_shares": breakdown.notional_total_shares,
+        "notional_call_pct": breakdown.notional_call_pct,
+        "notional_put_pct": breakdown.notional_put_pct,
+        "notional_total_pct": breakdown.notional_total_pct,
+        "delta_adjusted_call_shares": breakdown.delta_adjusted_call_shares,
+        "delta_adjusted_put_shares": breakdown.delta_adjusted_put_shares,
+        "delta_adjusted_total_shares": breakdown.delta_adjusted_total_shares,
+        "delta_adjusted_call_pct": breakdown.delta_adjusted_call_pct,
+        "delta_adjusted_put_pct": breakdown.delta_adjusted_put_pct,
+        "delta_adjusted_total_pct": breakdown.delta_adjusted_total_pct,
+        "contracts_with_delta": breakdown.contracts_with_delta,
+        "contracts_total": breakdown.contracts_total,
+        "generated_at": datetime.now(timezone.utc),
+    }
+
+
+async def get_wall_clusters(
+    ticker: str,
+    *,
+    max_expiries: int = DEFAULT_MAX_EXPIRIES,
+    risk_free: float = DEFAULT_RISK_FREE,
+    threshold_pct: float = CLUSTER_OI_THRESHOLD,
+    top_n: int = DEFAULT_CLUSTER_TOP_N,
+) -> dict[str, Any] | None:
+    """Tenor-bucketed wall clusters for the chain.
+
+    Returns a payload shaped for WallClustersResponse, or None when the chain
+    is empty.
+    """
+    normalized = ticker.upper()
+    raw = await _get_chain(
+        normalized, max_expiries=max_expiries, risk_free=risk_free, force=False
+    )
+    spot = float(raw.get("spot") or 0)
+    contracts: list[OptionContract] = raw.get("contracts") or []
+    if not contracts:
+        return None
+
+    clusters = detect_wall_clusters(
+        ticker=normalized,
+        spot=spot,
+        contracts=contracts,
+        threshold_pct=threshold_pct,
+        top_n=top_n,
+    )
+
+    return {
+        "ticker": clusters.ticker,
+        "spot": clusters.spot,
+        "threshold_pct": clusters.threshold_pct,
+        "top_n": clusters.top_n,
+        "buckets": [
+            {
+                "label": b.label,
+                "dte_min": b.dte_min,
+                "dte_max": b.dte_max,
+                "contract_count": b.contract_count,
+                "peak_call_oi": b.peak_call_oi,
+                "peak_put_oi": b.peak_put_oi,
+                "top_calls": [asdict(s) for s in b.top_calls],
+                "top_puts": [asdict(s) for s in b.top_puts],
+            }
+            for b in clusters.buckets
+        ],
+        "generated_at": datetime.now(timezone.utc),
+    }
+
+
+async def get_iv_surface(
+    ticker: str,
+    *,
+    max_expiries: int = DEFAULT_MAX_EXPIRIES,
+    risk_free: float = DEFAULT_RISK_FREE,
+) -> dict[str, Any] | None:
+    """Strike x expiry IV grid + per-expiry term-structure summary.
+
+    The pure compute lives in `core.options_chain.iv_surface.build_iv_surface`;
+    this function is the I/O boundary — it reuses the cached chain and shapes
+    the response for IVSurfaceResponse. Returns None when no contracts are
+    available or spot is invalid.
+    """
+    normalized = ticker.upper()
+    raw = await _get_chain(
+        normalized, max_expiries=max_expiries, risk_free=risk_free, force=False
+    )
+    spot = float(raw.get("spot") or 0)
+    contracts: list[OptionContract] = raw.get("contracts") or []
+    if not contracts or spot <= 0:
+        return None
+
+    surface = build_iv_surface(
+        ticker=normalized,
+        spot=spot,
+        contracts=contracts,
+        today=date.today(),
+    )
+
+    return {
+        "ticker": surface.ticker,
+        "spot": surface.spot,
+        "expiries": [
+            {
+                "expiry": e.expiry,
+                "dte": e.dte,
+                "atm_iv": e.atm_iv,
+                "skew_pct": e.skew_pct,
+                "points": [
+                    {
+                        "strike": p.strike,
+                        "iv": p.iv,
+                        "moneyness": p.moneyness,
+                        "open_interest": p.open_interest,
+                        "has_call": p.has_call,
+                        "has_put": p.has_put,
+                    }
+                    for p in e.points
+                ],
+            }
+            for e in surface.expiries
+        ],
+        "strikes": list(surface.strikes),
+        "as_of": surface.as_of,
+        "generated_at": datetime.now(timezone.utc),
+    }
+
+
+async def get_expiry_focus(
+    ticker: str,
+    expiry_iso: str,
+    *,
+    max_expiries: int = DEFAULT_MAX_EXPIRIES,
+    risk_free: float = DEFAULT_RISK_FREE,
+    top_n: int = 5,
+) -> dict[str, Any] | None:
+    """Per-expiry OI focus (top resistance / support strikes + expected move)."""
+    normalized = ticker.upper()
+    try:
+        target = date.fromisoformat(expiry_iso)
+    except ValueError as exc:
+        raise ValueError(f"Invalid expiry date: {expiry_iso}") from exc
+
+    raw = await _get_chain(
+        normalized,
+        max_expiries=max_expiries,
+        risk_free=risk_free,
+        force=False,
+    )
+    spot = float(raw.get("spot") or 0)
+    contracts = raw.get("contracts") or []
+    if not contracts or spot <= 0:
+        return None
+
+    focus = focus_expiry(
+        ticker=normalized,
+        spot=spot,
+        contracts=contracts,
+        expiry=target,
+        top_n=top_n,
+    )
+    if focus is None:
+        return None
+
+    return {
+        "ticker": focus.ticker,
+        "expiry": focus.expiry,
+        "dte": focus.dte,
+        "spot": focus.spot,
+        "atm_iv": focus.atm_iv,
+        "expected_move": focus.expected_move,
+        "expected_low": focus.expected_low,
+        "expected_high": focus.expected_high,
+        "max_pain": focus.max_pain,
+        "total_call_oi": focus.total_call_oi,
+        "total_put_oi": focus.total_put_oi,
+        "put_call_oi_ratio": focus.put_call_oi_ratio,
+        "top_call_strikes": [asdict(s) for s in focus.top_call_strikes],
+        "top_put_strikes": [asdict(s) for s in focus.top_put_strikes],
+        "generated_at": datetime.now(timezone.utc),
+    }

@@ -57,6 +57,68 @@ SETTING_DEFINITIONS: tuple[SettingDefinition, ...] = (
         description="默认使用 Alpaca paper trading 地址。",
     ),
     SettingDefinition(
+        key="CRYPTO_COINGECKO_API_BASE",
+        label="CoinGecko API Base",
+        category="market_data",
+        required=False,
+        sensitive=False,
+        default="https://api.coingecko.com/api/v3",
+        description="CoinGecko 公共 REST API 地址。默认免费公共版；如需付费版可改为对应 host。",
+    ),
+    SettingDefinition(
+        key="CRYPTO_COINGECKO_ENABLED",
+        label="Enable CoinGecko Crypto Markets",
+        category="market_data",
+        required=False,
+        sensitive=False,
+        default="false",
+        description="true 时启用 CoinGecko 加密货币行情接入；默认关闭，开启后才会拉取行情。",
+    ),
+    SettingDefinition(
+        key="KRAKEN_ENABLED",
+        label="Enable Kraken Public Data",
+        category="market_data",
+        required=False,
+        sensitive=False,
+        default="false",
+        description="true 时启用 Kraken 公共行情接口（只读 ticker / 最近成交）；默认关闭。",
+    ),
+    SettingDefinition(
+        key="KRAKEN_API_BASE",
+        label="Kraken API Base URL",
+        category="market_data",
+        required=False,
+        sensitive=False,
+        default="https://api.kraken.com",
+        description="Kraken REST API 入口，通常无需修改。",
+    ),
+    SettingDefinition(
+        key="GLASSNODE_ENABLED",
+        label="Enable GlassNode On-Chain Adapter",
+        category="market_data",
+        required=False,
+        sensitive=False,
+        default="false",
+        description="GlassNode 链上指标接入开关；默认关闭，需配合 GLASSNODE_API_KEY 使用。",
+    ),
+    SettingDefinition(
+        key="GLASSNODE_API_KEY",
+        label="GlassNode API Key",
+        category="market_data",
+        required=False,
+        sensitive=True,
+        description="GlassNode REST API key（免费层登录后在仪表板获取）。",
+    ),
+    SettingDefinition(
+        key="GLASSNODE_API_BASE",
+        label="GlassNode API Base",
+        category="market_data",
+        required=False,
+        sensitive=False,
+        default="https://api.glassnode.com/v1",
+        description="GlassNode REST API 入口；通常无需修改。",
+    ),
+    SettingDefinition(
         key="POLYGON_API_KEY",
         label="Polygon API Key",
         category="market_data",
@@ -89,6 +151,91 @@ SETTING_DEFINITIONS: tuple[SettingDefinition, ...] = (
         description="用于新闻摘要和研究报告。",
     ),
     SettingDefinition(
+        key="FRED_API_KEY",
+        label="FRED API Key",
+        category="research",
+        required=False,
+        description="用于宏观指标看板（CPI/PCE/收益率/HY OAS 等）。免费申请：https://fredaccount.stlouisfed.org/apikeys",
+    ),
+    SettingDefinition(
+        key="TRADINGECONOMICS_API_KEY",
+        label="TradingEconomics API Key",
+        category="research",
+        required=False,
+        description="可选。用于实时丰富 Economic Calendar 事件；不填时使用内置精选种子事件列表。",
+    ),
+    SettingDefinition(
+        key="PINE_SEEDS_DIR",
+        label="Pine Seeds Directory",
+        category="research",
+        required=False,
+        sensitive=False,
+        default="",
+        description="本地写入 TradingView pine-seeds CSV 的目录。默认：${DATA_DIR}/pine_seeds。",
+    ),
+    SettingDefinition(
+        key="PINE_SEEDS_REPO_URL",
+        label="Pine Seeds Repo URL",
+        category="research",
+        required=False,
+        sensitive=False,
+        default="",
+        description="pine-seeds 公开 GitHub 仓库地址（HTTPS 或 SSH）。仅在需要自动 push 时填写。申请 TradingView 白名单：https://github.com/tradingview-pine-seeds",
+    ),
+    SettingDefinition(
+        key="PINE_SEEDS_WATCHLIST",
+        label="Pine Seeds Watchlist",
+        category="research",
+        required=False,
+        sensitive=False,
+        default="SPY,QQQ,NVDA,AAPL",
+        description="要导出 options / 估值水平的标的列表（逗号分隔）。",
+    ),
+    SettingDefinition(
+        key="BROKER_BACKEND",
+        label="Broker Backend",
+        category="broker",
+        required=False,
+        sensitive=False,
+        default="alpaca",
+        description="路由到哪个券商：alpaca（默认）或 ibkr。切换到 ibkr 需要本地运行的 IB Gateway。",
+    ),
+    SettingDefinition(
+        key="IBKR_HOST",
+        label="IBKR Host",
+        category="broker",
+        required=False,
+        sensitive=False,
+        default="127.0.0.1",
+        description="IB Gateway / TWS 运行的主机，默认本机 127.0.0.1。",
+    ),
+    SettingDefinition(
+        key="IBKR_PORT",
+        label="IBKR Port",
+        category="broker",
+        required=False,
+        sensitive=False,
+        default="5055",
+        description="5055 = paper，4001 = live。在 IB Gateway → Configuration → API 中设置。",
+    ),
+    SettingDefinition(
+        key="IBKR_CLIENT_ID",
+        label="IBKR Client ID",
+        category="broker",
+        required=False,
+        sensitive=False,
+        default="1",
+        description="每个连接需要唯一整数。运行多个机器人时使用不同值（1-32）。",
+    ),
+    SettingDefinition(
+        key="IBKR_ACCOUNT_ID",
+        label="IBKR Account ID",
+        category="broker",
+        required=False,
+        sensitive=False,
+        description="IBKR 账户 ID，例如 DU1234567 (paper) 或 U1234567 (live)。仅在使用 ibkr 后端时需要。",
+    ),
+    SettingDefinition(
         key="OPENAI_API_KEY",
         label="OpenAI API Key",
         category="ai",
@@ -112,6 +259,40 @@ SETTING_DEFINITIONS: tuple[SettingDefinition, ...] = (
         sensitive=False,
         default="gpt-4o-2024-08-06",
         description="用于社媒摘要。",
+    ),
+    SettingDefinition(
+        key="OPENAI_EMBEDDING_MODEL",
+        label="OpenAI Embedding Model",
+        category="ai",
+        required=False,
+        sensitive=False,
+        default="text-embedding-3-small",
+        description="用于新闻聚类等向量化任务的嵌入模型。",
+    ),
+    SettingDefinition(
+        key="ANTHROPIC_API_KEY",
+        label="Anthropic API Key",
+        category="ai",
+        required=False,
+        description="用于 AI Council Claude 提供方（可选）。设置后可在 COUNCIL_LLM_PROVIDER 中切换到 anthropic。",
+    ),
+    SettingDefinition(
+        key="ANTHROPIC_COUNCIL_MODEL",
+        label="Anthropic Council Model",
+        category="ai",
+        required=False,
+        sensitive=False,
+        default="claude-sonnet-4-5-20250929",
+        description="AI Council 使用的 Claude 模型；默认 Sonnet 4.5。",
+    ),
+    SettingDefinition(
+        key="COUNCIL_LLM_PROVIDER",
+        label="AI Council LLM Provider",
+        category="ai",
+        required=False,
+        sensitive=False,
+        default="openai",
+        description="AI Council 使用的 LLM 提供方：openai（默认）或 anthropic。",
     ),
     SettingDefinition(
         key="ENABLE_SOCIAL_AUTO_TRADE",
@@ -187,6 +368,73 @@ SETTING_DEFINITIONS: tuple[SettingDefinition, ...] = (
         description="价格提醒默认收件人，留空时回退到 SMTP From。",
     ),
     SettingDefinition(
+        key="NOTIFICATIONS_WEBHOOK_URL",
+        label="Generic Webhook URL",
+        category="notifications",
+        required=False,
+        sensitive=True,
+        description="风控/价格提醒事件以原始 JSON 形式 POST 到该地址，留空则跳过。",
+    ),
+    SettingDefinition(
+        key="NOTIFICATIONS_SLACK_WEBHOOK_URL",
+        label="Slack Incoming Webhook",
+        category="notifications",
+        required=False,
+        sensitive=True,
+        description="Slack 通道：粘贴 Incoming Webhook URL 即可。",
+    ),
+    SettingDefinition(
+        key="NOTIFICATIONS_DISCORD_WEBHOOK_URL",
+        label="Discord Webhook",
+        category="notifications",
+        required=False,
+        sensitive=True,
+        description="Discord 通道：频道设置 → 整合 → Webhook。",
+    ),
+    SettingDefinition(
+        key="NOTIFICATIONS_TELEGRAM_BOT_TOKEN",
+        label="Telegram Bot Token",
+        category="notifications",
+        required=False,
+        sensitive=True,
+        description="Telegram 通道：BotFather 创建后给出的 token。",
+    ),
+    SettingDefinition(
+        key="NOTIFICATIONS_TELEGRAM_CHAT_ID",
+        label="Telegram Chat ID",
+        category="notifications",
+        required=False,
+        sensitive=False,
+        description="Telegram 通道：发送目标的 chat_id（与 bot token 同时填写才生效）。",
+    ),
+    SettingDefinition(
+        key="POLYMARKET_ENABLED",
+        label="Enable Polymarket integration",
+        category="market_data",
+        required=False,
+        sensitive=False,
+        default="false",
+        description="预测市场（Polymarket）只读数据，默认关闭。在受限地区使用前请自行确认合规。",
+    ),
+    SettingDefinition(
+        key="POLYMARKET_API_BASE",
+        label="Polymarket API Base URL",
+        category="market_data",
+        required=False,
+        sensitive=False,
+        default="https://gamma-api.polymarket.com",
+        description="Polymarket gamma 公共只读 API 入口；通常无需修改。",
+    ),
+    SettingDefinition(
+        key="DOCS_ROOT_DIR",
+        label="Docs Root Directory",
+        category="research",
+        required=False,
+        sensitive=False,
+        default="",
+        description="覆盖 /api/docs 扫描的根目录（默认仓库根下的 docs/）。",
+    ),
+    SettingDefinition(
         key="ALLOW_LIVE_ALERT_ORDERS",
         label="Allow Live Alert Orders",
         category="safety",
@@ -195,7 +443,18 @@ SETTING_DEFINITIONS: tuple[SettingDefinition, ...] = (
         default="false",
         description="false 时自动交易仅允许 Alpaca paper 账户。",
     ),
+    SettingDefinition(
+        key="SECURE_STORAGE_ENABLED",
+        label="Enable Secure Credential Storage",
+        category="safety",
+        required=False,
+        sensitive=False,
+        default="false",
+        description="true 时把 sensitive 标记的 setting 存入 OS 钥匙串（macOS Keychain / Windows Credential Manager / Linux libsecret）；默认 false 时仍写 SQLite。",
+    ),
 )
+
+ENABLED_SETTING_KEY = "SECURE_STORAGE_ENABLED"
 
 _SETTING_MAP = {item.key: item for item in SETTING_DEFINITIONS}
 
@@ -234,10 +493,40 @@ def _read_stored_values() -> dict[str, str]:
         connection.close()
 
 
+def _delete_stored_value(key: str) -> None:
+    """Remove a single key from app_settings. Idempotent."""
+    connection = _connect()
+    try:
+        connection.execute("DELETE FROM app_settings WHERE key = ?", (key,))
+        connection.commit()
+    finally:
+        connection.close()
+
+
+def _vault_enabled() -> bool:
+    """Read the master switch directly from SQLite to avoid recursion."""
+    stored = _read_stored_values().get(ENABLED_SETTING_KEY, "")
+    return _parse_bool(stored, default=False)
+
+
 def get_setting(key: str, default: str | None = None) -> str | None:
     normalized_key = str(key or "").strip()
     if not normalized_key:
         return default
+
+    # Vault read-through: only sensitive keys, only when enabled.
+    definition = _SETTING_MAP.get(normalized_key)
+    if (
+        definition is not None
+        and definition.sensitive
+        and normalized_key != ENABLED_SETTING_KEY  # avoid recursion
+        and _vault_enabled()
+    ):
+        from app.services.secure_storage_service import get_secret
+
+        secret = get_secret(normalized_key)
+        if secret:
+            return secret
 
     stored = _read_stored_values().get(normalized_key)
     if stored:
@@ -247,8 +536,7 @@ def get_setting(key: str, default: str | None = None) -> str | None:
     if env_value:
         return env_value
 
-    definition = _SETTING_MAP.get(normalized_key)
-    if definition and definition.default is not None:
+    if definition is not None and definition.default is not None:
         return definition.default
 
     return default
@@ -333,6 +621,11 @@ def save_settings(values: dict[str, Any], admin_token: str | None = None) -> dic
     now = datetime.now(timezone.utc).isoformat()
 
     try:
+        # Cache vault-enabled state once per save call to avoid repeated
+        # SQLite reads (and to make the routing decision consistent across
+        # the loop even if a value flips the switch mid-batch).
+        vault_on = _vault_enabled()
+
         for key, raw_value in values.items():
             definition = _SETTING_MAP.get(str(key).strip())
             if definition is None:
@@ -341,6 +634,26 @@ def save_settings(values: dict[str, Any], admin_token: str | None = None) -> dic
             normalized_value = str(raw_value).strip() if raw_value is not None else ""
             if not normalized_value:
                 continue
+
+            # Route sensitive values to the OS keychain when the master
+            # switch is on. Never route the switch itself (chicken-and-egg).
+            if (
+                definition.sensitive
+                and definition.key != ENABLED_SETTING_KEY
+                and vault_on
+            ):
+                from app.services.secure_storage_service import set_secret
+
+                if set_secret(definition.key, normalized_value):
+                    # Vault write succeeded; remove any stale SQLite copy
+                    # so we don't leave plaintext behind.
+                    connection.execute(
+                        "DELETE FROM app_settings WHERE key = ?",
+                        (definition.key,),
+                    )
+                    updated_keys.append(definition.key)
+                    continue
+                # Vault write failed -- fall through to SQLite write.
 
             connection.execute(
                 """

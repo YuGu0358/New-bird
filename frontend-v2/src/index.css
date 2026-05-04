@@ -1,0 +1,385 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* =============================================================
+   Newbird — Tokyo cyberpunk aesthetic
+   - Pure black void with subtle grid + noise overlays
+   - Neon cyan #14F1D9 as primary accent
+   - Sharp 0-radius corners; corner-cut decorations
+   - Display: Chakra Petch · Body: Geist · Mono: JetBrains Mono
+   ============================================================= */
+
+@layer base {
+  *,
+  *::before,
+  *::after { box-sizing: border-box; }
+
+  html, body, #root { height: 100%; }
+
+  body {
+    background: #050508;
+    color: #F0F2FA;
+    font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-feature-settings: 'tnum' 1;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Subtle grid background — fixed, beneath everything */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(20, 241, 217, 0.015) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(20, 241, 217, 0.015) 1px, transparent 1px);
+    background-size: 48px 48px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* Film-grain noise overlay */
+  body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' /%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)' opacity='0.4'/%3E%3C/svg%3E");
+    opacity: 0.03;
+    pointer-events: none;
+    z-index: 1;
+  }
+
+  /* App shell sits above the overlays */
+  #root > * { position: relative; z-index: 2; }
+
+  /* Scrollbar — thin, neutral */
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-track { background: #0E0F14; }
+  ::-webkit-scrollbar-thumb { background: #1F2028; }
+  ::-webkit-scrollbar-thumb:hover { background: #2D2F40; }
+
+  .tabular { font-variant-numeric: tabular-nums; }
+
+  /* Pulse animation for live status dots */
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50%      { opacity: 0.4; }
+  }
+}
+
+@layer components {
+  /* ============================================ Cards (sharp corners) */
+  .card {
+    @apply bg-surface border border-border-subtle p-6 relative;
+  }
+  .card-dense {
+    @apply bg-surface border border-border-subtle p-4 relative;
+  }
+  .card-emph {
+    @apply bg-surface border border-border-subtle p-7 relative;
+  }
+  .card-hover {
+    @apply transition duration-150 hover:border-border-accent;
+  }
+
+  /* Corner-cut decoration: top-left + bottom-right brackets */
+  .card-bracket::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0;
+    width: 24px; height: 24px;
+    border-top: 1px solid #2D2F40;
+    border-left: 1px solid #2D2F40;
+    pointer-events: none;
+  }
+  .card-bracket::after {
+    content: '';
+    position: absolute;
+    bottom: 0; right: 0;
+    width: 24px; height: 24px;
+    border-bottom: 1px solid #2D2F40;
+    border-right: 1px solid #2D2F40;
+    pointer-events: none;
+  }
+
+  /* Top-right corner notch (macro card decoration) */
+  .card-notch {
+    clip-path: polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 0 100%);
+  }
+  .card-notch-deco::after {
+    content: '';
+    position: absolute;
+    top: 0; right: 0;
+    width: 12px; height: 12px;
+    background: #1F2028;
+    clip-path: polygon(0 0, 100% 0, 100% 100%);
+    pointer-events: none;
+  }
+
+  /* ============================================ Buttons */
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 h-9 px-4 font-medium text-body
+           transition duration-150 select-none uppercase tracking-wider;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.15em;
+  }
+  .btn-primary {
+    @apply btn bg-cyan text-void hover:bg-cyan-dim
+           disabled:bg-border-subtle disabled:text-text-muted;
+  }
+  .btn-secondary {
+    @apply btn border border-border-accent text-text-primary bg-transparent
+           hover:border-cyan hover:text-cyan;
+  }
+  .btn-destructive {
+    @apply btn bg-loss text-void hover:bg-loss-dim;
+  }
+  .btn-ghost {
+    @apply btn bg-transparent text-text-secondary hover:bg-elevated hover:text-text-primary;
+  }
+  .btn-sm {
+    @apply h-7 px-3;
+    font-size: 10px;
+  }
+  .btn-lg {
+    @apply h-11 px-5;
+    font-size: 12px;
+  }
+
+  /* ============================================ Inputs */
+  .input {
+    @apply h-9 w-full bg-void border border-border-subtle px-3 text-body text-text-primary
+           placeholder-text-muted transition duration-150
+           focus:outline-none focus:border-cyan focus:shadow-focus;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+  }
+  .input-error {
+    @apply border-loss focus:border-loss focus:shadow-focus-error;
+  }
+  .select {
+    @apply input pr-8 appearance-none cursor-pointer;
+  }
+
+  /* ============================================ Pills / signal labels */
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    height: 18px;
+    padding: 0 8px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    border: 1px solid currentColor;
+    background: transparent;
+  }
+  .pill-default { @apply pill text-text-secondary; }
+  .pill-bull,
+  .pill-profit  { @apply pill text-profit; }
+  .pill-bear,
+  .pill-loss    { @apply pill text-loss; }
+  .pill-warn    { @apply pill text-warn; }
+  .pill-cyan,
+  .pill-active  { @apply pill text-cyan; }
+  .pill-social  { @apply pill text-social; }
+
+  /* Signal label with leading dot */
+  .signal-label {
+    @apply inline-flex items-center gap-1.5;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+  }
+  .signal-label.ok      { color: #00D980; }
+  .signal-label.warn    { color: #FFAA00; }
+  .signal-label.danger  { color: #FF3366; }
+  .signal-label.neutral { color: #8B8FA3; }
+  .signal-label.cyan    { color: #14F1D9; }
+
+  /* Glowing indicator dots */
+  .dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .dot-ok      { background: #00D980; box-shadow: 0 0 6px #00D980; }
+  .dot-warn    { background: #FFAA00; box-shadow: 0 0 6px #FFAA00; }
+  .dot-danger  { background: #FF3366; box-shadow: 0 0 6px #FF3366; }
+  .dot-cyan    { background: #14F1D9; box-shadow: 0 0 6px #14F1D9; }
+  .dot-neutral { background: #4A4D5C; }
+
+  /* ============================================ Headings */
+  .h-page {
+    font-family: 'Chakra Petch', sans-serif;
+    font-weight: 500;
+    font-size: 42px;
+    line-height: 1.05;
+    letter-spacing: -0.01em;
+    color: #F0F2FA;
+  }
+  .h-section {
+    font-family: 'Chakra Petch', sans-serif;
+    font-weight: 600;
+    font-size: 14px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: #F0F2FA;
+  }
+  .h-caption {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: #4A4D5C;
+  }
+  .h-sub {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    letter-spacing: 0.05em;
+    color: #8B8FA3;
+  }
+
+  /* Crumb / breadcrumb top line */
+  .crumb {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.2em;
+    color: #4A4D5C;
+    text-transform: uppercase;
+  }
+
+  /* ============================================ Tables */
+  .tbl {
+    @apply w-full tabular;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    border-collapse: collapse;
+  }
+  .tbl thead th {
+    text-align: left;
+    padding: 10px 12px;
+    color: #4A4D5C;
+    font-weight: 400;
+    font-size: 9px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    border-bottom: 1px solid #1F2028;
+    background: #0E0F14;
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .tbl tbody td {
+    padding: 12px 12px;
+    border-bottom: 1px solid #1F2028;
+    color: #F0F2FA;
+  }
+  .tbl tbody tr {
+    transition: background 0.15s;
+  }
+  .tbl tbody tr:hover {
+    background: #0E0F14;
+  }
+  .tbl-dense thead th { padding: 6px 10px; }
+  .tbl-dense tbody td { padding: 8px 10px; }
+  .tbl-num { text-align: right; }
+
+  .ticker {
+    font-family: 'Chakra Petch', sans-serif;
+    font-weight: 600;
+    font-size: 13px;
+    letter-spacing: 0.08em;
+  }
+
+  /* ============================================ KPI cards */
+  .kpi-row {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1px;
+    background: #1F2028;
+    border: 1px solid #1F2028;
+  }
+  .kpi {
+    background: #0E0F14;
+    padding: 24px 28px;
+    position: relative;
+    overflow: hidden;
+  }
+  .kpi-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.15em;
+    color: #4A4D5C;
+    text-transform: uppercase;
+    margin-bottom: 14px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+  }
+  .kpi-tag {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    padding: 2px 6px;
+    border: 1px solid currentColor;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+  .kpi-value {
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 500;
+    font-size: 28px;
+    letter-spacing: -0.02em;
+    font-variant-numeric: tabular-nums;
+    line-height: 1.1;
+    margin-bottom: 8px;
+  }
+  .kpi-delta {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: #8B8FA3;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Section divider */
+  .section-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin-bottom: 16px;
+    border-bottom: 1px solid #1F2028;
+    padding-bottom: 10px;
+  }
+  .section-meta {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: #4A4D5C;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+  }
+
+  /* Status row colours (kept for legacy uses) */
+  .pos { color: #00D980; }
+  .neg { color: #FF3366; }
+  .pos-bg { background: rgba(0,217,128,0.10); }
+  .neg-bg { background: rgba(255,51,102,0.10); }
+  .warn-c { color: #FFAA00; }
+
+  /* Metric column helpers (used by KpiCard primitive) */
+  .metric-caption { @apply h-caption mb-3; }
+  .metric-value {
+    @apply font-mono tabular;
+    font-weight: 500;
+    font-size: 26px;
+    letter-spacing: -0.02em;
+    color: #F0F2FA;
+    line-height: 1.05;
+  }
+  .metric-delta-up   { color: #00D980; font-family: 'JetBrains Mono', monospace; font-size: 11px; }
+  .metric-delta-down { color: #FF3366; font-family: 'JetBrains Mono', monospace; font-size: 11px; }
+  .metric-delta-flat { color: #8B8FA3; font-family: 'JetBrains Mono', monospace; font-size: 11px; }
+}

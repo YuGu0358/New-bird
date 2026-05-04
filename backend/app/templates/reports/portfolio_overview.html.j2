@@ -1,0 +1,50 @@
+{% extends "_base.html.j2" %}
+{% block body %}
+<h2>Account</h2>
+<table>
+  <tbody>
+    <tr><td>Broker</td><td>{{ account.broker }}</td></tr>
+    <tr><td>Account ID</td><td>{{ account.account_id }}</td></tr>
+    <tr><td>Alias</td><td>{{ account.alias or "—" }}</td></tr>
+    <tr><td>Tier</td><td><span class="pill">{{ account.tier }}</span></td></tr>
+    <tr><td>Status</td><td>{{ "Active" if account.is_active else "Disabled" }}</td></tr>
+  </tbody>
+</table>
+
+<h2>Recent Position Snapshots ({{ snapshots | length }})</h2>
+{% if snapshots %}
+<table>
+  <thead>
+    <tr>
+      <th>Snapshot</th>
+      <th>Symbol</th>
+      <th class="num">Qty</th>
+      <th class="num">Avg Cost</th>
+      <th class="num">Current</th>
+      <th class="num">Market Value</th>
+      <th class="num">Unrealised P/L</th>
+      <th>Note</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for snap in snapshots %}
+    {% set ovr = overrides_by_ticker.get(snap.symbol) %}
+    <tr>
+      <td>{{ snap.snapshot_at | fmt_dt }}</td>
+      <td>{{ snap.symbol }}</td>
+      <td class="num">{{ snap.qty | fmt_num(2) }}</td>
+      <td class="num">{{ snap.avg_cost | fmt_num(2) }}</td>
+      <td class="num">{{ snap.current_price | fmt_num(2) }}</td>
+      <td class="num">{{ snap.market_value | fmt_num(2) }}</td>
+      <td class="num {% if snap.unrealized_pl is not none and snap.unrealized_pl >= 0 %}pos{% elif snap.unrealized_pl is not none %}neg{% endif %}">
+        {{ snap.unrealized_pl | fmt_num(2) }}
+      </td>
+      <td>{{ ovr.notes if ovr and ovr.notes else "" }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p>No snapshots recorded for this account yet.</p>
+{% endif %}
+{% endblock %}

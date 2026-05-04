@@ -13,7 +13,7 @@ class DesktopAppTests(unittest.TestCase):
     def test_load_runtime_env_discovers_repo_env_next_to_desktop_app(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             desktop_root = Path(temp_dir) / "Desktop"
-            app_root = desktop_root / "Trading Raven Platform.app" / "Contents" / "MacOS"
+            app_root = desktop_root / "Newbird Platform.app" / "Contents" / "MacOS"
             repo_env = desktop_root / "trading_platform" / "backend" / ".env"
 
             app_root.mkdir(parents=True)

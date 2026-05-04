@@ -1,71 +1,74 @@
 from __future__ import annotations
 
 import os
-from datetime import datetime, timedelta, timezone
+from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Annotated
 
-from fastapi import Depends, FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
-from sqlalchemy import desc, select
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.database import NewsCache, Trade, get_session, init_database
-from app.models import (
-    Account,
-    AssetUniverseItem,
-    BotStatus,
-    CompanyProfileResponse,
-    ControlResponse,
-    MonitoringOverview,
-    NewsArticle,
-    OrderRecord,
-    Position,
-    PriceAlertRuleCreateRequest,
-    PriceAlertRuleUpdateRequest,
-    PriceAlertRuleView,
-    QuantBrainFactorAnalysisRequest,
-    RuntimeSettingsStatus,
-    SettingsUpdateRequest,
-    SocialProviderStatus,
-    SocialSignalRunRequest,
-    SocialSignalRunResponse,
-    SocialSignalSnapshotView,
-    SocialSearchResponse,
-    StockResearchReport,
-    StrategyAnalysisDraft,
-    StrategyAnalysisRequest,
-    StrategyLibraryResponse,
-    StrategyPreviewRequest,
-    StrategyPreviewResponse,
-    StrategySaveRequest,
-    SymbolChartResponse,
-    TavilySearchResponse,
-    TradeRecord,
-    WatchlistUpdateRequest,
-)
-from app import runtime_settings
+from core.observability import configure_logging
+from app import scheduler as app_scheduler
+from app.database import init_database
+from app.middleware.correlation import CorrelationIdMiddleware
+from app.middleware.metrics import HttpMetricsMiddleware
+from app.routers import account as account_router
+from app.routers import agents as agents_router
+from app.routers import alerts as alerts_router
+from app.routers import arena as arena_router
+from app.routers import backtest as backtest_router
+from app.routers import bot as bot_router
+from app.routers import broker_accounts as broker_accounts_router
+from app.routers import code as code_router
+from app.routers import crypto as crypto_router
+from app.routers import datahub as datahub_router
+from app.routers import dbnomics as dbnomics_router
+from app.routers import docs as docs_router
+from app.routers import factors as factors_router
+from app.routers import geopolitics as geopolitics_router
+from app.routers import health as health_router
+from app.routers import heatmap as heatmap_router
+from app.routers import indicators as indicators_router
+from app.routers import journal as journal_router
+from app.routers import kraken as kraken_router
+from app.routers import macro as macro_router
+from app.routers import metrics as metrics_router
+from app.routers import monitoring as monitoring_router
+from app.routers import onchain as onchain_router
+from app.routers import options_chain as options_chain_router
+from app.routers import pine_seeds as pine_seeds_router
+from app.routers import portfolio_opt as portfolio_opt_router
+from app.routers import position_costs as position_costs_router
+from app.routers import portfolio_overrides as portfolio_overrides_router
+from app.routers import portfolio_snapshots as portfolio_snapshots_router
+from app.routers import predictions as predictions_router
+from app.routers import quantlib as quantlib_router
+from app.routers import reports as reports_router
+from app.routers import screener as screener_router
+from app.routers import sectors as sectors_router
+from app.routers import signals as signals_router
+from app.routers import research as research_router
+from app.routers import risk as risk_router
+from app.routers import scheduler as scheduler_router
+from app.routers import settings as settings_router
+from app.routers import social as social_router
+from app.routers import stream as stream_router
+from app.routers import strategy_health as strategy_health_router
+from app.routers import strategies as strategies_router
+from app.routers import symbols as symbols_router
+from app.routers import trade_recommendation as trade_recommendation_router
+from app.routers import valuation as valuation_router
+from app.routers import workflow as workflow_router
+from app.routers import workspace as workspace_router
 from app.services import (
-    alpaca_service,
     bot_controller,
-    chart_service,
-    company_profile_service,
-    market_research_service,
-    monitoring_service,
-    price_alerts_service,
-    quantbrain_factor_service,
-    social_polling_service,
-    social_intelligence_service,
-    social_signal_service,
-    strategy_profiles_service,
-    tavily_service,
+    datahub_service,
+    polygon_ws_publisher,
+    scheduled_jobs,
 )
-from app.services.network_utils import friendly_service_error_detail
-from app.services import strategy_document_service
 
-NEWS_CACHE_TTL = timedelta(hours=4)
 FRONTEND_DIST_DIR = Path(
     os.getenv(
         "TRADING_PLATFORM_FRONTEND_DIST",
@@ -74,33 +77,173 @@ FRONTEND_DIST_DIR = Path(
 ).expanduser().resolve()
 FRONTEND_ASSETS_DIR = FRONTEND_DIST_DIR / "assets"
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Application startup/shutdown sequence (replaces deprecated @app.on_event).
+
+    Tests bypass this by constructing TestClient(app) without `with`.
+    """
+    await init_database()
+    await app_scheduler.start()
+    scheduled_jobs.register_default_jobs()
+
+    # Daily Factor Forge evolution. Wrapped — a scheduler/import failure
+    # here must never block app boot.
+    try:
+        from app.services import factor_pipeline as ff_pipeline
+        await ff_pipeline.schedule_default_jobs()
+    except Exception:
+        import logging
+        logging.getLogger(__name__).exception(
+            "factor_pipeline.schedule_default_jobs failed at startup"
+        )
+
+    # Register any active scheduled workflows. Needs a DB session, so it
+    # can't live inside register_default_jobs() — see workflow_service.
+    try:
+        from app.database import AsyncSessionLocal
+        from app.services import workflow_service
+        async with AsyncSessionLocal() as session:
+            await workflow_service.register_workflow_jobs(session)
+    except Exception:
+        import logging
+        logging.getLogger(__name__).exception(
+            "register_workflow_jobs failed at startup"
+        )
+
+    await datahub_service.start()
+    await polygon_ws_publisher.start()
+
+    # Re-register user-uploaded strategies after DB is up.
+    try:
+        from app.database import AsyncSessionLocal
+        from app.services import code_service
+        async with AsyncSessionLocal() as session:
+            await code_service.reload_all_user_strategies(session)
+    except Exception:
+        # Never let user-strategy reload failures block boot.
+        import logging
+        logging.getLogger(__name__).exception("reload_all_user_strategies failed at startup")
+
+    try:
+        yield
+    finally:
+        await polygon_ws_publisher.shutdown()
+        await datahub_service.shutdown()
+        # Stop Factor Forge continuous loop before scheduler shutdown.
+        try:
+            from app.services import factor_pipeline as ff_pipeline
+            await ff_pipeline.stop_loop(timeout=5.0)
+        except Exception:
+            import logging
+            logging.getLogger(__name__).exception(
+                "factor_pipeline.stop_loop failed at shutdown"
+            )
+        await app_scheduler.shutdown()
+        await bot_controller.shutdown_bot()
+
+
+configure_logging()
+
 app = FastAPI(
     title="Personal Automated Trading Platform",
     version="1.0.0",
+    lifespan=lifespan,
+)
+
+# CORS_ALLOW_ORIGINS=* (default) keeps current dev behaviour; on Railway the
+# deployer sets a comma-separated whitelist e.g.
+# CORS_ALLOW_ORIGINS=https://newbird.up.railway.app,https://yourdomain.com
+_cors_env = os.getenv("CORS_ALLOW_ORIGINS", "*")
+_cors_origins = (
+    [o.strip() for o in _cors_env.split(",") if o.strip()]
+    if _cors_env != "*"
+    else ["*"]
 )
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_cors_origins,
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.add_middleware(CorrelationIdMiddleware)
+app.add_middleware(HttpMetricsMiddleware)
+
+
+# yfinance/upstream guards (rate_limiter.py) surface as friendly HTTP errors
+# instead of opaque 500s.
+from app.services.rate_limiter import RateLimitedError, UpstreamTimeoutError
+
+
+@app.exception_handler(RateLimitedError)
+async def _rate_limited_handler(_request: Request, exc: RateLimitedError) -> JSONResponse:
+    return JSONResponse(
+        status_code=429,
+        content={"detail": str(exc)},
+        headers={"Retry-After": f"{max(int(exc.retry_after), 1)}"},
+    )
+
+
+@app.exception_handler(UpstreamTimeoutError)
+async def _upstream_timeout_handler(_request: Request, exc: UpstreamTimeoutError) -> JSONResponse:
+    return JSONResponse(status_code=504, content={"detail": str(exc)})
 
 if FRONTEND_ASSETS_DIR.exists():
     app.mount("/assets", StaticFiles(directory=FRONTEND_ASSETS_DIR), name="assets")
 
-SessionDep = Annotated[AsyncSession, Depends(get_session)]
 
-
-def _normalize_timestamp(value: datetime) -> datetime:
-    if value.tzinfo is None:
-        return value.replace(tzinfo=timezone.utc)
-    return value
-
-
-def _service_error(exc: Exception) -> HTTPException:
-    return HTTPException(status_code=503, detail=friendly_service_error_detail(exc))
+app.include_router(account_router.router)
+app.include_router(agents_router.router)
+app.include_router(monitoring_router.router)
+app.include_router(quantlib_router.router)
+app.include_router(research_router.router)
+app.include_router(risk_router.router)
+app.include_router(strategies_router.router)
+app.include_router(alerts_router.router)
+app.include_router(backtest_router.router)
+app.include_router(social_router.router)
+app.include_router(bot_router.router)
+app.include_router(code_router.router)
+app.include_router(health_router.router)
+app.include_router(journal_router.router)
+app.include_router(metrics_router.router)
+app.include_router(settings_router.router)
+app.include_router(strategy_health_router.router)
+# Tradewell-inspired additions
+app.include_router(arena_router.router)
+app.include_router(crypto_router.router)
+app.include_router(macro_router.router)
+app.include_router(valuation_router.router)
+app.include_router(options_chain_router.router)
+app.include_router(pine_seeds_router.router)
+app.include_router(portfolio_opt_router.router)
+app.include_router(portfolio_overrides_router.router)
+app.include_router(portfolio_snapshots_router.router)
+app.include_router(position_costs_router.router)
+app.include_router(predictions_router.router)
+app.include_router(reports_router.router)
+app.include_router(scheduler_router.router)
+app.include_router(screener_router.router)
+app.include_router(sectors_router.router)
+app.include_router(signals_router.router)
+app.include_router(dbnomics_router.router)
+app.include_router(docs_router.router)
+app.include_router(factors_router.router)
+app.include_router(geopolitics_router.router)
+app.include_router(heatmap_router.router)
+app.include_router(indicators_router.router)
+app.include_router(kraken_router.router)
+app.include_router(onchain_router.router)
+app.include_router(stream_router.router)
+app.include_router(datahub_router.router)
+app.include_router(broker_accounts_router.router)
+app.include_router(symbols_router.router)
+app.include_router(trade_recommendation_router.router)
+app.include_router(workflow_router.router)
+app.include_router(workspace_router.router)
 
 
 def _is_safe_frontend_path(base_dir: Path, requested_path: Path) -> bool:
@@ -109,598 +252,6 @@ def _is_safe_frontend_path(base_dir: Path, requested_path: Path) -> bool:
     except ValueError:
         return False
     return True
-
-
-@app.on_event("startup")
-async def startup_event() -> None:
-    await init_database()
-    await price_alerts_service.start_monitor()
-    await social_polling_service.start_monitor()
-
-
-@app.on_event("shutdown")
-async def shutdown_event() -> None:
-    await price_alerts_service.shutdown_monitor()
-    await social_polling_service.shutdown_monitor()
-    await bot_controller.shutdown_bot()
-
-
-@app.get("/api/account", response_model=Account)
-async def get_account() -> Account:
-    try:
-        payload = await alpaca_service.get_account()
-    except Exception as exc:
-        raise _service_error(exc) from exc
-    return Account(**payload)
-
-
-@app.get("/api/positions", response_model=list[Position])
-async def get_positions() -> list[Position]:
-    try:
-        payload = await alpaca_service.list_positions()
-    except Exception as exc:
-        raise _service_error(exc) from exc
-    return [Position(**row) for row in payload]
-
-
-@app.get("/api/trades", response_model=list[TradeRecord])
-async def get_trades(session: SessionDep) -> list[TradeRecord]:
-    result = await session.execute(
-        select(Trade).order_by(desc(Trade.exit_date), desc(Trade.id))
-    )
-    trades = result.scalars().all()
-    return [TradeRecord.model_validate(item) for item in trades]
-
-
-@app.get("/api/news/{symbol}", response_model=NewsArticle)
-async def get_news(symbol: str, session: SessionDep) -> NewsArticle:
-    normalized_symbol = symbol.upper()
-    result = await session.execute(
-        select(NewsCache)
-        .where(NewsCache.symbol == normalized_symbol)
-        .order_by(desc(NewsCache.timestamp), desc(NewsCache.id))
-        .limit(1)
-    )
-    cached_item = result.scalars().first()
-
-    if cached_item is not None:
-        cached_at = _normalize_timestamp(cached_item.timestamp)
-        if datetime.now(timezone.utc) - cached_at <= NEWS_CACHE_TTL:
-            return NewsArticle.model_validate(cached_item)
-
-    try:
-        payload = await tavily_service.fetch_news_summary(normalized_symbol)
-    except Exception as exc:
-        if cached_item is not None:
-            return NewsArticle.model_validate(cached_item)
-        raise _service_error(exc) from exc
-
-    news_item = NewsCache(
-        symbol=payload["symbol"],
-        timestamp=datetime.now(timezone.utc),
-        summary=payload["summary"],
-        source=payload["source"],
-    )
-    session.add(news_item)
-    await session.commit()
-    await session.refresh(news_item)
-
-    return NewsArticle.model_validate(news_item)
-
-
-@app.get("/api/research/{symbol}", response_model=StockResearchReport)
-async def get_stock_research(symbol: str, research_model: str = "mini") -> StockResearchReport:
-    try:
-        payload = await market_research_service.fetch_stock_research(symbol, research_model)
-    except Exception as exc:
-        raise _service_error(exc) from exc
-    return StockResearchReport(**payload)
-
-
-@app.get("/api/tavily/search", response_model=TavilySearchResponse)
-async def search_with_tavily(
-    query: str,
-    topic: str = "news",
-    max_results: int = 6,
-) -> TavilySearchResponse:
-    try:
-        payload = await tavily_service.search_web(
-            query=query,
-            topic=topic,
-            max_results=max_results,
-        )
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except Exception as exc:
-        raise _service_error(exc) from exc
-    return TavilySearchResponse(**payload)
-
-
-@app.get("/api/orders", response_model=list[OrderRecord])
-async def get_orders(status: str = "all") -> list[OrderRecord]:
-    try:
-        payload = await alpaca_service.list_orders(status=status)
-    except Exception as exc:
-        raise _service_error(exc) from exc
-    return [OrderRecord(**row) for row in payload]
-
-
-@app.get("/api/monitoring", response_model=MonitoringOverview)
-async def get_monitoring_overview(
-    session: SessionDep,
-    force_refresh: bool = False,
-) -> MonitoringOverview:
-    try:
-        payload = await monitoring_service.get_monitoring_overview(
-            session,
-            force_refresh=force_refresh,
-        )
-    except Exception as exc:
-        raise _service_error(exc) from exc
-    return MonitoringOverview(**payload)
-
-
-@app.get("/api/chart/{symbol}", response_model=SymbolChartResponse)
-async def get_symbol_chart(
-    symbol: str,
-    range: str = "3mo",
-) -> SymbolChartResponse:
-    try:
-        payload = await chart_service.get_symbol_chart(symbol, range)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except Exception as exc:
-        raise _service_error(exc) from exc
-    return SymbolChartResponse(**payload)
-
-
-@app.get("/api/company/{symbol}", response_model=CompanyProfileResponse)
-async def get_company_profile(symbol: str) -> CompanyProfileResponse:
-    try:
-        payload = await company_profile_service.get_company_profile(symbol)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except Exception as exc:
-        raise _service_error(exc) from exc
-    return CompanyProfileResponse(**payload)
-
-
-@app.get("/api/universe", response_model=list[AssetUniverseItem])
-async def get_universe(
-    query: str = "",
-    limit: int = 50,
-) -> list[AssetUniverseItem]:
-    try:
-        payload = await monitoring_service.search_alpaca_universe(query=query, limit=limit)
-    except Exception as exc:
-        raise _service_error(exc) from exc
-    return [AssetUniverseItem(**row) for row in payload]
-
-
-@app.post("/api/watchlist", response_model=list[str])
-async def add_watchlist_symbol(
-    request: WatchlistUpdateRequest,
-    session: SessionDep,
-) -> list[str]:
-    try:
-        return await monitoring_service.add_watchlist_symbol(session, request.symbol)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except Exception as exc:
-        raise _service_error(exc) from exc
-
-
-@app.delete("/api/watchlist/{symbol}", response_model=list[str])
-async def remove_watchlist_symbol(
-    symbol: str,
-    session: SessionDep,
-) -> list[str]:
-    try:
-        return await monitoring_service.remove_watchlist_symbol(session, symbol)
-    except Exception as exc:
-        raise _service_error(exc) from exc
-
-
-@app.post("/api/monitoring/refresh", response_model=MonitoringOverview)
-async def refresh_monitoring(session: SessionDep) -> MonitoringOverview:
-    try:
-        payload = await monitoring_service.get_monitoring_overview(
-            session,
-            force_refresh=True,
-        )
-    except Exception as exc:
-        raise _service_error(exc) from exc
-    return MonitoringOverview(**payload)
-
-
-@app.get("/api/alerts", response_model=list[PriceAlertRuleView])
-async def get_price_alert_rules(
-    session: SessionDep,
-    symbol: str | None = None,
-) -> list[PriceAlertRuleView]:
-    try:
-        payload = await price_alerts_service.list_rules(session, symbol=symbol)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except Exception as exc:
-        raise _service_error(exc) from exc
-    return [PriceAlertRuleView(**item) for item in payload]
-
-
-@app.post("/api/alerts", response_model=PriceAlertRuleView)
-async def create_price_alert_rule(
-    request: PriceAlertRuleCreateRequest,
-    session: SessionDep,
-) -> PriceAlertRuleView:
-    try:
-        payload = await price_alerts_service.create_rule(session, request)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except Exception as exc:
-        raise _service_error(exc) from exc
-    return PriceAlertRuleView(**payload)
-
-
-@app.patch("/api/alerts/{rule_id}", response_model=PriceAlertRuleView)
-async def update_price_alert_rule(
-    rule_id: int,
-    request: PriceAlertRuleUpdateRequest,
-    session: SessionDep,
-) -> PriceAlertRuleView:
-    try:
-        payload = await price_alerts_service.update_rule(session, rule_id, request)
-    except ValueError as exc:
-        message = str(exc)
-        status_code = 404 if "没有找到" in message else 400
-        raise HTTPException(status_code=status_code, detail=message) from exc
-    except Exception as exc:
-        raise _service_error(exc) from exc
-    return PriceAlertRuleView(**payload)
-
-
-@app.delete("/api/alerts/{rule_id}", response_model=ControlResponse)
-async def delete_price_alert_rule(
-    rule_id: int,
-    session: SessionDep,
-) -> ControlResponse:
-    try:
-        await price_alerts_service.delete_rule(session, rule_id)
-    except ValueError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
-    except Exception as exc:
-        raise _service_error(exc) from exc
-    return ControlResponse(success=True, message="提醒规则已删除。")
-
-
-@app.get("/api/social/providers", response_model=list[SocialProviderStatus])
-async def get_social_providers() -> list[SocialProviderStatus]:
-    payload = social_intelligence_service.list_social_providers()
-    return [SocialProviderStatus(**item) for item in payload]
-
-
-@app.get("/api/strategies", response_model=StrategyLibraryResponse)
-async def get_strategy_library(session: SessionDep) -> StrategyLibraryResponse:
-    payload = await strategy_profiles_service.list_strategies(session)
-    return StrategyLibraryResponse(**payload)
-
-
-@app.post("/api/strategies/analyze", response_model=StrategyAnalysisDraft)
-async def analyze_strategy(request: StrategyAnalysisRequest) -> StrategyAnalysisDraft:
-    try:
-        payload = await strategy_profiles_service.analyze_strategy(request.description)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except Exception as exc:
-        raise _service_error(exc) from exc
-    return StrategyAnalysisDraft(**payload.model_dump())
-
-
-@app.post("/api/strategies/analyze-upload", response_model=StrategyAnalysisDraft)
-async def analyze_strategy_with_files(
-    description: str = Form(""),
-    files: list[UploadFile] | None = File(None),
-) -> StrategyAnalysisDraft:
-    try:
-        payloads: list[tuple[str, bytes]] = []
-        for file in files or []:
-            payloads.append((file.filename or "strategy-note.txt", await file.read()))
-        documents = strategy_document_service.extract_strategy_documents(payloads)
-        payload = await strategy_profiles_service.analyze_strategy(description, documents)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except Exception as exc:
-        raise _service_error(exc) from exc
-    return StrategyAnalysisDraft(**payload.model_dump())
-
-
-@app.post("/api/strategies/analyze-factor-code", response_model=StrategyAnalysisDraft)
-async def analyze_quantbrain_factor_code(
-    request: QuantBrainFactorAnalysisRequest,
-) -> StrategyAnalysisDraft:
-    try:
-        payload = await strategy_profiles_service.analyze_factor_code_strategy(
-            request.code,
-            description=request.description,
-            source_name=request.source_name,
-        )
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except Exception as exc:
-        raise _service_error(exc) from exc
-    return StrategyAnalysisDraft(**payload.model_dump())
-
-
-@app.post("/api/strategies/analyze-factor-upload", response_model=StrategyAnalysisDraft)
-async def analyze_quantbrain_factor_upload(
-    description: str = Form(""),
-    code: str = Form(""),
-    files: list[UploadFile] | None = File(None),
-) -> StrategyAnalysisDraft:
-    try:
-        payloads: list[tuple[str, bytes]] = []
-        for file in files or []:
-            payloads.append((file.filename or "quantbrain-factor.py", await file.read()))
-        documents = quantbrain_factor_service.extract_factor_code_files(payloads)
-        code_sections = []
-        if str(code or "").strip():
-            code_sections.append(f"# Source: pasted-quantbrain-factor.py\n{code.strip()}")
-        code_sections.extend(f"# Source: {item['name']}\n{item['code']}" for item in documents)
-        combined_code = "\n\n".join(code_sections)
-        source_names = ["pasted-quantbrain-factor.py"] if str(code or "").strip() else []
-        source_names.extend(item["name"] for item in documents)
-        source_name = ", ".join(source_names)
-        payload = await strategy_profiles_service.analyze_factor_code_strategy(
-            combined_code,
-            description=description,
-            source_name=source_name or "uploaded-factor.py",
-        )
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except Exception as exc:
-        raise _service_error(exc) from exc
-    return StrategyAnalysisDraft(**payload.model_dump())
-
-
-@app.post("/api/strategies", response_model=StrategyLibraryResponse)
-async def save_strategy(
-    request: StrategySaveRequest,
-    session: SessionDep,
-) -> StrategyLibraryResponse:
-    try:
-        payload = await strategy_profiles_service.save_strategy(session, request)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except Exception as exc:
-        raise _service_error(exc) from exc
-    return StrategyLibraryResponse(**payload)
-
-
-@app.put("/api/strategies/{strategy_id}", response_model=StrategyLibraryResponse)
-async def update_strategy(
-    strategy_id: int,
-    request: StrategySaveRequest,
-    session: SessionDep,
-) -> StrategyLibraryResponse:
-    try:
-        payload = await strategy_profiles_service.update_strategy(session, strategy_id, request)
-    except ValueError as exc:
-        message = str(exc)
-        status_code = 404 if "没有找到" in message else 400
-        raise HTTPException(status_code=status_code, detail=message) from exc
-    except Exception as exc:
-        raise _service_error(exc) from exc
-    return StrategyLibraryResponse(**payload)
-
-
-@app.post("/api/strategies/preview", response_model=StrategyPreviewResponse)
-async def preview_strategy(request: StrategyPreviewRequest) -> StrategyPreviewResponse:
-    try:
-        payload = await strategy_profiles_service.preview_strategy(request)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except Exception as exc:
-        raise _service_error(exc) from exc
-    return StrategyPreviewResponse(**payload)
-
-
-@app.post("/api/strategies/{strategy_id}/activate", response_model=StrategyLibraryResponse)
-async def activate_strategy(
-    strategy_id: int,
-    session: SessionDep,
-) -> StrategyLibraryResponse:
-    try:
-        payload = await strategy_profiles_service.activate_strategy(session, strategy_id)
-    except ValueError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
-    except Exception as exc:
-        raise _service_error(exc) from exc
-    return StrategyLibraryResponse(**payload)
-
-
-@app.delete("/api/strategies/{strategy_id}", response_model=StrategyLibraryResponse)
-async def delete_strategy(
-    strategy_id: int,
-    session: SessionDep,
-) -> StrategyLibraryResponse:
-    try:
-        payload = await strategy_profiles_service.delete_strategy(session, strategy_id)
-    except ValueError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
-    except Exception as exc:
-        raise _service_error(exc) from exc
-    return StrategyLibraryResponse(**payload)
-
-
-@app.get("/api/settings/status", response_model=RuntimeSettingsStatus)
-async def get_runtime_settings_status() -> RuntimeSettingsStatus:
-    return RuntimeSettingsStatus(**runtime_settings.get_settings_status())
-
-
-@app.put("/api/settings", response_model=RuntimeSettingsStatus)
-async def update_runtime_settings(request: SettingsUpdateRequest) -> RuntimeSettingsStatus:
-    try:
-        payload = runtime_settings.save_settings(
-            request.settings,
-            admin_token=request.admin_token,
-        )
-    except PermissionError as exc:
-        raise HTTPException(status_code=403, detail=str(exc)) from exc
-    except Exception as exc:
-        raise _service_error(exc) from exc
-    return RuntimeSettingsStatus(**payload)
-
-
-@app.get("/api/social/search", response_model=SocialSearchResponse)
-async def search_social(
-    session: SessionDep,
-    query: str,
-    provider: str = "x",
-    limit: int = 20,
-    lang: str | None = None,
-    min_like_count: int = 0,
-    min_repost_count: int = 0,
-    exclude_reposts: bool = True,
-    exclude_replies: bool = True,
-    exclude_terms: list[str] | None = None,
-    summarize: bool = False,
-    force_refresh: bool = False,
-) -> SocialSearchResponse:
-    try:
-        payload = await social_intelligence_service.search_social_posts(
-            session,
-            provider=provider,
-            query=query,
-            limit=limit,
-            lang=lang,
-            min_like_count=min_like_count,
-            min_repost_count=min_repost_count,
-            exclude_reposts=exclude_reposts,
-            exclude_replies=exclude_replies,
-            exclude_terms=exclude_terms or (),
-            summarize=summarize,
-            force_refresh=force_refresh,
-        )
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except Exception as exc:
-        raise _service_error(exc) from exc
-    return SocialSearchResponse(**payload)
-
-
-@app.get("/api/social/score", response_model=SocialSignalSnapshotView)
-async def score_social_signal(
-    session: SessionDep,
-    symbol: str,
-    keyword: list[str] | None = None,
-    hours: int = 6,
-    lang: str = "en",
-    execute: bool = False,
-    force_refresh: bool = False,
-) -> SocialSignalSnapshotView:
-    try:
-        payload = await social_signal_service.score_symbol_signal(
-            session,
-            symbol=symbol,
-            keywords=keyword or (),
-            hours=hours,
-            lang=lang,
-            execute=execute,
-            force_refresh=force_refresh,
-        )
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except Exception as exc:
-        raise _service_error(exc) from exc
-    return SocialSignalSnapshotView(**payload)
-
-
-@app.get("/api/social/signals", response_model=list[SocialSignalSnapshotView])
-async def get_social_signals(
-    session: SessionDep,
-    symbol: str | None = None,
-    limit: int = 25,
-) -> list[SocialSignalSnapshotView]:
-    try:
-        payload = await social_signal_service.get_latest_signals(
-            session,
-            symbol=symbol,
-            limit=limit,
-        )
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except Exception as exc:
-        raise _service_error(exc) from exc
-    return [SocialSignalSnapshotView(**item) for item in payload]
-
-
-@app.post("/api/social/run", response_model=SocialSignalRunResponse)
-async def run_social_signals(
-    request: SocialSignalRunRequest,
-    session: SessionDep,
-) -> SocialSignalRunResponse:
-    try:
-        payload = await social_signal_service.run_social_monitor(
-            session,
-            symbols=request.symbols,
-            keywords=request.keywords,
-            include_watchlist=request.include_watchlist,
-            include_positions=request.include_positions,
-            include_candidates=request.include_candidates,
-            hours=request.hours,
-            lang=request.lang,
-            execute=request.execute,
-            force_refresh=request.force_refresh,
-        )
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except Exception as exc:
-        raise _service_error(exc) from exc
-    return SocialSignalRunResponse(**payload)
-
-
-@app.get("/api/bot/status", response_model=BotStatus)
-async def get_bot_status() -> BotStatus:
-    return BotStatus(**await bot_controller.get_status())
-
-
-@app.post("/api/bot/start", response_model=ControlResponse)
-async def start_bot() -> ControlResponse:
-    status = await bot_controller.start_bot()
-    message = "机器人已启动。" if status["is_running"] else "机器人启动失败。"
-    return ControlResponse(success=status["is_running"], message=message)
-
-
-@app.post("/api/bot/stop", response_model=ControlResponse)
-async def stop_bot() -> ControlResponse:
-    status = await bot_controller.stop_bot()
-    message = "机器人已停止。" if not status["is_running"] else "机器人仍在运行。"
-    return ControlResponse(success=not status["is_running"], message=message)
-
-
-@app.post("/api/orders/cancel", response_model=ControlResponse)
-async def cancel_orders() -> ControlResponse:
-    try:
-        cancelled_count = await alpaca_service.cancel_all_orders()
-    except Exception as exc:
-        raise _service_error(exc) from exc
-
-    return ControlResponse(
-        success=True,
-        message=f"已提交撤销挂单请求，共处理 {cancelled_count} 笔订单。",
-    )
-
-
-@app.post("/api/positions/close", response_model=ControlResponse)
-async def close_positions() -> ControlResponse:
-    try:
-        submitted_count = await alpaca_service.close_all_positions()
-    except Exception as exc:
-        raise _service_error(exc) from exc
-
-    return ControlResponse(
-        success=True,
-        message=f"已提交全部平仓请求，共处理 {submitted_count} 个持仓。",
-    )
 
 
 @app.get("/", include_in_schema=False)

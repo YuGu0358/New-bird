@@ -3,9 +3,13 @@ __pycache__/
 *.pyc
 .pytest_cache/
 .venv/
+.claude/
 backend/.env
 backend/.env.backup-readme
 backend/trading_platform.db
+backend/pine_seeds/
+frontend-v2/dist/
+frontend-v2/node_modules/
 frontend/node_modules/
 frontend/dist/
 backend/build/

@@ -2,17 +2,26 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from app.services.network_utils import run_sync_with_retries
+from app.services.rate_limiter import YF_LIMITER, guarded_fetch
 
-_CHART_CACHE_TTL = timedelta(minutes=10)
-_CHART_RANGE_CONFIG: dict[str, dict[str, str]] = {
-    "1d": {"period": "1d", "interval": "5m"},
-    "5d": {"period": "5d", "interval": "30m"},
-    "1mo": {"period": "1mo", "interval": "1d"},
-    "3mo": {"period": "3mo", "interval": "1d"},
-    "6mo": {"period": "6mo", "interval": "1d"},
-    "1y": {"period": "1y", "interval": "1wk"},
-    "2y": {"period": "2y", "interval": "1d"},
+# Wall-clock budgets for a single chart fetch. Module-level so tests can
+# monkey-patch without touching the limiter.
+_FETCH_TIMEOUT_SEC = 8.0
+_ACQUIRE_TIMEOUT_SEC = 5.0
+
+# Range → (yfinance period, yfinance interval, cache TTL).
+# yfinance limits: 1m bars max ~7d back, ≤30m bars max ~60d back, daily+ has
+# no such cap. We pick the finest interval each range allows so the chart
+# shows per-minute resolution where possible. TTL scales with bar size — a
+# 1-minute view stales fast; a yearly view doesn't.
+_CHART_RANGE_CONFIG: dict[str, dict[str, Any]] = {
+    "1d":  {"period": "1d",  "interval": "1m",  "ttl": timedelta(seconds=60)},
+    "5d":  {"period": "5d",  "interval": "5m",  "ttl": timedelta(minutes=2)},
+    "1mo": {"period": "1mo", "interval": "1h",  "ttl": timedelta(minutes=5)},
+    "3mo": {"period": "3mo", "interval": "1d",  "ttl": timedelta(minutes=10)},
+    "6mo": {"period": "6mo", "interval": "1d",  "ttl": timedelta(minutes=10)},
+    "1y":  {"period": "1y",  "interval": "1d",  "ttl": timedelta(minutes=30)},
+    "2y":  {"period": "2y",  "interval": "1wk", "ttl": timedelta(minutes=30)},
 }
 _chart_cache: dict[tuple[str, str], tuple[datetime, dict[str, Any]]] = {}
 
@@ -100,16 +109,19 @@ async def get_symbol_chart(symbol: str, range_name: str = "3mo") -> dict[str, An
     cache_key = (normalized_symbol, normalized_range)
     now = datetime.now(timezone.utc)
 
+    range_config = _CHART_RANGE_CONFIG[normalized_range]
+    ttl: timedelta = range_config["ttl"]
     cached_item = _chart_cache.get(cache_key)
-    if cached_item is not None and now - cached_item[0] <= _CHART_CACHE_TTL:
+    if cached_item is not None and now - cached_item[0] <= ttl:
         return cached_item[1]
 
-    range_config = _CHART_RANGE_CONFIG[normalized_range]
-    frame = await run_sync_with_retries(
-        _download_chart_frame_sync,
-        normalized_symbol,
-        range_config["period"],
-        range_config["interval"],
+    frame = await guarded_fetch(
+        f"yfinance.chart[{normalized_symbol}/{normalized_range}]",
+        limiter=YF_LIMITER,
+        fetch_timeout=_FETCH_TIMEOUT_SEC,
+        acquire_timeout=_ACQUIRE_TIMEOUT_SEC,
+        fn=_download_chart_frame_sync,
+        args=(normalized_symbol, range_config["period"], range_config["interval"]),
     )
     points = _frame_to_points(frame)
     if not points:

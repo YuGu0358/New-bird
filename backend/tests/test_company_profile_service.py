@@ -56,6 +56,8 @@ class CompanyProfileServiceTests(unittest.IsolatedAsyncioTestCase):
                 await company_profile_service.get_company_profile("AAPL")
 
     async def test_get_company_profile_falls_back_when_yfinance_is_unauthorized(self) -> None:
+        # Default language is English, so the fallback text should mention
+        # "unauthorized" (English) rather than "未授权" (Chinese).
         with patch(
             "app.services.company_profile_service._download_company_info_sync",
             side_effect=Exception("HTTP Error 401: Unauthorized"),
@@ -76,6 +78,31 @@ class CompanyProfileServiceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(payload["company_name"], "Apple Inc.")
         self.assertEqual(payload["exchange"], "NASDAQ")
         self.assertEqual(payload["sector"], "Technology")
+        self.assertIn("unauthorized", payload["business_summary"].lower())
+        self.assertNotIn("HTTP Error 401", payload["business_summary"])
+
+    async def test_get_company_profile_unauthorized_fallback_localized_to_chinese(self) -> None:
+        # When the caller asks for Chinese the same fallback should render in
+        # Chinese (the i18n pivot — keep the historical 未授权 string alive
+        # for zh users).
+        company_profile_service._profile_cache.clear()  # noqa: SLF001
+        with patch(
+            "app.services.company_profile_service._download_company_info_sync",
+            side_effect=Exception("HTTP Error 401: Unauthorized"),
+        ), patch(
+            "app.services.company_profile_service._download_company_search_sync",
+            return_value={
+                "longName": "Apple Inc.",
+                "shortName": "Apple Inc.",
+                "fullExchangeName": "NASDAQ",
+                "quoteType": "EQUITY",
+                "sector": "Technology",
+                "industry": "Consumer Electronics",
+                "_profile_fallback": True,
+            },
+        ):
+            payload = await company_profile_service.get_company_profile("AAPL", lang="zh")
+
         self.assertIn("未授权", payload["business_summary"])
         self.assertNotIn("HTTP Error 401", payload["business_summary"])
 

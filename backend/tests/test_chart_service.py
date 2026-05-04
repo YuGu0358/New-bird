@@ -67,10 +67,11 @@ class ChartServiceTests(unittest.IsolatedAsyncioTestCase):
         ) as download_mock:
             payload = await chart_service.get_symbol_chart("nvda", "1mo")
 
-        download_mock.assert_called_once_with("NVDA", "1mo", "1d")
+        # 1mo now uses 1h bars (was 1d) to surface intraday detail.
+        download_mock.assert_called_once_with("NVDA", "1mo", "1h")
         self.assertEqual(payload["symbol"], "NVDA")
         self.assertEqual(payload["range"], "1mo")
-        self.assertEqual(payload["interval"], "1d")
+        self.assertEqual(payload["interval"], "1h")
         self.assertEqual(payload["latest_price"], 105.0)
         self.assertEqual(payload["range_change_percent"], 5.0)
         self.assertEqual(len(payload["points"]), 3)
@@ -78,6 +79,21 @@ class ChartServiceTests(unittest.IsolatedAsyncioTestCase):
     async def test_get_symbol_chart_rejects_unsupported_range(self) -> None:
         with self.assertRaisesRegex(ValueError, "不支持的走势图区间"):
             await chart_service.get_symbol_chart("NVDA", "10y")
+
+    async def test_get_symbol_chart_propagates_upstream_timeout(self) -> None:
+        import time as _time
+        from app.services.rate_limiter import UpstreamTimeoutError
+
+        def slow_download(*_args, **_kwargs):
+            _time.sleep(2.0)
+            return None
+
+        with patch(
+            "app.services.chart_service._download_chart_frame_sync",
+            side_effect=slow_download,
+        ), patch("app.services.chart_service._FETCH_TIMEOUT_SEC", 0.05):
+            with self.assertRaises(UpstreamTimeoutError):
+                await chart_service.get_symbol_chart("AAPL", "1d")
 
     async def test_get_symbol_chart_supports_intraday_range(self) -> None:
         now = datetime(2026, 3, 15, 14, 0, tzinfo=timezone.utc)
@@ -100,9 +116,10 @@ class ChartServiceTests(unittest.IsolatedAsyncioTestCase):
         ) as download_mock:
             payload = await chart_service.get_symbol_chart("aapl", "1d")
 
-        download_mock.assert_called_once_with("AAPL", "1d", "5m")
+        # 1d now uses 1m bars (was 5m) so per-minute moves are visible.
+        download_mock.assert_called_once_with("AAPL", "1d", "1m")
         self.assertEqual(payload["range"], "1d")
-        self.assertEqual(payload["interval"], "5m")
+        self.assertEqual(payload["interval"], "1m")
         self.assertEqual(payload["latest_price"], 101.2)
 
 
