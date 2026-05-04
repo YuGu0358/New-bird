@@ -17,7 +17,7 @@ import pandas as pd
 from sqlalchemy import delete, func, select
 
 from app.db.engine import AsyncSessionLocal
-from app.db.tables import DailyActiveUniverse, DailyRecommendation
+from app.db.tables import DailyActiveUniverse, DailyRecommendation, PositionOverride
 from app.services import factor_data_service, multi_factor_score_service
 from core.indicators import compute_indicator
 
@@ -39,6 +39,46 @@ _RISK_CONFIDENCE_DECAY = 0.85
 _VOL_RATIO_HIGH = 3.0
 _VOL_RATIO_LOW = 0.3
 _DISAGREEMENT_CONFIDENCE_CAP = 0.4
+_HIGH_CONFIDENCE_CLOSE = 0.7  # confidence >= this on a sell of held → 'close'
+
+
+# ---- Position-aware state ---------------------------------------------------
+
+
+async def _load_user_positions() -> dict[str, dict[str, Any]]:
+    """Map ticker → position info from ``position_overrides``.
+
+    Returned dict is keyed by upper-cased ticker so the recommendation
+    loop can do an O(1) ``sym in positions`` lookup regardless of the
+    ticker case stored in the table.
+    """
+    async with AsyncSessionLocal() as session:
+        rows = (await session.execute(select(PositionOverride))).scalars().all()
+    return {
+        r.ticker.upper(): {
+            "broker_account_id": r.broker_account_id,
+            "stop_price": r.stop_price,
+            "take_profit_price": r.take_profit_price,
+        }
+        for r in rows
+    }
+
+
+def _decide_position_state(
+    *, action: str, has_position: bool, confidence: float
+) -> str:
+    """Map (action, holding, confidence) → user-facing state.
+
+    Returns one of: ``open``, ``add``, ``reduce``, ``close``.
+    """
+    if not has_position:
+        return "open"
+    if action == "buy":
+        return "add"
+    # action == "sell" with an existing long position.
+    if confidence >= _HIGH_CONFIDENCE_CLOSE:
+        return "close"
+    return "reduce"
 
 
 # ---- Risk metrics ----------------------------------------------------------
@@ -121,6 +161,7 @@ def _build_recommendation(
     rsi: float | None,
     vol_ratio: float | None,
     target_position_pct: float,
+    position_state: str = "open",
 ) -> dict[str, Any]:
     """Compose a single recommendation dict using ATR-based bands.
 
@@ -211,6 +252,7 @@ def _build_recommendation(
         "ensemble_score": round(float(ensemble_score), 4),
         "reasoning": reasoning,
         "risk_signals": risk_signals,
+        "position_state": position_state,
     }
 
 
@@ -274,6 +316,8 @@ async def generate_today_recommendations(
         return []
     base_pct = min(_MAX_POSITION_PCT, _MAX_TOTAL_GROSS / max(n_total, 1))
 
+    positions = await _load_user_positions()
+
     recs: list[dict[str, Any]] = []
     recs.extend(
         _build_side_recs(
@@ -282,6 +326,7 @@ async def generate_today_recommendations(
             panel=panel,
             last_close_per_symbol=last_close_per_symbol,
             base_pct=base_pct,
+            positions=positions,
         )
     )
     recs.extend(
@@ -291,6 +336,7 @@ async def generate_today_recommendations(
             panel=panel,
             last_close_per_symbol=last_close_per_symbol,
             base_pct=base_pct,
+            positions=positions,
         )
     )
 
@@ -305,7 +351,9 @@ def _build_side_recs(
     panel: pd.DataFrame,
     last_close_per_symbol: pd.Series,
     base_pct: float,
+    positions: dict[str, dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
+    holdings = positions or {}
     out: list[dict[str, Any]] = []
     for r, (sym, row) in enumerate(sorted_df.iterrows(), start=1):
         if sym not in last_close_per_symbol.index:
@@ -316,21 +364,25 @@ def _build_side_recs(
         atr = _atr_pct(panel, sym) or _DEFAULT_ATR_PCT
         rsi = _rsi_last(panel, sym)
         vol = _volume_ratio(panel, sym)
-        out.append(
-            _build_recommendation(
-                rank=r,
-                symbol=sym,
-                action=action,
-                last_close=last,
-                atr_pct=atr,
-                ensemble_score=float(row["ensemble_rank"]),
-                contributing=row["contributing_factors"],
-                disagreement=float(row["factor_disagreement"]),
-                rsi=rsi,
-                vol_ratio=vol,
-                target_position_pct=base_pct,
-            )
+        rec = _build_recommendation(
+            rank=r,
+            symbol=sym,
+            action=action,
+            last_close=last,
+            atr_pct=atr,
+            ensemble_score=float(row["ensemble_rank"]),
+            contributing=row["contributing_factors"],
+            disagreement=float(row["factor_disagreement"]),
+            rsi=rsi,
+            vol_ratio=vol,
+            target_position_pct=base_pct,
         )
+        rec["position_state"] = _decide_position_state(
+            action=action,
+            has_position=str(sym).upper() in holdings,
+            confidence=float(rec["confidence"]),
+        )
+        out.append(rec)
     return out
 
 
@@ -361,6 +413,7 @@ async def _persist_recommendations(
                         rec["risk_signals"], ensure_ascii=False
                     ),
                     rank=rec["rank"],
+                    position_state=rec.get("position_state", "open"),
                 )
             )
         await session.commit()
@@ -397,6 +450,7 @@ async def get_today_recommendations(
             "reasoning": json.loads(r.reasoning_json or "[]"),
             "risk_signals": json.loads(r.risk_signals_json or "[]"),
             "rank": r.rank,
+            "position_state": r.position_state,
         }
         for r in rows
     ]

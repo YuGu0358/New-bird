@@ -145,6 +145,7 @@ class RecommendationView(BaseModel):
     reasoning: list[ReasoningEntry] = []
     risk_signals: list[RiskSignal] = []
     rank: int
+    position_state: str = "open"
 
 
 class RecommendationsResponse(BaseModel):

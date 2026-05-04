@@ -799,6 +799,9 @@ class DailyRecommendation(Base):
     reasoning_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
     risk_signals_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
     rank: Mapped[int] = mapped_column(Integer, nullable=False)  # 1 = strongest buy / sell
+    position_state: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="open"
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,

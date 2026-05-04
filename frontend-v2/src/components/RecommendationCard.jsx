@@ -2,12 +2,21 @@ import { useState } from 'react';
 import { TrendingUp, TrendingDown, AlertTriangle } from 'lucide-react';
 import { classNames, fmtUsd } from '../lib/format.js';
 
+const STATE_TONE = {
+  open: { label: '开仓', tone: 'border-cyan/40 text-cyan' },
+  add: { label: '加仓', tone: 'border-bull text-bull' },
+  reduce: { label: '减仓', tone: 'border-amber-400/50 text-amber-300' },
+  close: { label: '平仓', tone: 'border-bear text-bear' },
+  hold: { label: '持有', tone: 'border-text-muted text-text-muted' },
+};
+
 export default function RecommendationCard({ rec }) {
   const [expanded, setExpanded] = useState(false);
   const isBuy = rec.action === 'buy';
   const Icon = isBuy ? TrendingUp : TrendingDown;
   const tone = isBuy ? 'border-bull text-bull' : 'border-bear text-bear';
   const confPct = Math.round((rec.confidence || 0) * 100);
+  const stateMeta = STATE_TONE[rec.position_state] || STATE_TONE.open;
   return (
     <div className={classNames('card space-y-2 border', tone)}>
       <div className="flex items-baseline justify-between">
@@ -16,6 +25,14 @@ export default function RecommendationCard({ rec }) {
           <span className="font-mono text-h2">{rec.symbol}</span>
           <span className="font-mono text-[10px] tracking-[0.15em] uppercase">
             {isBuy ? '买入' : '卖出'} #{rec.rank}
+          </span>
+          <span
+            className={classNames(
+              'px-1.5 py-0.5 border text-[10px] uppercase tracking-[0.1em]',
+              stateMeta.tone,
+            )}
+          >
+            {stateMeta.label}
           </span>
         </div>
         <span className="font-mono text-caption text-text-muted">

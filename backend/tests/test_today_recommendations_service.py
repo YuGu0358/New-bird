@@ -106,6 +106,73 @@ class TodayRecommendationsTests(unittest.IsolatedAsyncioTestCase):
         total_gross = sum(abs(r["position_pct"]) for r in recs)
         self.assertLessEqual(total_gross, 80.0 + 1e-6)
 
+    async def test_recommendations_set_position_state_for_held_tickers(self) -> None:
+        """Held ticker getting buy → 'add'; new ticker → 'open'."""
+        from app.services import today_recommendations_service as svc
+        from app.db.tables import PositionOverride
+
+        # Insert a position for AAPL via the isolation session factory.
+        async with self._iso.session_factory() as s:
+            s.add(
+                PositionOverride(
+                    broker_account_id=1,
+                    ticker="AAPL",
+                    stop_price=None,
+                    take_profit_price=None,
+                    notes="",
+                )
+            )
+            await s.commit()
+
+        idx = pd.MultiIndex.from_product(
+            [pd.date_range("2026-04-01", periods=30), ["AAPL", "B", "C", "D"]],
+            names=["date", "symbol"],
+        )
+        panel = pd.DataFrame(
+            {
+                "open": 100.0,
+                "high": 102.0,
+                "low": 99.0,
+                "close": 100.0,
+                "volume": 1_000_000,
+            },
+            index=idx,
+        ).sort_index()
+        score_df = pd.DataFrame(
+            {
+                "ensemble_rank": [0.9, 0.8, 0.2, 0.1],
+                "factor_disagreement": [0.05] * 4,
+                "contributing_factors": [[]] * 4,
+            },
+            index=["AAPL", "B", "C", "D"],
+        )
+
+        with patch.object(
+            svc.factor_data_service,
+            "get_active_universe",
+            new=AsyncMock(return_value=["AAPL", "B", "C", "D"]),
+        ), patch.object(
+            svc.factor_data_service,
+            "get_panel",
+            new=AsyncMock(return_value=panel),
+        ), patch.object(
+            svc.multi_factor_score_service,
+            "compute_ensemble_score",
+            new=AsyncMock(return_value=score_df),
+        ):
+            recs = await svc.generate_today_recommendations(
+                date(2026, 4, 30), top_k_buy=2, top_k_sell=2
+            )
+
+        aapl = next(r for r in recs if r["symbol"] == "AAPL")
+        # Held ticker getting a buy signal → 'add'.
+        self.assertEqual(aapl["position_state"], "add")
+        # The underlying action stays 'buy' so frontend filters still work.
+        self.assertEqual(aapl["action"], "buy")
+        # A non-held ticker stays 'open'.
+        non_held = next(r for r in recs if r["symbol"] != "AAPL")
+        self.assertEqual(non_held["position_state"], "open")
+
 
 if __name__ == "__main__":
     unittest.main()
