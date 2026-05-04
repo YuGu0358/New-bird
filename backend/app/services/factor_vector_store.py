@@ -140,24 +140,27 @@ async def add_factor(
     a sufficiently similar factor already exists, OR when ``enforce_gate``
     is True and the candidate fails the multi-condition quality gate.
 
-    Quality gate (CLEAN sub-plan):
-      fitness >= 0.04
-      ic_5d > 0.025
-      0.5 <= sharpe <= 3.0
-      max_drawdown < 0.30
-      n_obs > 5000  (when supplied via ``n_obs`` kwarg)
-    Auto-quarantine triggers (still persist, but flag):
-      formula length < 10
-      sharpe outside [-3, 3] but otherwise plausible — already rejected by gate
+    Quality gate (CLEAN sub-plan, relaxed for real-world noise):
+      |fitness| >= 0.04                           — IC magnitude meaningful
+      |ic_5d|  > 0.025                            — sign-agnostic; long-only
+                                                    factor with negative IC
+                                                    is still tradable as short
+      sharpe is not None and |sharpe| < 8         — block obvious leakage
+                                                    (sharpe > 8 = look-ahead);
+                                                    keep negative sharpes
+      max_drawdown < 0.50                         — relaxed from 0.30: real
+                                                    portfolios can hit 30-40%
+      n_obs > 5000  (when supplied)
+    Auto-quarantine (still persist, but flag) handled by factor_audit_service.
     """
     if enforce_gate:
-        if fitness < 0.04:
+        if abs(fitness) < 0.04:
             return None
-        if ic_5d is None or ic_5d <= 0.025:
+        if ic_5d is None or abs(ic_5d) <= 0.025:
             return None
-        if sharpe is None or not (0.5 <= sharpe <= 3.0):
+        if sharpe is None or abs(sharpe) >= 8.0:
             return None
-        if max_drawdown is None or max_drawdown >= 0.30:
+        if max_drawdown is None or max_drawdown >= 0.50:
             return None
         if n_obs is not None and n_obs <= 5000:
             return None
