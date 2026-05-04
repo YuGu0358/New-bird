@@ -284,9 +284,23 @@ def _get_executor() -> ProcessPoolExecutor:
     Reused across generations so we pay the import + warm-up cost only
     once. ``max_workers=1`` is intentional — this isolates the GP
     backtest from the API event loop, it is not a parallelisation knob.
+
+    If the previous worker died abruptly (manual kill, OOM, segfault),
+    ``_executor`` is in a permanently-broken state — submit() raises
+    ``BrokenProcessPool`` from then on. Detect that and recreate the
+    pool so the next generation gets a fresh worker.
     """
     global _executor
     if _executor is None:
+        _executor = ProcessPoolExecutor(max_workers=1)
+        return _executor
+    # Detect broken pool — ProcessPoolExecutor exposes _broken (private but
+    # stable since 3.5). Recreate cleanly.
+    if getattr(_executor, "_broken", False):
+        try:
+            _executor.shutdown(wait=False, cancel_futures=True)
+        except Exception:
+            pass
         _executor = ProcessPoolExecutor(max_workers=1)
     return _executor
 
