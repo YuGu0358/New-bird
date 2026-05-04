@@ -4,13 +4,23 @@ from __future__ import annotations
 import unittest
 from unittest.mock import AsyncMock, patch
 
-from app.database import init_database
 from core.factors.ast import parse
+
+from tests._factor_test_isolation import (
+    factor_test_isolation_setup,
+    factor_test_isolation_teardown,
+)
 
 
 class FitnessPredictorTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self) -> None:
-        await init_database()
+        # Service uses factor_vector_store.list_factors so patch both modules.
+        self._iso = await factor_test_isolation_setup(
+            services=["factor_fitness_predictor", "factor_vector_store"]
+        )
+
+    async def asyncTearDown(self) -> None:
+        await factor_test_isolation_teardown(self._iso)
 
     async def test_features_have_fixed_dim(self) -> None:
         from app.services.factor_fitness_predictor import (

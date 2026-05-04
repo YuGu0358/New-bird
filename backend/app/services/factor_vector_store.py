@@ -132,10 +132,38 @@ async def add_factor(
     generation: int = 0,
     dedupe: bool = True,
     dedupe_threshold: float = 0.8,
+    quarantined: bool = False,
+    enforce_gate: bool = True,
+    n_obs: int | None = None,
 ) -> int | None:
     """Insert a new factor record. Returns None when ``dedupe=True`` and
-    a sufficiently similar factor already exists.
+    a sufficiently similar factor already exists, OR when ``enforce_gate``
+    is True and the candidate fails the multi-condition quality gate.
+
+    Quality gate (CLEAN sub-plan):
+      fitness >= 0.04
+      ic_5d > 0.025
+      0.5 <= sharpe <= 3.0
+      max_drawdown < 0.30
+      n_obs > 5000  (when supplied via ``n_obs`` kwarg)
+    Auto-quarantine triggers (still persist, but flag):
+      formula length < 10
+      sharpe outside [-3, 3] but otherwise plausible — already rejected by gate
     """
+    if enforce_gate:
+        if fitness < 0.04:
+            return None
+        if ic_5d is None or ic_5d <= 0.025:
+            return None
+        if sharpe is None or not (0.5 <= sharpe <= 3.0):
+            return None
+        if max_drawdown is None or max_drawdown >= 0.30:
+            return None
+        if n_obs is not None and n_obs <= 5000:
+            return None
+    if len(formula) < 10:
+        quarantined = True
+
     fe = (
         formula_embedding
         if formula_embedding is not None
@@ -168,6 +196,7 @@ async def add_factor(
             return_embedding=_serialize_vec(re_),
             metadata_json=json.dumps(metadata) if metadata else None,
             generation=int(generation),
+            quarantined=bool(quarantined),
         )
         session.add(row)
         try:
@@ -185,12 +214,15 @@ async def list_factors(
     *,
     sort_by: str = "fitness",
     min_fitness: float | None = None,
+    include_quarantined: bool = False,
 ) -> list[dict[str, Any]]:
     sort_col = getattr(FactorRecord, sort_by, FactorRecord.fitness)
     async with AsyncSessionLocal() as session:
         q = select(FactorRecord)
         if min_fitness is not None:
             q = q.where(FactorRecord.fitness >= min_fitness)
+        if not include_quarantined:
+            q = q.where(FactorRecord.quarantined == False)  # noqa: E712 — SQL boolean
         q = q.order_by(desc(sort_col)).limit(limit)
         rows = (await session.execute(q)).scalars().all()
     return [
@@ -206,6 +238,7 @@ async def list_factors(
             "max_drawdown": r.max_drawdown,
             "turnover": r.turnover,
             "generation": r.generation,
+            "quarantined": r.quarantined,
             "created_at": r.created_at.isoformat(),
         }
         for r in rows

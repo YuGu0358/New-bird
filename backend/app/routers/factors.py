@@ -49,10 +49,18 @@ async def list_library(
     limit: int = 100,
     sort_by: str = "fitness",
     min_fitness: float | None = None,
+    include_quarantined: bool = False,
 ) -> FactorLibraryResponse:
-    """Return the top factors from the vector store, sorted by ``sort_by``."""
+    """Return the top factors from the vector store, sorted by ``sort_by``.
+
+    By default quarantined (suspicious) factors are excluded — pass
+    ``include_quarantined=true`` to see them too.
+    """
     items = await factor_vector_store.list_factors(
-        limit=limit, sort_by=sort_by, min_fitness=min_fitness
+        limit=limit,
+        sort_by=sort_by,
+        min_fitness=min_fitness,
+        include_quarantined=include_quarantined,
     )
     return FactorLibraryResponse(
         items=[FactorRecordView.model_validate(item) for item in items]

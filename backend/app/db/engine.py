@@ -62,6 +62,8 @@ async def _apply_additive_migrations(connection) -> None:
     pending = [
         ("agent_analyses", "action_plan_json",
          "ALTER TABLE agent_analyses ADD COLUMN action_plan_json TEXT NOT NULL DEFAULT '{}'"),
+        ("factor_records", "quarantined",
+         "ALTER TABLE factor_records ADD COLUMN quarantined BOOLEAN NOT NULL DEFAULT 0"),
     ]
 
     for table_name, column_name, ddl in pending:

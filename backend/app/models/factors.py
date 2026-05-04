@@ -20,6 +20,7 @@ class FactorRecordView(BaseModel):
     max_drawdown: float | None = None
     turnover: float | None = None
     generation: int = 0
+    quarantined: bool = False
     created_at: datetime
 
 

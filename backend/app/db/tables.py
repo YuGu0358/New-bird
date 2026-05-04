@@ -735,6 +735,9 @@ class FactorRecord(Base):
     return_embedding: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
     metadata_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     generation: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    quarantined: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, index=True
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,

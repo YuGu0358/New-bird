@@ -339,6 +339,21 @@ async def continuous_evolution_loop() -> None:
     logger.info("[FactorForge] continuous evolution loop starting")
     rng = random.Random()  # un-seeded — different every restart
 
+    # One-shot audit at boot — re-screen the existing library against the
+    # CLEAN heuristics so old records (e.g. neg(close), sharpe=4.7 outliers)
+    # get quarantined automatically without manual SQL.
+    try:
+        from app.services import factor_audit_service
+        audit_result = await factor_audit_service.audit_library()
+        if audit_result["newly_quarantined"]:
+            logger.info(
+                "[FactorForge] startup audit: %d newly quarantined out of %d scanned",
+                audit_result["newly_quarantined"],
+                audit_result["scanned"],
+            )
+    except Exception:
+        logger.warning("startup factor audit failed", exc_info=True)
+
     while not _should_stop.is_set():
         generation: int | None = None
         try:
