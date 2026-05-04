@@ -74,6 +74,8 @@ _LLM_INJECT_EVERY = 5
 _LLM_VARIANT_COUNT = 5
 _QUANTA_FRACTION_HYBRID = 0.5  # in hybrid mode, this share of the pop is QuantaAlpha-driven
 _QUANTA_VARIANTS_PER_GEN = 5  # how many trajectories injected per generation
+_PROMOTE_EVERY_N_GENS = 10
+_PROMOTE_BATCH_SIZE = 5
 _COLLAPSE_TOLERANCE = 1e-3
 _COLLAPSE_TOP_N = 5
 _NEWS_TOP_N = 100
@@ -709,6 +711,74 @@ async def _run_one_generation(
     return next_pop, fitnesses, best, new_persisted
 
 
+# ----- Trajectory promotion --------------------------------------------------
+
+
+async def _promote_trajectories(generation: int) -> int:
+    """Backtest unscored trajectories; promote passing ones to factor_records.
+
+    Reads up to ``_PROMOTE_BATCH_SIZE`` trajectories with ``fitness IS NULL``
+    (skipping ``crossover`` rows), backtests each formula, writes the metrics
+    back to the trajectory row, and — if the result clears
+    :func:`factor_vector_store.add_factor`'s gate — links the trajectory to
+    the freshly-promoted ``factor_records`` row.
+
+    Returns the number of trajectories promoted to the library.
+    """
+    try:
+        from app.services import factor_backtest_service
+        from app.services import factor_quanta_service as quanta
+        from core.factors.ast import parse
+    except Exception:
+        return 0
+
+    end = date.today()
+    start = date(end.year - 2, end.month, min(end.day, 28))
+
+    candidates = await quanta.list_unscored_trajectories(limit=_PROMOTE_BATCH_SIZE)
+    promoted = 0
+    for c in candidates:
+        try:
+            node = parse(c["formula"])
+        except Exception:
+            await quanta.update_trajectory_metrics(
+                c["id"], failure_reason="unparseable"
+            )
+            continue
+        try:
+            r = await factor_backtest_service.backtest_factor(
+                node, start=start, end=end, universe_size=100,
+            )
+            await quanta.update_trajectory_metrics(
+                c["id"],
+                fitness=float(r.fitness),
+                ic_5d=float(r.ic_5d) if r.ic_5d is not None else None,
+            )
+            row_id = await factor_vector_store.add_factor(
+                c["formula"],
+                fitness=float(r.fitness),
+                ic_5d=r.ic_5d,
+                ic_1d=r.ic_1d,
+                ic_20d=r.ic_20d,
+                icir=r.icir_5d,
+                sharpe=r.sharpe,
+                max_drawdown=r.max_drawdown,
+                turnover=r.turnover,
+                generation=generation,
+                metadata={"source": "trajectory", "trajectory_id": c["id"]},
+            )
+            if row_id:
+                await quanta.update_trajectory_metrics(
+                    c["id"], factor_record_id=row_id
+                )
+                promoted += 1
+        except Exception as exc:  # noqa: BLE001 — log + record + continue
+            await quanta.update_trajectory_metrics(
+                c["id"], failure_reason=str(exc)[:200]
+            )
+    return promoted
+
+
 # ----- The loop --------------------------------------------------------------
 
 
@@ -821,6 +891,22 @@ async def continuous_evolution_loop() -> None:
                         "quanta injection failed at gen=%d",
                         generation,
                         exc_info=True,
+                    )
+
+            # Periodic trajectory promotion: backtest some recent trajectories
+            # and add the passing ones to factor_records.
+            if generation % _PROMOTE_EVERY_N_GENS == 0:
+                try:
+                    promoted = await _promote_trajectories(generation)
+                    if promoted:
+                        logger.info(
+                            "[FactorForge gen=%d] promoted %d trajectories to library",
+                            generation, promoted,
+                        )
+                except Exception:
+                    logger.warning(
+                        "trajectory promotion failed at gen=%d",
+                        generation, exc_info=True,
                     )
 
             # Retrain predictor every N generations.

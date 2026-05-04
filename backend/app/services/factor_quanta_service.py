@@ -274,6 +274,58 @@ async def list_trajectories(*, limit: int = 100) -> list[dict[str, Any]]:
     ]
 
 
+async def update_trajectory_metrics(
+    traj_id: int,
+    *,
+    fitness: float | None = None,
+    ic_5d: float | None = None,
+    factor_record_id: int | None = None,
+    failure_reason: str | None = None,
+) -> None:
+    """Update a trajectory row with backtest results / promotion link."""
+    from sqlalchemy import update as sql_update
+
+    async with AsyncSessionLocal() as session:
+        stmt = sql_update(FactorTrajectory).where(FactorTrajectory.id == traj_id)
+        values: dict[str, Any] = {}
+        if fitness is not None:
+            values["fitness"] = fitness
+        if ic_5d is not None:
+            values["ic_5d"] = ic_5d
+        if factor_record_id is not None:
+            values["factor_record_id"] = factor_record_id
+        if failure_reason is not None:
+            values["failure_reason"] = failure_reason
+        if values:
+            await session.execute(stmt.values(**values))
+            await session.commit()
+
+
+async def list_unscored_trajectories(limit: int = 5) -> list[dict[str, Any]]:
+    """Trajectories that haven't been backtested yet."""
+    from sqlalchemy import select
+
+    async with AsyncSessionLocal() as session:
+        rows = (
+            await session.execute(
+                select(FactorTrajectory)
+                .where(FactorTrajectory.fitness.is_(None))
+                .where(FactorTrajectory.evolution_step != "crossover")
+                .order_by(FactorTrajectory.id.desc())
+                .limit(limit)
+            )
+        ).scalars().all()
+    return [
+        {
+            "id": r.id,
+            "formula": r.formula,
+            "research_direction": r.research_direction,
+            "evolution_step": r.evolution_step,
+        }
+        for r in rows
+    ]
+
+
 def pick_parents_for_quanta(
     library: list[dict[str, Any]],
     n: int,
