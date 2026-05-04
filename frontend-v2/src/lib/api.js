@@ -502,6 +502,12 @@ export const startEvolution = () =>
 export const stopEvolution = () =>
   request('/api/factors/evolution/stop', { method: 'POST', body: {} });
 
+export const getEvolutionHistory = (limit = 100) =>
+  request(`/api/factors/evolution/history?limit=${limit}`);
+
+export const getEvolutionPopulation = () =>
+  request('/api/factors/evolution/population');
+
 // ----------------------------------------------------------- agents (P7)
 export const listPersonas = () => request('/api/agents/personas');
 export const analyzeWithPersona = (body) => request('/api/agents/analyze', { method: 'POST', body });

@@ -1,11 +1,16 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { Activity, Database, Cpu, Play } from 'lucide-react';
+import { Activity, Database, Zap, History as HistoryIcon } from 'lucide-react';
+import {
+  Bar, CartesianGrid, ComposedChart, Line, ResponsiveContainer,
+  Tooltip, XAxis, YAxis,
+} from 'recharts';
 import {
   listFactors, getFactorDetail, getActiveUniverse,
   listFactorRuns,
   getEvolutionStatus, startEvolution, stopEvolution,
+  getEvolutionHistory, getEvolutionPopulation,
 } from '../lib/api.js';
 import {
   PageHeader, SectionHeader, LoadingState, ErrorState, EmptyState,
@@ -13,38 +18,53 @@ import {
 import { classNames, fmtUsd } from '../lib/format.js';
 
 const TABS = [
-  { id: 'library', icon: Database, label: 'nav.factors' },
-  { id: 'universe', icon: Activity, label: 'factors.universe' },
-  { id: 'runs', icon: Cpu, label: 'factors.runs' },
+  { id: 'library',   icon: Database,    label: '库' },
+  { id: 'evolution', icon: Activity,    label: '演化曲线' },
+  { id: 'universe',  icon: Zap,         label: '活跃股' },
+  { id: 'runs',      icon: HistoryIcon, label: '运行记录' },
 ];
 
+const tooltipStyle = {
+  background: '#0F1923', border: '1px solid #3D7FA5',
+  borderRadius: 6, color: '#E8ECF1', fontSize: 12,
+};
+
 export default function FactorsPage() {
-  const { t } = useTranslation();
   const [tab, setTab] = useState('library');
   return (
     <div className="space-y-4">
       <PageHeader
         moduleId={21}
-        title={t('factors.title', '因子工厂')}
+        title="因子工厂"
         segments={[{ label: 'FACTOR', accent: true }, { label: 'FORGE' }]}
       />
-      <StatusBanner />
+      <HeroPanel />
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div className="lg:col-span-2"><PopulationGrid /></div>
+        <EventFeed />
+      </div>
       <TabBar value={tab} onChange={setTab} />
       <div className="card">
-        {tab === 'library' && <LibraryTab />}
-        {tab === 'universe' && <UniverseTab />}
-        {tab === 'runs' && <RunsTab />}
+        {tab === 'library'   && <LibraryTab />}
+        {tab === 'evolution' && <EvolutionChart />}
+        {tab === 'universe'  && <UniverseTab />}
+        {tab === 'runs'      && <RunsTab />}
       </div>
     </div>
   );
 }
 
-function StatusBanner() {
+function HeroPanel() {
   const qc = useQueryClient();
   const statusQ = useQuery({
     queryKey: ['evolution-status'],
     queryFn: getEvolutionStatus,
     refetchInterval: 5_000,
+  });
+  const historyQ = useQuery({
+    queryKey: ['evolution-history-spark'],
+    queryFn: () => getEvolutionHistory(50),
+    refetchInterval: 10_000,
   });
   const startM = useMutation({
     mutationFn: startEvolution,
@@ -54,53 +74,81 @@ function StatusBanner() {
     mutationFn: stopEvolution,
     onSuccess: () => qc.invalidateQueries({ queryKey: ['evolution-status'] }),
   });
-
   const s = statusQ.data;
   const running = !!s?.is_running;
-  const dotClass = running ? 'bg-bull animate-pulse' : 'bg-text-muted';
+  const dot = running ? 'bg-bull animate-pulse' : 'bg-text-muted';
   const lastDone = s?.last_generation_completed_at
     ? new Date(s.last_generation_completed_at).toLocaleString()
     : '—';
+  const histItems = historyQ.data?.items || [];
+
+  const recentBest = s?.best_fitness_recent;
+  const olderBest = histItems.length >= 6
+    ? histItems[histItems.length - 6]?.best_fitness
+    : null;
+  const delta = recentBest != null && olderBest != null && olderBest !== 0
+    ? ((recentBest - olderBest) / Math.abs(olderBest)) * 100
+    : null;
+  const deltaTone = delta == null ? 'text-text-muted'
+    : delta > 0 ? 'text-bull' : delta < 0 ? 'text-bear' : 'text-text-muted';
 
   return (
-    <div className="card flex items-center justify-between flex-wrap gap-3">
-      <div className="flex items-center gap-3 flex-wrap">
-        <span className={classNames('w-2.5 h-2.5 rounded-full', dotClass)} />
-        <span className="font-mono text-[11px] tracking-[0.15em] uppercase text-text-secondary">
-          {running ? '进化中' : '已停止'}
-        </span>
-        <Stat label="代" value={s?.current_generation ?? 0} />
-        <Stat label="best" value={s?.best_fitness_recent != null ? s.best_fitness_recent.toFixed(4) : '—'} />
-        <Stat label="种群" value={s?.population_size ?? 0} />
-        <Stat label="库" value={s?.library_count ?? 0} />
-        <Stat label="last gen" value={lastDone} />
-      </div>
-      <div className="flex items-center gap-2">
-        {running ? (
-          <button
-            type="button"
-            onClick={() => stopM.mutate()}
-            disabled={stopM.isPending}
-            className="px-3 py-1 border border-bear/40 text-bear font-mono text-[10px] tracking-[0.15em] uppercase hover:bg-bear/10 disabled:opacity-50"
-          >
-            {stopM.isPending ? '停止中…' : '停止'}
-          </button>
-        ) : (
-          <button
-            type="button"
-            onClick={() => startM.mutate()}
-            disabled={startM.isPending}
-            className="px-3 py-1 border border-cyan/40 text-cyan font-mono text-[10px] tracking-[0.15em] uppercase hover:bg-cyan/10 disabled:opacity-50"
-          >
-            {startM.isPending ? '启动中…' : '启动'}
-          </button>
-        )}
-      </div>
-      {s?.error ? (
-        <div className="basis-full text-rose-400 text-caption font-mono">
-          上次出错: {String(s.error).slice(0, 200)}
+    <div className="card space-y-3">
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div className="flex items-center gap-3 flex-wrap">
+          <span className={classNames('w-2.5 h-2.5 rounded-full', dot)} />
+          <span className="font-mono text-[11px] tracking-[0.15em] uppercase text-text-secondary">
+            {running ? '进化中' : '已停止'}
+          </span>
+          <Stat label="代" value={s?.current_generation ?? 0} />
+          <Stat label="best" value={recentBest != null ? recentBest.toFixed(4) : '—'} />
+          {delta != null && (
+            <span className={classNames('font-mono text-caption', deltaTone)}>
+              {delta >= 0 ? '↑' : '↓'} 较 5 代前 {delta >= 0 ? '+' : ''}{delta.toFixed(1)}%
+            </span>
+          )}
+          <Stat label="种群" value={s?.population_size ?? 0} />
+          <Stat label="库" value={s?.library_count ?? 0} />
+          <Stat label="last gen" value={lastDone} />
         </div>
-      ) : null}
+        <div>
+          {running ? (
+            <button
+              type="button"
+              onClick={() => stopM.mutate()}
+              disabled={stopM.isPending}
+              className="px-3 py-1 border border-bear/40 text-bear font-mono text-[10px] tracking-[0.15em] uppercase hover:bg-bear/10 disabled:opacity-50"
+            >{stopM.isPending ? '停止中…' : '停止'}</button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => startM.mutate()}
+              disabled={startM.isPending}
+              className="px-3 py-1 border border-cyan/40 text-cyan font-mono text-[10px] tracking-[0.15em] uppercase hover:bg-cyan/10 disabled:opacity-50"
+            >{startM.isPending ? '启动中…' : '启动'}</button>
+          )}
+        </div>
+      </div>
+      {s?.error && (
+        <div className="text-rose-400 text-caption font-mono">上次出错: {String(s.error).slice(0, 200)}</div>
+      )}
+      <Sparkline data={histItems} />
+    </div>
+  );
+}
+
+function Sparkline({ data }) {
+  if (!data || data.length < 2) {
+    return <div className="h-12 text-caption text-text-muted">等待第一代完成…</div>;
+  }
+  const points = data.map((d) => ({ g: d.generation, v: d.best_fitness ?? 0 }));
+  return (
+    <div className="h-12">
+      <ResponsiveContainer width="100%" height="100%">
+        <ComposedChart data={points}>
+          <Line type="monotone" dataKey="v" stroke="#5BA3C6" strokeWidth={1.5} dot={false} isAnimationActive={false} />
+        </ComposedChart>
+      </ResponsiveContainer>
     </div>
   );
 }
@@ -114,23 +162,141 @@ function Stat({ label, value }) {
   );
 }
 
+function PopulationGrid() {
+  const popQ = useQuery({
+    queryKey: ['evolution-pop'],
+    queryFn: getEvolutionPopulation,
+    refetchInterval: 5_000,
+  });
+  const [focused, setFocused] = useState(null);
+  if (popQ.isLoading) return <div className="card"><LoadingState rows={3} /></div>;
+  if (popQ.isError) return <div className="card"><ErrorState error={popQ.error} onRetry={popQ.refetch} /></div>;
+  const slots = popQ.data?.slots || [];
+  if (!slots.length) return <div className="card"><EmptyState title="种群空" hint="等待第一代播种…" /></div>;
+
+  const fits = slots.map((s) => s.fitness).filter((f) => f > -50);
+  const minF = fits.length ? Math.min(...fits) : 0;
+  const maxF = fits.length ? Math.max(...fits) : 0;
+  const range = (maxF - minF) || 1;
+
+  return (
+    <div className="card space-y-3">
+      <div className="flex items-baseline justify-between">
+        <SectionHeader title="当代种群" subtitle={`gen ${popQ.data.generation} · ${slots.length} slots`} />
+        <span className="text-caption text-text-muted font-mono">
+          best {fits.length ? maxF.toFixed(4) : '—'} · worst {fits.length ? minF.toFixed(4) : '—'}
+        </span>
+      </div>
+      <div className="grid grid-cols-10 gap-1.5">
+        {slots.map((slot) => {
+          const f = slot.fitness;
+          const failed = f < -50;
+          const t = failed ? 0 : (f - minF) / range;
+          const bg = failed ? '#2A3645'
+            : `hsl(${Math.round(t * 130)}, 60%, ${30 + Math.round(t * 25)}%)`;
+          return (
+            <button
+              key={slot.slot}
+              type="button"
+              onClick={() => setFocused(slot)}
+              title={`#${slot.slot} fit=${f.toFixed(4)}\n${slot.formula}`}
+              className="aspect-square border border-border-subtle hover:ring-1 hover:ring-cyan transition-all"
+              style={{ backgroundColor: bg }}
+            />
+          );
+        })}
+      </div>
+      {focused && (
+        <div className="border border-cyan/40 p-3 space-y-1">
+          <div className="text-caption text-text-muted font-mono">
+            #{focused.slot} · fitness {focused.fitness.toFixed(4)}
+          </div>
+          <div className="font-mono text-body-sm break-all">{focused.formula}</div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function EventFeed() {
+  const histQ = useQuery({
+    queryKey: ['evolution-history-feed'],
+    queryFn: () => getEvolutionHistory(20),
+    refetchInterval: 5_000,
+  });
+  const items = histQ.data?.items ? [...histQ.data.items].reverse() : [];
+  return (
+    <div className="card max-h-[420px] overflow-y-auto">
+      <SectionHeader title="最近事件" subtitle="按代倒序" />
+      {!items.length ? (
+        <EmptyState title="尚无事件" hint="代完成后这里会更新" />
+      ) : (
+        <ul className="space-y-1.5 text-caption font-mono">
+          {items.map((it) => (
+            <li key={it.generation} className="flex items-baseline justify-between gap-2 border-b border-border-subtle/50 pb-1">
+              <span className="text-text-muted">
+                {new Date(it.completed_at).toLocaleTimeString()}
+              </span>
+              <span>
+                gen {it.generation} · best{' '}
+                <span className={it.best_fitness != null && it.best_fitness > 0.02 ? 'text-bull' : 'text-text-secondary'}>
+                  {it.best_fitness != null ? it.best_fitness.toFixed(4) : '—'}
+                </span>
+                {it.persisted_count > 0 ? <span className="text-cyan"> · +{it.persisted_count} → 库</span> : null}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function EvolutionChart() {
+  const histQ = useQuery({
+    queryKey: ['evolution-history-chart'],
+    queryFn: () => getEvolutionHistory(500),
+    refetchInterval: 15_000,
+  });
+  if (histQ.isLoading) return <LoadingState rows={6} />;
+  if (histQ.isError) return <ErrorState error={histQ.error} onRetry={histQ.refetch} />;
+  const items = histQ.data?.items || [];
+  if (!items.length) return <EmptyState title="尚无数据" hint="跑过一代后这里会有曲线" />;
+  return (
+    <div className="space-y-3">
+      <SectionHeader title="演化曲线" subtitle="best/median fitness 与每代入库数 · 越老的代越靠左" />
+      <div className="h-[400px]">
+        <ResponsiveContainer width="100%" height="100%">
+          <ComposedChart data={items}>
+            <CartesianGrid stroke="#2A3645" strokeDasharray="3 3" />
+            <XAxis dataKey="generation" stroke="#7C8A9A" fontSize={10} />
+            <YAxis yAxisId="fit" stroke="#7C8A9A" fontSize={10} />
+            <YAxis yAxisId="cnt" orientation="right" stroke="#7C8A9A" fontSize={10} />
+            <Tooltip contentStyle={tooltipStyle} />
+            <Bar yAxisId="cnt" dataKey="persisted_count" fill="#3D7FA5" opacity={0.4} />
+            <Line yAxisId="fit" type="monotone" dataKey="median_fitness" stroke="#7C8A9A" strokeWidth={1.2} dot={false} isAnimationActive={false} name="median" />
+            <Line yAxisId="fit" type="monotone" dataKey="best_fitness" stroke="#5BA3C6" strokeWidth={1.8} dot={false} isAnimationActive={false} name="best" />
+          </ComposedChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
+  );
+}
+
 function TabBar({ value, onChange }) {
-  const { t } = useTranslation();
   return (
     <div className="flex gap-1 border-b border-border-subtle font-mono text-[11px] tracking-[0.15em] uppercase">
-      {TABS.map((tabDef) => (
+      {TABS.map((t) => (
         <button
-          key={tabDef.id}
+          key={t.id}
           type="button"
-          onClick={() => onChange(tabDef.id)}
+          onClick={() => onChange(t.id)}
           className={classNames(
-            'px-4 py-2 border-b-2 -mb-[1px] transition-colors',
-            tabDef.id === value
-              ? 'border-cyan text-cyan'
-              : 'border-transparent text-text-muted hover:text-text-primary',
+            'px-4 py-2 border-b-2 -mb-[1px] transition-colors inline-flex items-center gap-1',
+            t.id === value ? 'border-cyan text-cyan' : 'border-transparent text-text-muted hover:text-text-primary',
           )}
         >
-          {t(tabDef.label, tabDef.id)}
+          <t.icon size={12} /> {t.label}
         </button>
       ))}
     </div>
