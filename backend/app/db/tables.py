@@ -780,6 +780,32 @@ class FactorEvolutionStateSingleton(Base):
     is_paused: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
 
+class DailyRecommendation(Base):
+    """One recommendation row per (date, symbol). Wiped+rewritten daily."""
+
+    __tablename__ = "daily_recommendations"
+
+    date: Mapped[date] = mapped_column(Date, primary_key=True)
+    symbol: Mapped[str] = mapped_column(String(16), primary_key=True)
+    action: Mapped[str] = mapped_column(String(8), nullable=False)  # 'buy' / 'sell' / 'hold'
+    entry_low: Mapped[float] = mapped_column(Float, nullable=False)
+    entry_high: Mapped[float] = mapped_column(Float, nullable=False)
+    stop_loss: Mapped[float] = mapped_column(Float, nullable=False)
+    take_profit: Mapped[float] = mapped_column(Float, nullable=False)
+    holding_days: Mapped[int] = mapped_column(Integer, nullable=False, default=5)
+    position_pct: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    confidence: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    ensemble_score: Mapped[float] = mapped_column(Float, nullable=False)
+    reasoning_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
+    risk_signals_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
+    rank: Mapped[int] = mapped_column(Integer, nullable=False)  # 1 = strongest buy / sell
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+    )
+
+
 class FactorGenerationStat(Base):
     """Per-generation summary written at the end of each evolution cycle.
 

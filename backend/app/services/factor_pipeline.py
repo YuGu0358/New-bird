@@ -482,6 +482,16 @@ async def daily_data_refresh() -> None:
         await factor_fitness_predictor.train_from_library(
             min_records=_PREDICTOR_MIN_RECORDS
         )
+        # Generate today's recommendations once data + universe are fresh.
+        try:
+            from app.services import today_recommendations_service as recs
+
+            await recs.generate_today_recommendations()
+            logger.info("[FactorForge] today's recommendations generated")
+        except Exception:
+            logger.warning(
+                "today_recommendations generation failed", exc_info=True
+            )
         logger.info("[FactorForge] daily data refresh complete (%s)", today)
     except Exception:
         logger.exception("[FactorForge] daily data refresh failed")

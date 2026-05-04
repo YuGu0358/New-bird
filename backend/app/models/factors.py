@@ -114,3 +114,39 @@ class LandscapePoint(BaseModel):
 
 class LandscapeResponse(BaseModel):
     items: list[LandscapePoint]
+
+
+class ReasoningEntry(BaseModel):
+    factor_id: int | None = None
+    formula: str | None = None
+    fitness: float | None = None
+    weight: float | None = None
+    interpretation: str | None = None
+
+
+class RiskSignal(BaseModel):
+    kind: str
+    value: float | None = None
+    message: str
+
+
+class RecommendationView(BaseModel):
+    date: str
+    symbol: str
+    action: str
+    entry_low: float
+    entry_high: float
+    stop_loss: float
+    take_profit: float
+    holding_days: int
+    position_pct: float
+    confidence: float
+    ensemble_score: float
+    reasoning: list[ReasoningEntry] = []
+    risk_signals: list[RiskSignal] = []
+    rank: int
+
+
+class RecommendationsResponse(BaseModel):
+    items: list[RecommendationView]
+    generated_at: str | None = None

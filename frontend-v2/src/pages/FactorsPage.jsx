@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { Activity, Database, Zap, History as HistoryIcon, Map as MapIcon } from 'lucide-react';
+import { Activity, Database, Zap, History as HistoryIcon, Map as MapIcon, Lightbulb as LightbulbIcon } from 'lucide-react';
 import {
   Bar, CartesianGrid, ComposedChart, Line, ResponsiveContainer,
   Scatter, ScatterChart, Tooltip, XAxis, YAxis, ZAxis,
@@ -12,13 +12,16 @@ import {
   getEvolutionStatus, startEvolution, stopEvolution,
   getEvolutionHistory, getEvolutionPopulation,
   getFactorLandscape,
+  getTodayRecommendations,
 } from '../lib/api.js';
 import {
   PageHeader, SectionHeader, LoadingState, ErrorState, EmptyState,
 } from '../components/primitives.jsx';
+import RecommendationCard from '../components/RecommendationCard.jsx';
 import { classNames, fmtUsd } from '../lib/format.js';
 
 const TABS = [
+  { id: 'today',     icon: LightbulbIcon, label: '今日建议' },
   { id: 'library',   icon: Database,    label: '库' },
   { id: 'evolution', icon: Activity,    label: '演化曲线' },
   { id: 'landscape', icon: MapIcon,     label: '基因图谱' },
@@ -32,7 +35,7 @@ const tooltipStyle = {
 };
 
 export default function FactorsPage() {
-  const [tab, setTab] = useState('library');
+  const [tab, setTab] = useState('today');
   return (
     <div className="space-y-4">
       <PageHeader
@@ -47,11 +50,32 @@ export default function FactorsPage() {
       </div>
       <TabBar value={tab} onChange={setTab} />
       <div className="card">
+        {tab === 'today'     && <TodayRecommendations />}
         {tab === 'library'   && <LibraryTab />}
         {tab === 'evolution' && <EvolutionChart />}
         {tab === 'landscape' && <LandscapeTab />}
         {tab === 'universe'  && <UniverseTab />}
         {tab === 'runs'      && <RunsTab />}
+      </div>
+    </div>
+  );
+}
+
+function TodayRecommendations() {
+  const q = useQuery({
+    queryKey: ['today-recommendations'],
+    queryFn: () => getTodayRecommendations(10),
+    refetchInterval: 5 * 60_000,
+  });
+  if (q.isLoading) return <LoadingState rows={6} />;
+  if (q.isError) return <ErrorState error={q.error} onRetry={q.refetch} />;
+  const items = q.data?.items || [];
+  if (!items.length) return <EmptyState title="尚无建议" hint="等待因子库与今日 universe 就绪" />;
+  return (
+    <div className="space-y-3">
+      <SectionHeader title="今日建议" subtitle={`共 ${items.length} 条 · 按行动 + 排名分组`} />
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        {items.map((r) => <RecommendationCard key={`${r.action}-${r.symbol}`} rec={r} />)}
       </div>
     </div>
   );

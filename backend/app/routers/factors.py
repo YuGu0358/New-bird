@@ -36,8 +36,15 @@ from app.models.factors import (
     LandscapeResponse,
     PopulationSlotView,
     PopulationSnapshotResponse,
+    RecommendationView,
+    RecommendationsResponse,
 )
-from app.services import factor_landscape_service, factor_pipeline, factor_vector_store
+from app.services import (
+    factor_landscape_service,
+    factor_pipeline,
+    factor_vector_store,
+    today_recommendations_service,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -193,6 +200,27 @@ async def get_landscape(limit: int = 500) -> LandscapeResponse:
     capped = min(max(int(limit), 1), 2000)
     points = await factor_landscape_service.compute_landscape(limit=capped)
     return LandscapeResponse(items=[LandscapePoint(**p) for p in points])
+
+
+@router.get("/recommendations/today", response_model=RecommendationsResponse)
+async def get_today_recommendations(top_k: int = 10) -> RecommendationsResponse:
+    """Return today's persisted recommendations.
+
+    Generates them on the first hit of the day if the table is empty so
+    the UI never sees a stale-but-loadable empty state when the cron
+    hasn't fired yet (e.g. dev server boot).
+    """
+    items = await today_recommendations_service.get_today_recommendations()
+    if not items:
+        half = max(1, top_k // 2)
+        await today_recommendations_service.generate_today_recommendations(
+            top_k_buy=half, top_k_sell=top_k - half
+        )
+        items = await today_recommendations_service.get_today_recommendations()
+    return RecommendationsResponse(
+        items=[RecommendationView.model_validate(it) for it in items[:top_k]],
+        generated_at=items[0]["date"] if items else None,
+    )
 
 
 @router.get("/evolution/population", response_model=PopulationSnapshotResponse)
