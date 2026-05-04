@@ -100,3 +100,16 @@ class PopulationSlotView(BaseModel):
 class PopulationSnapshotResponse(BaseModel):
     generation: int
     slots: list[PopulationSlotView]
+
+
+class LandscapePoint(BaseModel):
+    id: int
+    formula: str
+    fitness: float
+    ic_5d: float | None = None
+    x: float
+    y: float
+
+
+class LandscapeResponse(BaseModel):
+    items: list[LandscapePoint]

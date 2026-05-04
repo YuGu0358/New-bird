@@ -32,10 +32,12 @@ from app.models.factors import (
     FactorRecordView,
     GenerationHistoryResponse,
     GenerationStatView,
+    LandscapePoint,
+    LandscapeResponse,
     PopulationSlotView,
     PopulationSnapshotResponse,
 )
-from app.services import factor_pipeline, factor_vector_store
+from app.services import factor_landscape_service, factor_pipeline, factor_vector_store
 
 logger = logging.getLogger(__name__)
 
@@ -175,6 +177,14 @@ async def get_evolution_history(
     ordered = list(reversed(rows))
     items = [GenerationStatView.model_validate(r) for r in ordered]
     return GenerationHistoryResponse(items=items)
+
+
+@router.get("/landscape", response_model=LandscapeResponse)
+async def get_landscape(limit: int = 500) -> LandscapeResponse:
+    """PCA-2D projection of factor formula embeddings, sorted by fitness."""
+    capped = min(max(int(limit), 1), 2000)
+    points = await factor_landscape_service.compute_landscape(limit=capped)
+    return LandscapeResponse(items=[LandscapePoint(**p) for p in points])
 
 
 @router.get("/evolution/population", response_model=PopulationSnapshotResponse)
