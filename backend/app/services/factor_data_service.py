@@ -11,9 +11,12 @@ Public API:
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
+import time
 from collections.abc import Iterable
 from datetime import date, datetime, timedelta, timezone
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -55,6 +58,112 @@ RUSSELL_PROXY_SYMBOLS: list[str] = [
 # Alpaca's bars endpoint accepts up to ~200 symbols per request; chunk to keep
 # the URL/payload safe and to spread retries over smaller failure domains.
 ALPACA_SYMBOL_CHUNK = 100
+
+
+# ---------------------------------------------------------------------------
+# Russell 1000 universe — fetched from iShares IWB holdings CSV with on-disk
+# cache + fallback to RUSSELL_PROXY_SYMBOLS on any failure.
+# ---------------------------------------------------------------------------
+
+_RUSSELL_CACHE_PATH = (
+    Path(__file__).resolve().parents[2] / "data" / "russell_1000_symbols.json"
+)
+_RUSSELL_CACHE_TTL_SEC = 7 * 24 * 3600  # 7 days
+# NOTE: product id 239707 = iShares Russell 1000 ETF (IWB). The 239726 path
+# returns IVV (S&P 500) and only ~500 holdings, which is a different fund.
+_RUSSELL_URL = (
+    "https://www.ishares.com/us/products/239707/ishares-russell-1000-etf/"
+    "1467271812596.ajax?fileType=csv&fileName=IWB_holdings&dataType=fund"
+)
+_RUSSELL_MIN_SYMBOLS = 500  # Sanity floor — anything less means malformed CSV.
+
+
+def _load_cached_russell() -> list[str] | None:
+    """Read cached Russell symbols from disk if present and fresh."""
+    try:
+        if not _RUSSELL_CACHE_PATH.exists():
+            return None
+        age = time.time() - _RUSSELL_CACHE_PATH.stat().st_mtime
+        if age > _RUSSELL_CACHE_TTL_SEC:
+            return None
+        with open(_RUSSELL_CACHE_PATH) as f:
+            data = json.load(f)
+        symbols = data.get("symbols") or []
+        return list(symbols) if isinstance(symbols, list) else None
+    except Exception:
+        logger.debug("Russell cache read failed", exc_info=True)
+        return None
+
+
+def _fetch_russell_csv_sync() -> list[str]:
+    """Pull the iShares IWB holdings CSV and parse out tickers.
+
+    The file has ~9-10 header lines before the actual CSV; we locate the
+    row whose first column is ``Ticker`` and parse from there. Symbols
+    must match ``^[A-Z][A-Z0-9.-]{0,10}$`` to drop cash entries / option
+    rows / other non-equity placeholders.
+    """
+    import csv
+    import io
+    import re
+    import urllib.request
+
+    req = urllib.request.Request(
+        _RUSSELL_URL,
+        headers={"User-Agent": "Mozilla/5.0 (FactorForge ingest)"},
+    )
+    with urllib.request.urlopen(req, timeout=30) as resp:  # noqa: S310 - fixed iShares URL
+        raw = resp.read().decode("utf-8", errors="replace")
+
+    lines = raw.splitlines()
+    start_idx: int | None = None
+    for i, line in enumerate(lines):
+        if line.strip().startswith("Ticker"):
+            start_idx = i
+            break
+    if start_idx is None:
+        raise RuntimeError("iShares CSV format changed — no Ticker header row")
+
+    reader = csv.DictReader(io.StringIO("\n".join(lines[start_idx:])))
+    pat = re.compile(r"^[A-Z][A-Z0-9.\-]{0,10}$")
+    seen: set[str] = set()
+    out: list[str] = []
+    for row in reader:
+        sym = (row.get("Ticker") or "").strip().upper()
+        if pat.match(sym) and sym not in seen:
+            seen.add(sym)
+            out.append(sym)
+    return out
+
+
+async def get_russell_universe() -> list[str]:
+    """Return ~1000 Russell 1000 symbols, with on-disk 7-day cache.
+
+    Falls back to the hand-coded ``RUSSELL_PROXY_SYMBOLS`` on any failure
+    (network, parsing, short response, etc.) so the pipeline never stalls.
+    """
+    cached = _load_cached_russell()
+    if cached:
+        return cached
+    try:
+        symbols = await asyncio.to_thread(_fetch_russell_csv_sync)
+        if len(symbols) < _RUSSELL_MIN_SYMBOLS:
+            logger.warning(
+                "iShares CSV returned only %d symbols — using fallback",
+                len(symbols),
+            )
+            return list(RUSSELL_PROXY_SYMBOLS)
+        _RUSSELL_CACHE_PATH.parent.mkdir(parents=True, exist_ok=True)
+        with open(_RUSSELL_CACHE_PATH, "w") as f:
+            json.dump({"symbols": symbols, "fetched_at": time.time()}, f)
+        logger.info("Fetched %d Russell 1000 symbols from iShares", len(symbols))
+        return symbols
+    except Exception:
+        logger.warning(
+            "Russell fetch failed, falling back to RUSSELL_PROXY_SYMBOLS",
+            exc_info=True,
+        )
+        return list(RUSSELL_PROXY_SYMBOLS)
 
 
 def _alpaca_data_client():
@@ -251,7 +360,8 @@ async def update_daily_bars(symbols: list[str] | None = None) -> int:
     declines to return are simply skipped (they show up as no rows in
     the response DataFrame).
     """
-    symbols = symbols or RUSSELL_PROXY_SYMBOLS
+    if symbols is None:
+        symbols = await get_russell_universe()
     today = date.today()
     five_years_ago = today - timedelta(days=5 * 365 + 5)
 

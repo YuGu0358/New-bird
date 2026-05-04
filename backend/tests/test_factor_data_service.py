@@ -10,7 +10,11 @@ both `engine` and the service module, mirroring the pattern used in
 from __future__ import annotations
 
 import importlib
+import json
+import tempfile
 from datetime import date, timedelta
+from pathlib import Path
+from unittest.mock import patch
 
 import pandas as pd
 import pytest
@@ -349,3 +353,55 @@ async def test_update_daily_bars_swallows_alpaca_errors(monkeypatch):
 
     inserted = await svc.update_daily_bars(symbols=["AAPL"])
     assert inserted == 0
+
+
+# ---------------------------------------------------------------------------
+# get_russell_universe: cache + fallback behavior, fetch is mocked
+# ---------------------------------------------------------------------------
+
+
+async def test_get_russell_universe_uses_cache_when_fresh():
+    from app.services import factor_data_service as svc
+
+    with patch.object(svc, "_load_cached_russell", return_value=["AAPL", "MSFT"]):
+        result = await svc.get_russell_universe()
+    assert result == ["AAPL", "MSFT"]
+
+
+async def test_get_russell_universe_falls_back_on_fetch_error():
+    from app.services import factor_data_service as svc
+
+    with patch.object(svc, "_load_cached_russell", return_value=None), patch.object(
+        svc, "_fetch_russell_csv_sync", side_effect=RuntimeError("network")
+    ):
+        result = await svc.get_russell_universe()
+    # Falls back to the hand-coded list (~200 entries).
+    assert len(result) > 100
+
+
+async def test_get_russell_universe_falls_back_on_short_csv():
+    from app.services import factor_data_service as svc
+
+    with patch.object(svc, "_load_cached_russell", return_value=None), patch.object(
+        svc, "_fetch_russell_csv_sync", return_value=["AAPL", "MSFT"]
+    ):
+        result = await svc.get_russell_universe()
+    # Too few symbols -> fallback list kicks in.
+    assert len(result) > 100
+
+
+async def test_get_russell_universe_caches_to_disk():
+    from app.services import factor_data_service as svc
+
+    with tempfile.TemporaryDirectory() as tmp:
+        cache_path = Path(tmp) / "rus.json"
+        symbols = [f"SYM{i:03d}" for i in range(800)]
+        with patch.object(svc, "_RUSSELL_CACHE_PATH", cache_path), patch.object(
+            svc, "_load_cached_russell", return_value=None
+        ), patch.object(svc, "_fetch_russell_csv_sync", return_value=symbols):
+            result = await svc.get_russell_universe()
+        assert len(result) == 800
+        assert cache_path.exists()
+        with open(cache_path) as f:
+            data = json.load(f)
+        assert len(data["symbols"]) == 800
