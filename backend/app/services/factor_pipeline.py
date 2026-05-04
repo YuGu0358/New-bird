@@ -48,6 +48,7 @@ except Exception:  # pragma: no cover - defensive
 
 from core.factors.ast import FactorNode, parse, serialize
 from core.factors.genetic import mutate
+from core.factors.op_stats import compute_op_weights
 from core.factors.seeds import get_seed_population
 
 logger = logging.getLogger(__name__)
@@ -224,6 +225,7 @@ def _run_generation_blocking(
     rng: random.Random,
     pre_filter,
     generation: int,
+    op_weights: dict[str, float] | None = None,
 ) -> tuple[list[FactorNode], list[float], object]:
     """Synchronous wrapper that runs ``run_generation`` in its own loop.
 
@@ -245,6 +247,7 @@ def _run_generation_blocking(
             fitness_threshold=0.02,
             persist=True,
             generation=generation,
+            op_weights=op_weights,
         )
     )
 
@@ -272,6 +275,17 @@ async def _run_one_generation(
     pre_filter = predictor.predict if predictor.is_trained else None
     start = date(end.year - 2, end.month, min(end.day, 28))
 
+    # Operator-success weights — bias mutation toward ops appearing in
+    # high-fitness library factors. Falls back to uniform when library is
+    # empty or fetch fails.
+    op_weights: dict[str, float] | None = None
+    try:
+        records = await factor_vector_store.list_factors(limit=2000)
+        op_weights = compute_op_weights(records) if records else None
+    except Exception:
+        logger.debug("op_weights fetch failed; falling back to uniform", exc_info=True)
+        op_weights = None
+
     next_pop, fitnesses, stats = await asyncio.to_thread(
         _run_generation_blocking,
         pop,
@@ -280,6 +294,7 @@ async def _run_one_generation(
         rng=rng,
         pre_filter=pre_filter,
         generation=generation,
+        op_weights=op_weights,
     )
     new_persisted = int(getattr(stats, "new_persisted", 0) or 0)
 

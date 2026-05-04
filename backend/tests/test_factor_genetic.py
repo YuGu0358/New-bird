@@ -165,3 +165,26 @@ def test_random_tree_is_deterministic_given_seed():
     a = serialize(random_tree(random.Random(123), max_depth=3))
     b = serialize(random_tree(random.Random(123), max_depth=3))
     assert a == b
+
+
+# ---------------------------------------------------------------------------
+# Weighted mutation
+# ---------------------------------------------------------------------------
+
+
+def test_mutate_with_op_weights_biases_swap():
+    """When mutation does an op-swap, weights should bias the choice."""
+    base = parse("rank(close)")
+    weights = {"zscore": 100.0}  # heavy bias to zscore; others fall back to epsilon
+    rng = random.Random(0)
+    swap_outcomes = []
+    for _ in range(50):
+        # Force mutation_rate=1.0 so every mutate definitely changes something.
+        rng2 = random.Random(rng.randrange(10_000))
+        mutated = mutate(base, rng2, mutation_rate=1.0, op_weights=weights)
+        swap_outcomes.append(serialize(mutated))
+    zscore_count = sum(1 for s in swap_outcomes if "zscore" in s)
+    # Mutation has two branches (subtree replace OR op swap); each ~50% likely.
+    # Of the op-swap halves, with weights={"zscore":100} most should be zscore.
+    # Conservative: at least 5 of 50 outcomes contain "zscore".
+    assert zscore_count > 5

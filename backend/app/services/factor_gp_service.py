@@ -150,6 +150,7 @@ def _breed_next_generation(
     tournament_k: int,
     crossover_rate: float,
     mutation_rate: float,
+    op_weights: dict[str, float] | None = None,
 ) -> list[FactorNode]:
     n = len(population)
     elite_count = max(1, int(n * elite_frac))
@@ -164,7 +165,9 @@ def _breed_next_generation(
             child = crossover(p1, p2, rng)
         else:
             child = tournament_select(population, fitnesses, tournament_k, rng)
-        child = mutate(child, rng, mutation_rate=mutation_rate)
+        child = mutate(
+            child, rng, mutation_rate=mutation_rate, op_weights=op_weights
+        )
         next_pop.append(child)
     return next_pop
 
@@ -184,9 +187,15 @@ async def run_generation(
     fitness_threshold: float = 0.0,
     persist: bool = True,
     generation: int = 0,
+    op_weights: dict[str, float] | None = None,
 ) -> tuple[list[FactorNode], list[float], GenerationStats]:
     """Score the population, build the next generation, and (optionally)
-    persist survivors above ``fitness_threshold`` to the vector store."""
+    persist survivors above ``fitness_threshold`` to the vector store.
+
+    ``op_weights`` is an optional operator-success weight map (see
+    ``core.factors.op_stats.compute_op_weights``) used to bias mutation
+    toward historically successful operators.
+    """
     t0 = time.time()
     fitnesses, results = await _score_population(
         population,
@@ -207,6 +216,7 @@ async def run_generation(
         population, fitnesses, rng=rng,
         elite_frac=elite_frac, tournament_k=tournament_k,
         crossover_rate=crossover_rate, mutation_rate=mutation_rate,
+        op_weights=op_weights,
     )
 
     finite_fits = [f for f in fitnesses if f > _SKIPPED_FITNESS]

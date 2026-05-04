@@ -15,6 +15,7 @@ import random
 from typing import Any, Iterable, Sequence, Tuple
 
 from core.factors.ast import FactorNode, replace_subtree
+from core.factors.op_stats import weighted_op_choice
 from core.factors.ops import OPS
 
 # Leaf token vocabulary.
@@ -146,6 +147,7 @@ def mutate(
     node: FactorNode,
     rng: random.Random,
     mutation_rate: float = 0.3,
+    op_weights: dict[str, float] | None = None,
 ) -> FactorNode:
     """Random mutation. With probability ``mutation_rate``, apply one of:
 
@@ -153,6 +155,11 @@ def mutate(
         random tree (depth <= 2);
       * operator swap — replace the operator at a random subtree with another
         op of the same arity, preserving its args.
+
+    When ``op_weights`` is provided, the operator-swap branch samples by
+    weight (epsilon-floored, normalized internally) instead of uniformly.
+    Falls back to uniform when weights are missing or zero for the
+    candidate ops.
 
     Otherwise return ``node`` unchanged. The original is never mutated.
     """
@@ -173,7 +180,7 @@ def mutate(
     same_arity_ops = [op for op in OPS if _arity_of(op) == arity and op != target.op]
     if not same_arity_ops:
         return node
-    new_op = rng.choice(same_arity_ops)
+    new_op = weighted_op_choice(same_arity_ops, op_weights, rng)
     return replace_subtree(node, path, FactorNode(op=new_op, args=target.args))
 
 
