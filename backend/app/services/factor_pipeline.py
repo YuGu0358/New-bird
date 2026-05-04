@@ -362,7 +362,9 @@ def _run_generation_subprocess(
     # instance — assignment to ``X.engine`` then hits AsyncEngine's
     # ``engine`` property which has no setter (= 500). Use an explicit
     # ``import app.db.engine`` to bind the SUBMODULE.
-    import app.db.engine as engine_module  # noqa: PLC0415
+    import sys  # noqa: PLC0415
+    import app.db.engine  # noqa: F401, PLC0415 — force submodule load
+    engine_module = sys.modules["app.db.engine"]  # bypass __init__.py shadowing
 
     # Open a fresh engine bound to the same SQLite file. Patch the
     # module-level AsyncSessionLocal so factor_data_service /
