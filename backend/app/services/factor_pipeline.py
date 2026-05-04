@@ -603,10 +603,31 @@ async def _run_one_generation(
             )
             _shutdown_executor()
     if payload is None:
-        # Both attempts failed — skip this generation, loop continues.
-        raise RuntimeError(
-            f"GP subprocess failed twice: {last_err}"
-        ) from last_err
+        # Both subprocess attempts failed — fall back to in-process
+        # threaded execution. Slower (event loop briefly starved on each
+        # generation) but reliably works on macOS dev where ProcessPool
+        # workers sometimes die without diagnostics.
+        logger.warning(
+            "GP subprocess failed twice (%s) — falling back to in-thread execution. "
+            "This is expected on macOS dev; Linux/Railway should not hit this path.",
+            last_err,
+        )
+        payload = await asyncio.to_thread(
+            _run_generation_subprocess,
+            formula_strings,
+            start_iso=start.isoformat(),
+            end_iso=end.isoformat(),
+            universe_size=100,
+            elite_frac=0.3,
+            tournament_k=4,
+            crossover_rate=0.6,
+            mutation_rate=0.3,
+            fitness_threshold=0.02,
+            generation=generation,
+            op_weights=op_weights,
+            rng_seed=rng_seed,
+            db_url=db_url,
+        )
 
     results = payload.get("results", [])
     fitnesses: list[float] = [float(r.get("fitness", -99.0)) for r in results]
