@@ -71,9 +71,11 @@ def _build_prompt(top_factors: list[dict], n_variants: int) -> str:
 def _generate_sync(prompt: str) -> _VariantList | None:
     """Single sync call — assumes openai SDK is installed and configured."""
     client = create_client()
+    # LLM-driven factor mutation is high-volume during evolution loops →
+    # default to mini for cost. Override via runtime setting OPENAI_FACTOR_MODEL.
     model_name = (
-        runtime_settings.get_setting("OPENAI_FACTOR_MODEL", "gpt-4o-2024-08-06")
-        or "gpt-4o-2024-08-06"
+        runtime_settings.get_setting("OPENAI_FACTOR_MODEL", "gpt-4o-mini-2024-07-18")
+        or "gpt-4o-mini-2024-07-18"
     )
     response = client.responses.parse(
         model=model_name,

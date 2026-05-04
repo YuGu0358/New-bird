@@ -152,9 +152,19 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# CORS_ALLOW_ORIGINS=* (default) keeps current dev behaviour; on Railway the
+# deployer sets a comma-separated whitelist e.g.
+# CORS_ALLOW_ORIGINS=https://newbird.up.railway.app,https://yourdomain.com
+_cors_env = os.getenv("CORS_ALLOW_ORIGINS", "*")
+_cors_origins = (
+    [o.strip() for o in _cors_env.split(",") if o.strip()]
+    if _cors_env != "*"
+    else ["*"]
+)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_cors_origins,
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],

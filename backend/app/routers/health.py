@@ -1,6 +1,7 @@
 """Liveness + readiness probes."""
 from __future__ import annotations
 
+import time
 from datetime import datetime, timezone
 
 from fastapi import APIRouter
@@ -14,11 +15,25 @@ from app.services import ibkr_client
 
 router = APIRouter(prefix="/api/health", tags=["health"])
 
+# Process start time captured at import. Used by /api/health to report
+# uptime without touching the DB or any external service (Railway HTTP probe).
+_PROCESS_START_MONOTONIC = time.monotonic()
+
 
 @router.get("", response_model=HealthResponse)
 async def liveness() -> HealthResponse:
-    """Always 200 if the process can answer HTTP. Useful for k8s liveness."""
-    return HealthResponse(status="ok", timestamp=datetime.now(timezone.utc))
+    """Always 200 if the process can answer HTTP. Pure in-memory liveness probe.
+
+    Does NOT query the DB or external services — Railway's HTTP healthcheck
+    hits this URL and must respond in <50ms.
+    """
+    uptime_sec = int(time.monotonic() - _PROCESS_START_MONOTONIC)
+    return HealthResponse(
+        status="ok",
+        timestamp=datetime.now(timezone.utc),
+        version="1.0.0",
+        uptime_sec=uptime_sec,
+    )
 
 
 @router.get("/ready", response_model=ReadinessResponse)

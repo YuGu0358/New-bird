@@ -86,9 +86,11 @@ _INSTRUCTIONS_CROSSOVER = (
 
 
 def _model_name() -> str:
+    # Factor variant generation runs many times per evolution cycle → default
+    # to mini for cost. Override via runtime setting OPENAI_FACTOR_MODEL.
     return (
-        runtime_settings.get_setting("OPENAI_FACTOR_MODEL", "gpt-4o-2024-08-06")
-        or "gpt-4o-2024-08-06"
+        runtime_settings.get_setting("OPENAI_FACTOR_MODEL", "gpt-4o-mini-2024-07-18")
+        or "gpt-4o-mini-2024-07-18"
     )
 
 

@@ -11,6 +11,7 @@ class HealthResponse(BaseModel):
     status: str = "ok"
     timestamp: datetime
     version: str = "1.0.0"
+    uptime_sec: int = 0
 
 
 class ReadinessCheck(BaseModel):
