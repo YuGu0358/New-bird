@@ -24,7 +24,8 @@ import functools
 import logging
 import random
 import statistics
-from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures import BrokenExecutor, ProcessPoolExecutor
+from concurrent.futures.process import BrokenProcessPool
 from datetime import date, datetime, timezone
 from typing import Optional
 
@@ -567,25 +568,45 @@ async def _run_one_generation(
     db_url = _resolve_db_url()
 
     loop = asyncio.get_running_loop()
-    payload = await loop.run_in_executor(
-        _get_executor(),
-        functools.partial(
-            _run_generation_subprocess,
-            formula_strings,
-            start_iso=start.isoformat(),
-            end_iso=end.isoformat(),
-            universe_size=100,
-            elite_frac=0.3,
-            tournament_k=4,
-            crossover_rate=0.6,
-            mutation_rate=0.3,
-            fitness_threshold=0.02,
-            generation=generation,
-            op_weights=op_weights,
-            rng_seed=rng_seed,
-            db_url=db_url,
-        ),
-    )
+    payload = None
+    last_err: Exception | None = None
+    # Retry once on BrokenProcessPool — the worker may have died from an
+    # external kill or a transient OOM. _get_executor() rebuilds on broken
+    # state, so a single retry usually clears it.
+    for attempt in range(2):
+        try:
+            payload = await loop.run_in_executor(
+                _get_executor(),
+                functools.partial(
+                    _run_generation_subprocess,
+                    formula_strings,
+                    start_iso=start.isoformat(),
+                    end_iso=end.isoformat(),
+                    universe_size=100,
+                    elite_frac=0.3,
+                    tournament_k=4,
+                    crossover_rate=0.6,
+                    mutation_rate=0.3,
+                    fitness_threshold=0.02,
+                    generation=generation,
+                    op_weights=op_weights,
+                    rng_seed=rng_seed,
+                    db_url=db_url,
+                ),
+            )
+            break
+        except (BrokenProcessPool, BrokenExecutor) as exc:
+            last_err = exc
+            logger.warning(
+                "subprocess pool broken (attempt %d): %s — recreating",
+                attempt + 1, exc,
+            )
+            _shutdown_executor()
+    if payload is None:
+        # Both attempts failed — skip this generation, loop continues.
+        raise RuntimeError(
+            f"GP subprocess failed twice: {last_err}"
+        ) from last_err
 
     results = payload.get("results", [])
     fitnesses: list[float] = [float(r.get("fitness", -99.0)) for r in results]
