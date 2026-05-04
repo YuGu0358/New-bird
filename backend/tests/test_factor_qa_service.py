@@ -48,6 +48,16 @@ class FactorQAServiceTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(result["blocked"])
         self.assertIn("rm -rf", result["answer"])
 
+    async def test_safety_check_allows_legitimate_questions_about_subprocess(self):
+        from app.services import factor_qa_service as svc
+        fake_client = MagicMock()
+        fake_client.responses.create.return_value = _FakeResponse(
+            [_FakeMessage("subprocess 启动慢可能是因为...")]
+        )
+        with patch.object(svc, "create_client", return_value=fake_client):
+            result = await svc.answer_question("subprocess 启动太慢了为什么")
+        self.assertFalse(result["blocked"])
+
     async def test_safety_check_rejects_long_questions(self):
         from app.services import factor_qa_service as svc
         result = await svc.answer_question("a" * 600)

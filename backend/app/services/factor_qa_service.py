@@ -14,6 +14,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import re
 from datetime import datetime, timezone
 from typing import Any
 
@@ -279,23 +280,42 @@ _INSTRUCTIONS = (
 
 
 def _model_name() -> str:
+    # High-volume QA path → default to mini for cost. Deployers can override
+    # via runtime setting OPENAI_QA_MODEL when they want the larger model.
     return (
-        runtime_settings.get_setting("OPENAI_QA_MODEL", "gpt-4o-2024-08-06")
-        or "gpt-4o-2024-08-06"
+        runtime_settings.get_setting("OPENAI_QA_MODEL", "gpt-4o-mini-2024-07-18")
+        or "gpt-4o-mini-2024-07-18"
     )
+
+
+# Block only when the keyword appears in code-like context: prefixed by
+# whitespace and followed by specific dangerous syntax. Plain mentions of
+# words like "subprocess" in a Chinese question should not be blocked.
+_DANGER_PATTERNS = [
+    re.compile(r"\brm\s+-rf\b", re.IGNORECASE),       # rm -rf flag
+    re.compile(r"\bos\.\w+\s*\("),                    # os.system(...)
+    re.compile(r"\bsubprocess\.\w+\s*\("),            # subprocess.run(...)
+    re.compile(r"\beval\s*\("),                       # eval(
+    re.compile(r"\bexec\s*\("),                       # exec(
+    re.compile(r"__import__\s*\("),                   # __import__(
+    re.compile(r"\bdrop\s+table\b", re.IGNORECASE),
+    re.compile(r"\bdelete\s+from\b", re.IGNORECASE),
+    re.compile(
+        r"```.*\b(?:os\.|subprocess|eval|exec|__import__)\b.*```",
+        re.DOTALL,
+    ),  # code block with dangerous identifier
+]
 
 
 def _safety_check(question: str) -> str | None:
     """Reject obvious prompt-injection / destructive intent. Returns rejection
     reason or None if OK."""
-    bad = ["rm -rf", "subprocess", "os.system", "import os", "eval(", "exec(",
-           "open(", "__import__", "DROP TABLE", "DELETE FROM"]
-    lower = question.lower()
-    for kw in bad:
-        if kw.lower() in lower:
-            return f"问题包含可疑关键词 ({kw})，已拒绝"
     if len(question) > 500:
         return "问题过长 (>500 字符)，已拒绝"
+    for pat in _DANGER_PATTERNS:
+        m = pat.search(question)
+        if m:
+            return f"问题包含可疑模式 ({m.group(0)})，已拒绝"
     return None
 
 

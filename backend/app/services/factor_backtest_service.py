@@ -196,7 +196,7 @@ def compute_metrics(
     # Align scores onto the panel's index, applying the universe mask.
     scores_aligned = scores.reindex(returns_panel.index)
     if universe_mask is not None:
-        masked_idx = universe_mask.reindex(returns_panel.index).fillna(False)
+        masked_idx = universe_mask.reindex(returns_panel.index).fillna(False).astype(bool)
         scores_aligned = scores_aligned.where(masked_idx)
 
     if not np.isfinite(scores_aligned.to_numpy(dtype=float, na_value=np.nan)).any():
