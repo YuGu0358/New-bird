@@ -775,3 +775,24 @@ class FactorEvolutionStateSingleton(Base):
     )
     last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
     is_paused: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+
+
+class FactorGenerationStat(Base):
+    """Per-generation summary written at the end of each evolution cycle.
+
+    Append-only time series keyed by generation. Powers the history line
+    chart in the Factor Forge dashboard (best/median fitness over time).
+    """
+
+    __tablename__ = "factor_generation_stats"
+
+    generation: Mapped[int] = mapped_column(Integer, primary_key=True)
+    best_fitness: Mapped[float | None] = mapped_column(Float, nullable=True)
+    median_fitness: Mapped[float | None] = mapped_column(Float, nullable=True)
+    persisted_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    evaluated_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    completed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+    )

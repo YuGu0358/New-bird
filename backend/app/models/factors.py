@@ -74,3 +74,29 @@ class EvolutionStatusResponse(BaseModel):
 class EvolutionControlResponse(BaseModel):
     is_running: bool
     message: str
+
+
+class GenerationStatView(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    generation: int
+    best_fitness: float | None = None
+    median_fitness: float | None = None
+    persisted_count: int = 0
+    evaluated_count: int = 0
+    completed_at: datetime
+
+
+class GenerationHistoryResponse(BaseModel):
+    items: list[GenerationStatView]
+
+
+class PopulationSlotView(BaseModel):
+    slot: int
+    formula: str
+    fitness: float
+
+
+class PopulationSnapshotResponse(BaseModel):
+    generation: int
+    slots: list[PopulationSlotView]

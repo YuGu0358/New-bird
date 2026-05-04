@@ -14,7 +14,13 @@ from fastapi import APIRouter, HTTPException
 from sqlalchemy import desc, select
 
 from app.db.engine import AsyncSessionLocal
-from app.db.tables import DailyActiveUniverse, FactorEvolutionRun, FactorRecord
+from app.db.tables import (
+    DailyActiveUniverse,
+    FactorEvolutionRun,
+    FactorGenerationStat,
+    FactorPopulationState,
+    FactorRecord,
+)
 from app.models.factors import (
     ActiveUniverseItem,
     ActiveUniverseResponse,
@@ -24,6 +30,10 @@ from app.models.factors import (
     FactorEvolutionRunView,
     FactorLibraryResponse,
     FactorRecordView,
+    GenerationHistoryResponse,
+    GenerationStatView,
+    PopulationSlotView,
+    PopulationSnapshotResponse,
 )
 from app.services import factor_pipeline, factor_vector_store
 
@@ -137,3 +147,54 @@ async def stop_evolution() -> EvolutionControlResponse:
     """Stop the continuous evolution loop (idempotent)."""
     msg = await factor_pipeline.stop_loop()
     return EvolutionControlResponse(is_running=False, message=msg)
+
+
+_HISTORY_MAX_LIMIT = 1000
+_HISTORY_DEFAULT_LIMIT = 100
+
+
+@router.get("/evolution/history", response_model=GenerationHistoryResponse)
+async def get_evolution_history(
+    limit: int = _HISTORY_DEFAULT_LIMIT,
+) -> GenerationHistoryResponse:
+    """Per-generation summaries, oldest-first.
+
+    The query selects the most recent ``limit`` rows by generation
+    descending, then reverses so the response is in chronological order
+    — matches what a line chart consumes directly.
+    """
+    capped = min(max(int(limit), 1), _HISTORY_MAX_LIMIT)
+    async with AsyncSessionLocal() as session:
+        rows = (
+            await session.execute(
+                select(FactorGenerationStat)
+                .order_by(desc(FactorGenerationStat.generation))
+                .limit(capped)
+            )
+        ).scalars().all()
+    ordered = list(reversed(rows))
+    items = [GenerationStatView.model_validate(r) for r in ordered]
+    return GenerationHistoryResponse(items=items)
+
+
+@router.get("/evolution/population", response_model=PopulationSnapshotResponse)
+async def get_evolution_population() -> PopulationSnapshotResponse:
+    """Current GP population: one entry per slot with its formula + fitness."""
+    async with AsyncSessionLocal() as session:
+        rows = (
+            await session.execute(
+                select(FactorPopulationState).order_by(FactorPopulationState.slot)
+            )
+        ).scalars().all()
+    if not rows:
+        return PopulationSnapshotResponse(generation=0, slots=[])
+    gen = max(int(r.generation) for r in rows)
+    slots = [
+        PopulationSlotView(
+            slot=int(r.slot),
+            formula=str(r.formula),
+            fitness=float(r.fitness),
+        )
+        for r in rows
+    ]
+    return PopulationSnapshotResponse(generation=gen, slots=slots)

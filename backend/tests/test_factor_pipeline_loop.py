@@ -33,7 +33,7 @@ class FactorPipelineLoopTests(unittest.IsolatedAsyncioTestCase):
         from app.services import factor_pipeline
 
         async def fake_one_gen(pop, **kwargs):  # noqa: ANN001, ARG001
-            return pop, [0.05] * len(pop), 0.05
+            return pop, [0.05] * len(pop), 0.05, 0
 
         with patch.object(factor_pipeline, "_run_one_generation", new=fake_one_gen):
             msg = await factor_pipeline.start_loop()

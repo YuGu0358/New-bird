@@ -20,6 +20,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import random
+import statistics
 from datetime import date, datetime, timezone
 from typing import Optional
 
@@ -28,6 +29,7 @@ from sqlalchemy import delete, select
 from app.db.engine import AsyncSessionLocal
 from app.db.tables import (
     FactorEvolutionStateSingleton,
+    FactorGenerationStat,
     FactorPopulationState,
 )
 from app.services import (
@@ -167,6 +169,42 @@ async def _save_population(
         await session.commit()
 
 
+async def _save_generation_stat(
+    *,
+    generation: int,
+    fitnesses: list[float],
+    best: float | None,
+    persisted_count: int,
+) -> None:
+    """Append a ``FactorGenerationStat`` row summarising one generation.
+
+    Median is computed across "evaluated" fitnesses only — pre-filtered
+    rows carry the sentinel ``-99.0`` and would skew the median if
+    included.
+    """
+    finite = [f for f in fitnesses if f > -50.0]
+    median_fit = float(statistics.median(finite)) if finite else None
+    async with AsyncSessionLocal() as session:
+        session.add(
+            FactorGenerationStat(
+                generation=int(generation),
+                best_fitness=float(best) if best is not None else None,
+                median_fitness=median_fit,
+                persisted_count=int(persisted_count),
+                evaluated_count=len(fitnesses),
+                completed_at=datetime.now(timezone.utc),
+            )
+        )
+        try:
+            await session.commit()
+        except Exception:
+            await session.rollback()
+            logger.warning(
+                "failed to persist FactorGenerationStat for gen=%d",
+                generation, exc_info=True,
+            )
+
+
 def _detect_collapse(fitnesses: list[float]) -> bool:
     """Top-5 fitness all within 1e-3 of each other → population collapsed."""
     sorted_fit = sorted([f for f in fitnesses if f > -50.0], reverse=True)[:_COLLAPSE_TOP_N]
@@ -217,10 +255,14 @@ async def _run_one_generation(
     rng: random.Random,
     generation: int,
     end: date | None = None,
-) -> tuple[list[FactorNode], list[float], float | None]:
+) -> tuple[list[FactorNode], list[float], float | None, int]:
     """Score the population and produce the next generation.
 
-    Returns ``(next_pop, fitnesses_just_evaluated, best_fitness)``.
+    Returns ``(next_pop, fitnesses_just_evaluated, best_fitness, new_persisted)``.
+
+    ``new_persisted`` is the count of factors written to the vector store
+    in this generation (pulled from the ``GenerationStats`` returned by
+    :func:`factor_gp_service.run_generation`).
 
     The synchronous backtest+GP work runs via :func:`asyncio.to_thread`
     so the event loop is never blocked.
@@ -230,7 +272,7 @@ async def _run_one_generation(
     pre_filter = predictor.predict if predictor.is_trained else None
     start = date(end.year - 2, end.month, min(end.day, 28))
 
-    next_pop, fitnesses, _stats = await asyncio.to_thread(
+    next_pop, fitnesses, stats = await asyncio.to_thread(
         _run_generation_blocking,
         pop,
         start=start,
@@ -239,6 +281,7 @@ async def _run_one_generation(
         pre_filter=pre_filter,
         generation=generation,
     )
+    new_persisted = int(getattr(stats, "new_persisted", 0) or 0)
 
     # Collapse-detection: if the elite all converge, inject seed mutations.
     if _detect_collapse(fitnesses):
@@ -270,7 +313,7 @@ async def _run_one_generation(
 
     finite = [f for f in fitnesses if f > -50.0]
     best = max(finite) if finite else None
-    return next_pop, fitnesses, best
+    return next_pop, fitnesses, best, new_persisted
 
 
 # ----- The loop --------------------------------------------------------------
@@ -296,12 +339,23 @@ async def continuous_evolution_loop() -> None:
                 )
 
             # Run one generation. This wraps the heavy numpy work in a thread.
-            next_pop, fitnesses, best = await _run_one_generation(
+            (
+                next_pop,
+                fitnesses,
+                best,
+                persisted_count,
+            ) = await _run_one_generation(
                 pop, rng=rng, generation=generation,
             )
 
             # Persist new state.
             await _save_population(next_pop, fitnesses, generation)
+            await _save_generation_stat(
+                generation=generation,
+                fitnesses=list(fitnesses),
+                best=best,
+                persisted_count=persisted_count,
+            )
             await _save_singleton(
                 current_generation=generation,
                 best_fitness_recent=float(best) if best is not None else None,
