@@ -36,6 +36,9 @@ from app.models.factors import (
     LandscapeResponse,
     PopulationSlotView,
     PopulationSnapshotResponse,
+    QARequest,
+    QAResponse,
+    QAToolCall,
     RecommendationView,
     RecommendationsResponse,
     TrajectoriesResponse,
@@ -44,6 +47,7 @@ from app.models.factors import (
 from app.services import (
     factor_landscape_service,
     factor_pipeline,
+    factor_qa_service,
     factor_quanta_service,
     factor_vector_store,
     today_recommendations_service,
@@ -257,3 +261,20 @@ async def get_evolution_population() -> PopulationSnapshotResponse:
         for r in rows
     ]
     return PopulationSnapshotResponse(generation=gen, slots=slots)
+
+
+@router.post("/qa", response_model=QAResponse)
+async def factor_qa(body: QARequest) -> QAResponse:
+    """Natural-language Q&A using OpenAI tool-calling over our pre-defined tools.
+
+    SECURITY: the LLM never writes/executes Python — it only picks from a
+    whitelisted tool registry. Question is also keyword-screened.
+    """
+    if not body.question or not body.question.strip():
+        raise HTTPException(status_code=400, detail="question is empty")
+    result = await factor_qa_service.answer_question(body.question.strip())
+    return QAResponse(
+        answer=result["answer"],
+        tool_calls=[QAToolCall(**tc) for tc in result.get("tool_calls", [])],
+        blocked=bool(result.get("blocked", False)),
+    )

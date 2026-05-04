@@ -517,6 +517,9 @@ export const getTodayRecommendations = (top_k = 10) =>
 export const getTrajectories = (limit = 200) =>
   request(`/api/factors/trajectories?limit=${limit}`);
 
+export const askFactorQA = (question) =>
+  request('/api/factors/qa', { method: 'POST', body: { question } });
+
 // ----------------------------------------------------------- agents (P7)
 export const listPersonas = () => request('/api/agents/personas');
 export const analyzeWithPersona = (body) => request('/api/agents/analyze', { method: 'POST', body });

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { Activity, Database, Zap, History as HistoryIcon, Map as MapIcon, Lightbulb as LightbulbIcon, GitBranch as GitBranchIcon } from 'lucide-react';
+import { Activity, Database, Zap, History as HistoryIcon, Map as MapIcon, Lightbulb as LightbulbIcon, GitBranch as GitBranchIcon, Search as SearchIcon } from 'lucide-react';
 import {
   Bar, CartesianGrid, ComposedChart, Line, ResponsiveContainer,
   Scatter, ScatterChart, Tooltip, XAxis, YAxis, ZAxis,
@@ -16,6 +16,7 @@ import {
   getFactorLandscape,
   getTodayRecommendations,
   getTrajectories,
+  askFactorQA,
 } from '../lib/api.js';
 import {
   PageHeader, SectionHeader, LoadingState, ErrorState, EmptyState,
@@ -47,6 +48,7 @@ export default function FactorsPage() {
         title="因子工厂"
         segments={[{ label: 'FACTOR', accent: true }, { label: 'FORGE' }]}
       />
+      <QaBar />
       <HeroPanel />
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <div className="lg:col-span-2"><PopulationGrid /></div>
@@ -649,6 +651,61 @@ function LineageTab() {
           <Controls showInteractive={false} />
         </ReactFlow>
       </div>
+    </div>
+  );
+}
+
+function QaBar() {
+  const [q, setQ] = useState('');
+  const [open, setOpen] = useState(false);
+  const m = useMutation({
+    mutationFn: askFactorQA,
+  });
+  function submit(e) {
+    e.preventDefault();
+    if (!q.trim()) return;
+    setOpen(true);
+    m.mutate(q.trim());
+  }
+  return (
+    <div className="card space-y-2">
+      <form onSubmit={submit} className="flex items-center gap-2">
+        <SearchIcon size={14} className="text-text-muted" />
+        <input
+          className="input flex-1 bg-transparent border-0 focus:outline-none"
+          placeholder='问点什么 — "为什么推荐 NVDA" / "库里 fitness 最高的因子是什么"'
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+        />
+        <button type="submit" disabled={m.isPending || !q.trim()}
+                className="px-3 py-1 border border-cyan/40 text-cyan font-mono text-[10px] tracking-[0.15em] uppercase hover:bg-cyan/10 disabled:opacity-50">
+          {m.isPending ? '思考中…' : '问'}
+        </button>
+      </form>
+      {open && (
+        <div className="border-t border-border-subtle pt-2 space-y-2">
+          {m.isPending && <div className="text-caption text-text-muted">…</div>}
+          {m.isError && <div className="text-caption text-rose-400">{String(m.error?.message || '调用失败')}</div>}
+          {m.data && (
+            <>
+              <div className="text-body-sm whitespace-pre-line">{m.data.answer}</div>
+              {m.data.tool_calls?.length > 0 && (
+                <details className="text-caption text-text-muted">
+                  <summary className="cursor-pointer">调用了 {m.data.tool_calls.length} 个工具</summary>
+                  <ul className="space-y-0.5 mt-1 font-mono">
+                    {m.data.tool_calls.map((t, i) => (
+                      <li key={i}>
+                        <span className="text-text-secondary">{t.name}</span>(
+                        <span className="text-text-muted">{JSON.stringify(t.args)}</span>)
+                      </li>
+                    ))}
+                  </ul>
+                </details>
+              )}
+            </>
+          )}
+        </div>
+      )}
     </div>
   );
 }

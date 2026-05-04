@@ -167,3 +167,19 @@ class TrajectoryNodeView(BaseModel):
 
 class TrajectoriesResponse(BaseModel):
     items: list[TrajectoryNodeView]
+
+
+class QARequest(BaseModel):
+    question: str
+
+
+class QAToolCall(BaseModel):
+    name: str
+    args: dict = {}
+    result_preview: str = ""
+
+
+class QAResponse(BaseModel):
+    answer: str
+    tool_calls: list[QAToolCall] = []
+    blocked: bool = False
