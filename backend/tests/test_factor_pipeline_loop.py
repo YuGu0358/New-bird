@@ -80,6 +80,20 @@ class FactorPipelineLoopTests(unittest.IsolatedAsyncioTestCase):
         msg = await factor_pipeline.stop_loop(timeout=1.0)
         self.assertEqual(msg, "not running")
 
+    async def test_subprocess_function_is_pickleable(self) -> None:
+        """ProcessPoolExecutor pickles the callable + args before sending
+        them to the worker. If ``_run_generation_subprocess`` were a
+        closure / method / lambda, dispatch would fail at runtime. This
+        test guards against accidental refactors that break that
+        contract."""
+        import pickle
+
+        from app.services.factor_pipeline import _run_generation_subprocess
+
+        blob = pickle.dumps(_run_generation_subprocess)
+        self.assertIsInstance(blob, bytes)
+        self.assertGreater(len(blob), 0)
+
 
 if __name__ == "__main__":
     unittest.main()

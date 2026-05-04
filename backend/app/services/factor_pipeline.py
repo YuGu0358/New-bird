@@ -12,18 +12,23 @@ Two coroutines run side-by-side:
    ``FactorPopulationState`` and ``FactorEvolutionStateSingleton`` so a
    restart resumes from the last generation.
 
-The heavy GP/backtest work runs inside ``asyncio.to_thread`` so the API
-event loop stays responsive while a generation is executing.
+The heavy GP/backtest math runs in a ``ProcessPoolExecutor`` subprocess
+so it cannot hold the main event loop's GIL. Persistence (which calls
+OpenAI for embeddings) is done back on the main process where async I/O
+behaves correctly.
 """
 from __future__ import annotations
 
 import asyncio
+import functools
 import logging
 import random
 import statistics
+from concurrent.futures import ProcessPoolExecutor
 from datetime import date, datetime, timezone
 from typing import Optional
 
+import numpy as np
 from sqlalchemy import delete, select
 
 from app.db.engine import AsyncSessionLocal
@@ -238,11 +243,14 @@ def _run_generation_blocking(
     pre_filter,
     generation: int,
     op_weights: dict[str, float] | None = None,
-) -> tuple[list[FactorNode], list[float], object]:
-    """Synchronous wrapper that runs ``run_generation`` in its own loop.
+) -> tuple[list[FactorNode], list[float], object, list]:
+    """DEPRECATED — kept for backward compatibility only.
 
-    Intended to be invoked via ``asyncio.to_thread`` so the heavy
-    numpy/pandas backtest work does not block the API event loop.
+    The continuous evolution loop now runs the GP work in a
+    ``ProcessPoolExecutor`` via :func:`_run_generation_subprocess`. This
+    in-thread variant is no longer called; it exists so any external
+    caller still importing it gets a clear (still working) path that
+    blocks the calling thread.
     """
     return asyncio.run(
         factor_gp_service.run_generation(
@@ -264,6 +272,223 @@ def _run_generation_blocking(
     )
 
 
+# ----- Subprocess plumbing ---------------------------------------------------
+
+
+_executor: Optional[ProcessPoolExecutor] = None
+
+
+def _get_executor() -> ProcessPoolExecutor:
+    """Lazy-init the shared 1-worker process pool.
+
+    Reused across generations so we pay the import + warm-up cost only
+    once. ``max_workers=1`` is intentional — this isolates the GP
+    backtest from the API event loop, it is not a parallelisation knob.
+    """
+    global _executor
+    if _executor is None:
+        _executor = ProcessPoolExecutor(max_workers=1)
+    return _executor
+
+
+def _shutdown_executor() -> None:
+    global _executor
+    if _executor is not None:
+        try:
+            _executor.shutdown(wait=False, cancel_futures=True)
+        except Exception:
+            pass
+        _executor = None
+
+
+def _resolve_db_url() -> str:
+    """The same SQLite URL the main process uses, so the subprocess
+    reads from / writes to the same DB file."""
+    from app.db import engine as engine_module
+
+    return str(engine_module.engine.url)
+
+
+def _run_generation_subprocess(
+    formula_strings: list[str],
+    *,
+    start_iso: str,
+    end_iso: str,
+    universe_size: int,
+    elite_frac: float,
+    tournament_k: int,
+    crossover_rate: float,
+    mutation_rate: float,
+    fitness_threshold: float,
+    generation: int,
+    op_weights: dict[str, float] | None,
+    rng_seed: int,
+    db_url: str,
+) -> dict:
+    """Run one GP generation entirely inside a subprocess.
+
+    Top-level (pickleable) so ``ProcessPoolExecutor`` can dispatch it.
+
+    Returns a JSON-pickleable dict:
+      {
+        "results": [
+          { "formula": str, "fitness": float, "ic_1d": float|None,
+            "ic_5d": float|None, "ic_20d": float|None, "icir_5d": float|None,
+            "sharpe": float|None, "max_drawdown": float|None,
+            "turnover": float|None, "n_obs": int|None,
+            "return_curve": list[float] }
+          ...
+        ],
+        "next_pop_formulas": [str, ...],
+        "stats": { "best_fitness": ..., "median_fitness": ... },
+      }
+
+    Persistence to ``factor_records`` (which embeds via OpenAI) is left
+    to the parent process — this subprocess only computes.
+    """
+    import asyncio as _asyncio
+    import random as _random
+
+    from datetime import date as _date
+
+    from sqlalchemy.ext.asyncio import (
+        async_sessionmaker as _async_sessionmaker,
+        create_async_engine as _create_async_engine,
+    )
+
+    from app.db import engine as engine_module
+
+    # Open a fresh engine bound to the same SQLite file. Patch the
+    # module-level AsyncSessionLocal so factor_data_service /
+    # factor_meta_service / factor_news_service (which bound the symbol
+    # at import time) read from it.
+    new_engine = _create_async_engine(db_url, future=True)
+    new_factory = _async_sessionmaker(new_engine, expire_on_commit=False)
+    engine_module.engine = new_engine
+    engine_module.AsyncSessionLocal = new_factory
+
+    from app.services import (
+        factor_data_service as _fds,
+        factor_meta_service as _fms,
+        factor_news_service as _fns,
+    )
+
+    _fds.AsyncSessionLocal = new_factory
+    _fms.AsyncSessionLocal = new_factory
+    _fns.AsyncSessionLocal = new_factory
+    # Note: NOT patching factor_vector_store — we won't call add_factor
+    # in this subprocess, so its session reference does not matter.
+
+    from app.services import factor_gp_service as _gp
+    from core.factors.ast import parse as _parse, serialize as _serialize
+
+    pop: list = []
+    for formula_str in formula_strings:
+        try:
+            pop.append(_parse(formula_str))
+        except Exception:
+            continue
+    if not pop:
+        return {"results": [], "next_pop_formulas": [], "stats": {}}
+
+    rng = _random.Random(rng_seed)
+
+    async def _go() -> dict:
+        try:
+            next_pop, fitnesses, stats, backtest_results = await _gp.run_generation(
+                pop,
+                start=_date.fromisoformat(start_iso),
+                end=_date.fromisoformat(end_iso),
+                rng=rng,
+                universe_size=universe_size,
+                elite_frac=elite_frac,
+                tournament_k=tournament_k,
+                crossover_rate=crossover_rate,
+                mutation_rate=mutation_rate,
+                # Pre-filter is applied on the main process before this
+                # subprocess is invoked; passing None here avoids loading
+                # the LightGBM predictor inside the subprocess.
+                pre_score_filter=None,
+                fitness_threshold=fitness_threshold,
+                # IMPORTANT: parent process owns persistence (OpenAI
+                # embeddings need async I/O on the main loop).
+                persist=False,
+                generation=generation,
+                op_weights=op_weights,
+            )
+        except Exception:
+            # If the whole generation blew up (e.g. missing API key),
+            # surface zero results back to the parent so the loop just
+            # records the failure and tries again next cycle.
+            return {"results": [], "next_pop_formulas": [], "stats": {}}
+
+        results: list[dict] = []
+        for cand, fit, r in zip(pop, fitnesses, backtest_results):
+            entry: dict = {
+                "formula": _serialize(cand),
+                "fitness": float(fit),
+            }
+            if r is not None:
+                entry.update(
+                    {
+                        "ic_1d": _safe_float(getattr(r, "ic_1d", None)),
+                        "ic_5d": _safe_float(getattr(r, "ic_5d", None)),
+                        "ic_20d": _safe_float(getattr(r, "ic_20d", None)),
+                        "icir_5d": _safe_float(getattr(r, "icir_5d", None)),
+                        "sharpe": _safe_float(getattr(r, "sharpe", None)),
+                        "max_drawdown": _safe_float(
+                            getattr(r, "max_drawdown", None)
+                        ),
+                        "turnover": _safe_float(getattr(r, "turnover", None)),
+                        "n_obs": int(getattr(r, "n_obs", 0) or 0),
+                        "return_curve": list(getattr(r, "return_curve", []) or []),
+                    }
+                )
+            results.append(entry)
+
+        return {
+            "results": results,
+            "next_pop_formulas": [_serialize(c) for c in next_pop],
+            "stats": {
+                "best_fitness": (
+                    float(stats.best_fitness) if stats is not None else None
+                ),
+                "median_fitness": (
+                    float(stats.median_fitness) if stats is not None else None
+                ),
+            },
+        }
+
+    try:
+        return _asyncio.run(_go())
+    finally:
+        try:
+            _asyncio.run(new_engine.dispose())
+        except Exception:
+            pass
+
+
+def _safe_float(v) -> float | None:  # noqa: ANN001
+    """Round-trip floats through json — coerce NaN/Inf/None to None."""
+    if v is None:
+        return None
+    try:
+        f = float(v)
+    except (TypeError, ValueError):
+        return None
+    # NaN / +/-inf survive float() but fail json/pickle round trips
+    # cleanly downstream; collapse them to None here.
+    if f != f or f in (float("inf"), float("-inf")):
+        return None
+    return f
+
+
+# ----- One generation (main-process orchestration) --------------------------
+
+
+_PRE_FILTER_MIN_SURVIVORS = 4
+
+
 async def _run_one_generation(
     pop: list[FactorNode],
     *,
@@ -275,17 +500,34 @@ async def _run_one_generation(
 
     Returns ``(next_pop, fitnesses_just_evaluated, best_fitness, new_persisted)``.
 
-    ``new_persisted`` is the count of factors written to the vector store
-    in this generation (pulled from the ``GenerationStats`` returned by
-    :func:`factor_gp_service.run_generation`).
-
-    The synchronous backtest+GP work runs via :func:`asyncio.to_thread`
-    so the event loop is never blocked.
+    Architecture:
+      * The cheap LightGBM pre-filter runs on the **main** process —
+        cheap CPU, model is already loaded here, and we'd rather not
+        ship the trained model into the subprocess on every generation.
+      * The heavy backtest/GP math runs in a **subprocess** via
+        ``ProcessPoolExecutor(max_workers=1)`` so the API event loop is
+        not subject to GIL contention from numpy/pandas.
+      * Persistence (``factor_vector_store.add_factor`` → OpenAI
+        embedding API) runs back on the main process, so async I/O
+        stays where it belongs.
     """
     end = end or date.today()
-    predictor = factor_fitness_predictor.load_predictor()
-    pre_filter = predictor.predict if predictor.is_trained else None
     start = date(end.year - 2, end.month, min(end.day, 28))
+
+    # Predictor pre-filter on MAIN process (no GIL contention with
+    # subprocess; saves the cost of shipping the LightGBM model across
+    # the process boundary every generation).
+    pop_for_subprocess = pop
+    predictor = factor_fitness_predictor.load_predictor()
+    if predictor.is_trained and pop:
+        try:
+            predicted = [predictor.predict(c) for c in pop]
+            threshold = float(np.median(predicted)) if predicted else float("-inf")
+            survivors = [c for c, p in zip(pop, predicted) if p >= threshold]
+            if len(survivors) >= _PRE_FILTER_MIN_SURVIVORS:
+                pop_for_subprocess = survivors
+        except Exception:
+            logger.debug("pre-filter failed; skipping", exc_info=True)
 
     # Operator-success weights — bias mutation toward ops appearing in
     # high-fitness library factors. Falls back to uniform when library is
@@ -298,17 +540,77 @@ async def _run_one_generation(
         logger.debug("op_weights fetch failed; falling back to uniform", exc_info=True)
         op_weights = None
 
-    next_pop, fitnesses, stats = await asyncio.to_thread(
-        _run_generation_blocking,
-        pop,
-        start=start,
-        end=end,
-        rng=rng,
-        pre_filter=pre_filter,
-        generation=generation,
-        op_weights=op_weights,
+    formula_strings = [serialize(c) for c in pop_for_subprocess]
+    rng_seed = rng.randrange(2**31)
+    db_url = _resolve_db_url()
+
+    loop = asyncio.get_running_loop()
+    payload = await loop.run_in_executor(
+        _get_executor(),
+        functools.partial(
+            _run_generation_subprocess,
+            formula_strings,
+            start_iso=start.isoformat(),
+            end_iso=end.isoformat(),
+            universe_size=100,
+            elite_frac=0.3,
+            tournament_k=4,
+            crossover_rate=0.6,
+            mutation_rate=0.3,
+            fitness_threshold=0.02,
+            generation=generation,
+            op_weights=op_weights,
+            rng_seed=rng_seed,
+            db_url=db_url,
+        ),
     )
-    new_persisted = int(getattr(stats, "new_persisted", 0) or 0)
+
+    results = payload.get("results", [])
+    fitnesses: list[float] = [float(r.get("fitness", -99.0)) for r in results]
+
+    # Persist passing factors back on the main process. ``add_factor``
+    # calls OpenAI for embeddings — async I/O, won't block other tasks.
+    new_persisted = 0
+    for r in results:
+        fit = r.get("fitness")
+        if fit is None or fit < 0.02:
+            continue
+        try:
+            return_curve = r.get("return_curve") or []
+            return_emb = (
+                factor_vector_store.embed_return_series(
+                    np.asarray(return_curve, dtype=np.float32)
+                )
+                if return_curve
+                else None
+            )
+            row_id = await factor_vector_store.add_factor(
+                r["formula"],
+                fitness=fit,
+                ic_1d=r.get("ic_1d"),
+                ic_5d=r.get("ic_5d"),
+                ic_20d=r.get("ic_20d"),
+                icir=r.get("icir_5d"),
+                sharpe=r.get("sharpe"),
+                max_drawdown=r.get("max_drawdown"),
+                turnover=r.get("turnover"),
+                n_obs=r.get("n_obs"),
+                return_embedding=return_emb,
+                generation=generation,
+            )
+            if row_id is not None:
+                new_persisted += 1
+        except Exception:
+            logger.debug(
+                "add_factor failed for %s", r.get("formula", "")[:60], exc_info=True
+            )
+
+    next_pop: list[FactorNode] = []
+    for s in payload.get("next_pop_formulas", []):
+        try:
+            next_pop.append(parse(s))
+        except Exception:
+            continue
 
     # Collapse-detection: if the elite all converge, inject seed mutations.
     if _detect_collapse(fitnesses):
@@ -511,6 +813,7 @@ async def stop_loop(timeout: float = 5.0) -> str:
     async with _loop_lock:
         if _loop_task is None or _loop_task.done():
             _loop_task = None
+            _shutdown_executor()
             return "not running"
         _should_stop.set()
         try:
@@ -523,6 +826,7 @@ async def stop_loop(timeout: float = 5.0) -> str:
                 pass
         finally:
             _loop_task = None
+            _shutdown_executor()
         return "stopped"
 
 

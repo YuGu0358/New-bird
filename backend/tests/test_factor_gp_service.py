@@ -87,7 +87,7 @@ def patched_services(monkeypatch):
 async def test_run_generation_scores_every_candidate(patched_services):
     rng = random.Random(0)
     pop = [random_tree(rng, max_depth=3) for _ in range(10)]
-    next_pop, fits, stats = await factor_gp_service.run_generation(
+    next_pop, fits, stats, results = await factor_gp_service.run_generation(
         pop,
         start=date(2024, 1, 1),
         end=date(2024, 6, 30),
@@ -98,6 +98,7 @@ async def test_run_generation_scores_every_candidate(patched_services):
     )
     assert len(fits) == len(pop)
     assert len(next_pop) == len(pop)
+    assert len(results) == len(pop)
     assert stats.population_size == len(pop)
     assert stats.best_fitness >= stats.median_fitness
 
@@ -148,7 +149,7 @@ async def test_run_generation_preserves_elite(patched_services):
     short_formula = parse("rank(close)")
     # Mix one clear winner (long) with several losers (short).
     pop = [long_formula] + [short_formula for _ in range(9)]
-    next_pop, _fits, _stats = await factor_gp_service.run_generation(
+    next_pop, _fits, _stats, _results = await factor_gp_service.run_generation(
         pop,
         start=date(2024, 1, 1),
         end=date(2024, 6, 30),

@@ -188,13 +188,20 @@ async def run_generation(
     persist: bool = True,
     generation: int = 0,
     op_weights: dict[str, float] | None = None,
-) -> tuple[list[FactorNode], list[float], GenerationStats]:
+) -> tuple[list[FactorNode], list[float], GenerationStats, list]:
     """Score the population, build the next generation, and (optionally)
     persist survivors above ``fitness_threshold`` to the vector store.
 
     ``op_weights`` is an optional operator-success weight map (see
     ``core.factors.op_stats.compute_op_weights``) used to bias mutation
     toward historically successful operators.
+
+    Returns ``(next_pop, fitnesses, stats, backtest_results)`` where
+    ``backtest_results`` is a parallel list (same length as the input
+    population) of ``BacktestResult`` instances or ``None`` for
+    candidates that failed / were pre-filtered. Callers running the
+    GP work in a subprocess with ``persist=False`` use this tuple to
+    drive their own persistence on the main process.
     """
     t0 = time.time()
     fitnesses, results = await _score_population(
@@ -228,7 +235,7 @@ async def run_generation(
         new_persisted=new_persisted,
         elapsed_sec=time.time() - t0,
     )
-    return next_pop, fitnesses, stats
+    return next_pop, fitnesses, stats, results
 
 
 # ---------------------------------------------------------------------------
@@ -282,7 +289,7 @@ async def _run_stage(
     stats_log: list[GenerationStats] = []
     fits: list[float] = []
     for g in range(n_gens):
-        population, fits, stats = await run_generation(
+        population, fits, stats, _results = await run_generation(
             population, start=start, end=end, rng=rng,
             universe_size=universe_size,
             fitness_threshold=fitness_threshold,
