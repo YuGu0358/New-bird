@@ -508,6 +508,9 @@ export const getEvolutionHistory = (limit = 100) =>
 export const getEvolutionPopulation = () =>
   request('/api/factors/evolution/population');
 
+export const getFactorLandscape = (limit = 500) =>
+  request(`/api/factors/landscape?limit=${limit}`);
+
 // ----------------------------------------------------------- agents (P7)
 export const listPersonas = () => request('/api/agents/personas');
 export const analyzeWithPersona = (body) => request('/api/agents/analyze', { method: 'POST', body });

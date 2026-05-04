@@ -1,16 +1,17 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { Activity, Database, Zap, History as HistoryIcon } from 'lucide-react';
+import { Activity, Database, Zap, History as HistoryIcon, Map as MapIcon } from 'lucide-react';
 import {
   Bar, CartesianGrid, ComposedChart, Line, ResponsiveContainer,
-  Tooltip, XAxis, YAxis,
+  Scatter, ScatterChart, Tooltip, XAxis, YAxis, ZAxis,
 } from 'recharts';
 import {
   listFactors, getFactorDetail, getActiveUniverse,
   listFactorRuns,
   getEvolutionStatus, startEvolution, stopEvolution,
   getEvolutionHistory, getEvolutionPopulation,
+  getFactorLandscape,
 } from '../lib/api.js';
 import {
   PageHeader, SectionHeader, LoadingState, ErrorState, EmptyState,
@@ -20,6 +21,7 @@ import { classNames, fmtUsd } from '../lib/format.js';
 const TABS = [
   { id: 'library',   icon: Database,    label: '库' },
   { id: 'evolution', icon: Activity,    label: '演化曲线' },
+  { id: 'landscape', icon: MapIcon,     label: '基因图谱' },
   { id: 'universe',  icon: Zap,         label: '活跃股' },
   { id: 'runs',      icon: HistoryIcon, label: '运行记录' },
 ];
@@ -47,6 +49,7 @@ export default function FactorsPage() {
       <div className="card">
         {tab === 'library'   && <LibraryTab />}
         {tab === 'evolution' && <EvolutionChart />}
+        {tab === 'landscape' && <LandscapeTab />}
         {tab === 'universe'  && <UniverseTab />}
         {tab === 'runs'      && <RunsTab />}
       </div>
@@ -476,6 +479,60 @@ function RunsTab() {
           ))}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+function LandscapeTab() {
+  const q = useQuery({
+    queryKey: ['factor-landscape'],
+    queryFn: () => getFactorLandscape(500),
+    refetchInterval: 30_000,
+  });
+  if (q.isLoading) return <LoadingState rows={6} />;
+  if (q.isError) return <ErrorState error={q.error} onRetry={q.refetch} />;
+  const items = q.data?.items || [];
+  if (items.length < 2) {
+    return <EmptyState title="尚无足够因子" hint="库里至少要 2 个因子才能投影" />;
+  }
+  const fits = items.map((p) => p.fitness).slice().sort((a, b) => a - b);
+  const p20 = fits[Math.floor(fits.length * 0.2)];
+  const p80 = fits[Math.floor(fits.length * 0.8)];
+  const colorOf = (f) => (f >= p80 ? '#22C55E' : f <= p20 ? '#EF4444' : '#7C8A9A');
+  const data = items.map((p) => ({ ...p, fill: colorOf(p.fitness) }));
+  return (
+    <div className="space-y-3">
+      <SectionHeader title="基因图谱" subtitle={`${items.length} 个因子的 PCA-2D 嵌入投影 · 按 fitness 着色`} />
+      <div className="h-[480px]">
+        <ResponsiveContainer width="100%" height="100%">
+          <ScatterChart margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
+            <CartesianGrid stroke="#2A3645" strokeDasharray="3 3" />
+            <XAxis type="number" dataKey="x" name="PC1" stroke="#7C8A9A" fontSize={10} />
+            <YAxis type="number" dataKey="y" name="PC2" stroke="#7C8A9A" fontSize={10} />
+            <ZAxis type="number" range={[40, 200]} dataKey="fitness" />
+            <Tooltip
+              cursor={{ strokeDasharray: '3 3' }}
+              content={({ payload }) => {
+                const pt = payload?.[0]?.payload;
+                if (!pt) return null;
+                return (
+                  <div style={tooltipStyle} className="p-2 max-w-md">
+                    <div className="font-mono text-caption text-text-muted">#{pt.id}</div>
+                    <div className="font-mono text-body-sm break-all">{pt.formula}</div>
+                    <div className="font-mono text-caption mt-1">fitness {pt.fitness.toFixed(4)}</div>
+                  </div>
+                );
+              }}
+            />
+            <Scatter name="Factors" data={data} fill="#5BA3C6" />
+          </ScatterChart>
+        </ResponsiveContainer>
+      </div>
+      <div className="flex items-center gap-4 text-caption font-mono">
+        <span className="inline-flex items-center gap-1"><span className="w-2 h-2 bg-bull rounded-full" /> top 20%</span>
+        <span className="inline-flex items-center gap-1"><span className="w-2 h-2 bg-text-muted rounded-full" /> middle</span>
+        <span className="inline-flex items-center gap-1"><span className="w-2 h-2 bg-bear rounded-full" /> bottom 20%</span>
+      </div>
     </div>
   );
 }
