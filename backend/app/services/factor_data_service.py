@@ -381,21 +381,34 @@ async def _persist_bars(records: list[dict]) -> int:
             continue
     if not rows:
         return 0
-    stmt = sqlite_insert(DailyBar).values(rows)
-    update_cols = {c.name: stmt.excluded[c.name] for c in DailyBar.__table__.columns
-                   if c.name not in {"symbol", "date"}}
-    stmt = stmt.on_conflict_do_update(
-        index_elements=["symbol", "date"],
-        set_=update_cols,
-    )
+    # SQLite caps at 999 (legacy) or 32766 (>=3.32) bound variables per
+    # statement. Each row binds 8 columns, so a 5y × 100-symbol batch
+    # (~125k rows = 1M params) blows up with "too many SQL variables".
+    # Chunk INSERT statements at 500 rows = 4000 params, safe under both.
+    _BATCH = 500
+    update_cols = {
+        c.name: None for c in DailyBar.__table__.columns
+        if c.name not in {"symbol", "date"}
+    }
+    inserted = 0
     async with AsyncSessionLocal() as session:
         try:
-            await session.execute(stmt)
+            for i in range(0, len(rows), _BATCH):
+                batch = rows[i : i + _BATCH]
+                stmt = sqlite_insert(DailyBar).values(batch)
+                stmt = stmt.on_conflict_do_update(
+                    index_elements=["symbol", "date"],
+                    set_={col: stmt.excluded[col] for col in update_cols},
+                )
+                await session.execute(stmt)
+                inserted += len(batch)
             await session.commit()
-            return len(rows)
+            return inserted
         except Exception:
             await session.rollback()
-            logger.warning("DailyBar upsert failed", exc_info=True)
+            logger.warning(
+                "DailyBar upsert failed (after %d rows)", inserted, exc_info=True
+            )
             return 0
 
 
