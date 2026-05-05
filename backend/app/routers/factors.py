@@ -214,6 +214,90 @@ async def admin_refresh_data() -> dict[str, str]:
     return {"status": "ok", "message": "daily data refresh complete"}
 
 
+@router.post("/admin/seed-library")
+async def admin_seed_library() -> dict[str, Any]:
+    """Backtest the WorldQuant Alpha 101 seed set and insert passers.
+
+    Bypasses the slow GP loop so the library has a baseline of known-
+    good factors without waiting for evolution to discover them. Each
+    seed runs through ``backtest_factor`` (4y panel) and the same
+    ``add_factor`` gate the loop uses — so anything inserted here would
+    have passed organically too.
+    """
+    from datetime import date as _date_cls
+
+    import numpy as _np
+
+    from app.services import factor_backtest_service
+    from core.factors.seeds import get_seed_population
+    from core.factors.ast import serialize as _serialize
+
+    seeds = list(get_seed_population())
+    end = _date_cls.today()
+    start = _date_cls(end.year - 4, end.month, min(end.day, 28))
+
+    attempted = 0
+    inserted = 0
+    rejected = 0
+    failed = 0
+    insertions: list[dict[str, Any]] = []
+
+    for node in seeds:
+        attempted += 1
+        formula = _serialize(node)
+        try:
+            r = await factor_backtest_service.backtest_factor(
+                formula, start=start, end=end, universe_size=100,
+            )
+        except Exception as exc:  # noqa: BLE001
+            failed += 1
+            insertions.append({"formula": formula[:80], "outcome": f"backtest_error: {str(exc)[:60]}"})
+            continue
+
+        return_curve = list(r.return_curve or [])
+        return_emb = (
+            factor_vector_store.embed_return_series(
+                _np.asarray(return_curve, dtype=_np.float32)
+            )
+            if return_curve else None
+        )
+        row_id = await factor_vector_store.add_factor(
+            formula,
+            fitness=float(r.fitness) if r.fitness is not None else 0.0,
+            ic_1d=r.ic_1d, ic_5d=r.ic_5d, ic_20d=r.ic_20d,
+            icir=r.icir_5d, sharpe=r.sharpe,
+            max_drawdown=r.max_drawdown, turnover=r.turnover,
+            n_obs=r.n_obs, return_embedding=return_emb,
+            generation=0,
+            metadata={"source": "alpha101_seed"},
+        )
+        if row_id is None:
+            rejected += 1
+            insertions.append({
+                "formula": formula[:80],
+                "outcome": "rejected_by_gate",
+                "fitness": r.fitness, "ic_5d": r.ic_5d,
+                "sharpe": r.sharpe, "max_drawdown": r.max_drawdown,
+            })
+        else:
+            inserted += 1
+            insertions.append({
+                "formula": formula[:80],
+                "outcome": "inserted",
+                "row_id": row_id,
+                "fitness": r.fitness, "ic_5d": r.ic_5d,
+                "sharpe": r.sharpe, "max_drawdown": r.max_drawdown,
+            })
+
+    return {
+        "attempted": attempted,
+        "inserted": inserted,
+        "rejected": rejected,
+        "failed": failed,
+        "details": insertions,
+    }
+
+
 @router.post("/admin/test-backtest")
 async def admin_test_backtest(formula: str | None = None) -> dict[str, Any]:
     """Run one backtest in-process and return all metric fields.
