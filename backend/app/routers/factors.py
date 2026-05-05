@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import logging
 from datetime import date as date_cls
+from typing import Any
 
 from fastapi import APIRouter, HTTPException
 from sqlalchemy import desc, select
@@ -16,6 +17,7 @@ from sqlalchemy import desc, select
 from app.db.engine import AsyncSessionLocal
 from app.db.tables import (
     DailyActiveUniverse,
+    DailyBar,
     FactorEvolutionRun,
     FactorGenerationStat,
     FactorPopulationState,
@@ -184,6 +186,59 @@ async def admin_refresh_data() -> dict[str, str]:
     """
     await factor_pipeline.daily_data_refresh()
     return {"status": "ok", "message": "daily data refresh complete"}
+
+
+@router.get("/admin/data-status")
+async def admin_data_status() -> dict[str, Any]:
+    """Diagnostic snapshot of the underlying-data pipeline state.
+
+    Returns counts and the most-recent date for the three tables that
+    govern whether the evolution loop has anything to evaluate:
+    ``factor_daily_bars``, ``factor_daily_active_universe``,
+    ``factor_records``. Used to verify a refresh actually landed bars
+    without grepping Railway logs.
+    """
+    from sqlalchemy import func as _func
+
+    async with AsyncSessionLocal() as session:
+        bars_count = (
+            await session.execute(_func.count(DailyBar.symbol).select())
+        ).scalar() or 0
+        bars_max_date = (
+            await session.execute(_func.max(DailyBar.date).select())
+        ).scalar()
+        bars_distinct_symbols = (
+            await session.execute(
+                _func.count(_func.distinct(DailyBar.symbol)).select()
+            )
+        ).scalar() or 0
+        universe_count = (
+            await session.execute(
+                _func.count(DailyActiveUniverse.rank).select()
+            )
+        ).scalar() or 0
+        universe_max_date = (
+            await session.execute(
+                _func.max(DailyActiveUniverse.date).select()
+            )
+        ).scalar()
+        factors_count = (
+            await session.execute(_func.count(FactorRecord.id).select())
+        ).scalar() or 0
+    return {
+        "bars": {
+            "row_count": int(bars_count),
+            "distinct_symbols": int(bars_distinct_symbols),
+            "most_recent_date": bars_max_date.isoformat() if bars_max_date else None,
+        },
+        "universe": {
+            "row_count": int(universe_count),
+            "most_recent_date": universe_max_date.isoformat() if universe_max_date else None,
+        },
+        "factor_records": {
+            "row_count": int(factors_count),
+        },
+    }
 
 
 @router.post("/admin/purge-bad-records")

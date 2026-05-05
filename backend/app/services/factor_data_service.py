@@ -13,6 +13,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import re
 import time
 from collections.abc import Iterable
 from datetime import date, datetime, timedelta, timezone
@@ -186,35 +187,80 @@ def _alpaca_data_client():
     return StockHistoricalDataClient(api_key, secret_key)
 
 
+_ALPACA_INVALID_SYMBOL_RE = re.compile(r"invalid symbol:\s*([A-Z0-9.\-]+)", re.IGNORECASE)
+_ALPACA_MAX_RETRIES = 8  # bounded — give up if we somehow keep getting fresh bad symbols
+
+
 def _fetch_bars_sync(symbols: list[str], start: date, end: date) -> pd.DataFrame:
     """Pull daily bars from Alpaca for ``symbols`` over [start, end].
 
     Returns a flat DataFrame with columns:
     symbol, date, open, high, low, close, volume, vwap.
     Empty DataFrame if Alpaca returns no rows.
+
+    Resilience: when Alpaca returns ``400 invalid symbol: X`` the entire
+    batch is rejected. We parse the offending symbol out of the error,
+    drop it from the request, and retry — up to ``_ALPACA_MAX_RETRIES``
+    times — so one bad ticker (e.g. a futures contract that slipped into
+    the Russell list) doesn't void the whole 100-symbol chunk.
     """
     from alpaca.data.requests import StockBarsRequest
     from alpaca.data.timeframe import TimeFrame
 
     client = _alpaca_data_client()
-    request = StockBarsRequest(
-        symbol_or_symbols=symbols,
-        timeframe=TimeFrame.Day,
-        start=datetime.combine(start, datetime.min.time(), tzinfo=timezone.utc),
-        end=datetime.combine(end, datetime.min.time(), tzinfo=timezone.utc),
-    )
-    bars = client.get_stock_bars(request)
-    df = bars.df  # MultiIndex (symbol, timestamp)
-    if df is None or df.empty:
-        return pd.DataFrame(
-            columns=["symbol", "date", "open", "high", "low", "close", "volume", "vwap"]
+    remaining = list(symbols)
+    dropped: list[str] = []
+
+    for attempt in range(_ALPACA_MAX_RETRIES):
+        if not remaining:
+            return pd.DataFrame(
+                columns=["symbol", "date", "open", "high", "low", "close", "volume", "vwap"]
+            )
+        request = StockBarsRequest(
+            symbol_or_symbols=remaining,
+            timeframe=TimeFrame.Day,
+            start=datetime.combine(start, datetime.min.time(), tzinfo=timezone.utc),
+            end=datetime.combine(end, datetime.min.time(), tzinfo=timezone.utc),
         )
-    df = df.reset_index()
-    df["date"] = pd.to_datetime(df["timestamp"]).dt.date
-    # Ensure expected columns are present even if Alpaca omits vwap.
-    if "vwap" not in df.columns:
-        df["vwap"] = None
-    return df[["symbol", "date", "open", "high", "low", "close", "volume", "vwap"]]
+        try:
+            bars = client.get_stock_bars(request)
+        except Exception as exc:  # noqa: BLE001 — APIError text-parse below
+            msg = str(exc)
+            match = _ALPACA_INVALID_SYMBOL_RE.search(msg)
+            if not match:
+                raise  # not a recoverable invalid-symbol error
+            bad = match.group(1).upper()
+            if bad not in remaining:
+                # Alpaca named a symbol we never sent — bail rather than loop.
+                raise
+            remaining.remove(bad)
+            dropped.append(bad)
+            continue
+
+        if dropped:
+            logger.info(
+                "Alpaca dropped invalid symbols from batch: %s (kept %d)",
+                ",".join(dropped),
+                len(remaining),
+            )
+        df = bars.df  # MultiIndex (symbol, timestamp)
+        if df is None or df.empty:
+            return pd.DataFrame(
+                columns=["symbol", "date", "open", "high", "low", "close", "volume", "vwap"]
+            )
+        df = df.reset_index()
+        df["date"] = pd.to_datetime(df["timestamp"]).dt.date
+        if "vwap" not in df.columns:
+            df["vwap"] = None
+        return df[["symbol", "date", "open", "high", "low", "close", "volume", "vwap"]]
+
+    logger.warning(
+        "Alpaca batch hit max retries (%d) — dropped %s, giving up on %d symbols",
+        _ALPACA_MAX_RETRIES, ",".join(dropped), len(remaining),
+    )
+    return pd.DataFrame(
+        columns=["symbol", "date", "open", "high", "low", "close", "volume", "vwap"]
+    )
 
 
 def compute_activity_score(
