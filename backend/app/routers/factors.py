@@ -214,6 +214,56 @@ async def admin_refresh_data() -> dict[str, str]:
     return {"status": "ok", "message": "daily data refresh complete"}
 
 
+@router.post("/admin/reset-population")
+async def admin_reset_population() -> dict[str, Any]:
+    """Wipe FactorPopulationState and reseed from WorldQuant Alpha 101.
+
+    The current 50 slots are stale rows from broken pre-fix runs (every
+    fitness=-99). The continuous loop normally evolves the population
+    away from junk over time, but with each generation taking 10+ min on
+    real data and most mutations producing sub-threshold fitness, that
+    drift is too slow. Reset gives the GP search a fresh, known-tradable
+    starting point.
+
+    Each reseed slot stores the formula text with fitness=0.0 so the
+    next generation evaluates them; the loop's next mutation/crossover
+    pass then works from real Alpha 101 alphas instead of -99 noise.
+    """
+    from sqlalchemy import delete as _delete
+
+    from core.factors.seeds import get_seed_population
+    from core.factors.ast import serialize as _serialize
+
+    seeds = list(get_seed_population())
+    async with AsyncSessionLocal() as session:
+        await session.execute(_delete(FactorPopulationState))
+        for slot, node in enumerate(seeds[:50]):
+            session.add(
+                FactorPopulationState(
+                    slot=slot,
+                    formula=_serialize(node),
+                    fitness=0.0,
+                    generation=0,
+                )
+            )
+        await session.commit()
+    return {"deleted_old_slots": 50, "reseeded_slots": min(len(seeds), 50)}
+
+
+@router.post("/admin/regenerate-recommendations")
+async def admin_regenerate_recommendations(top_k: int = 10) -> dict[str, Any]:
+    """Re-run today's recommendations against the current library.
+
+    The daily refresh ran when the library was empty; this lets us
+    rebuild today's picks without waiting for the next cron tick.
+    """
+    half = max(1, top_k // 2)
+    rows = await today_recommendations_service.generate_today_recommendations(
+        top_k_buy=half, top_k_sell=top_k - half
+    )
+    return {"generated": len(rows or []), "top_k": top_k}
+
+
 @router.post("/admin/seed-library")
 async def admin_seed_library() -> dict[str, Any]:
     """Backtest the WorldQuant Alpha 101 seed set and insert passers.

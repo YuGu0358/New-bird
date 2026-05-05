@@ -24,7 +24,9 @@ from core.factors.eval import evaluate
 logger = logging.getLogger(__name__)
 
 
-_MIN_FITNESS = 0.04
+_MIN_FITNESS = 0.005  # Match factor_vector_store gate; real-world Alpaca
+                       # alphas land at 0.005-0.020 fitness, not the 0.04+
+                       # the original threshold assumed.
 _DEFAULT_TOP_FACTORS = 20
 _DEFAULT_LOOKBACK_DAYS = 60
 _MAX_LIBRARY_SCAN = 1000
