@@ -34,6 +34,7 @@ from sqlalchemy import delete, select
 
 from app.db.engine import AsyncSessionLocal
 from app.db.tables import (
+    FactorEvolutionRun,
     FactorEvolutionStateSingleton,
     FactorGenerationStat,
     FactorPopulationState,
@@ -86,6 +87,11 @@ _NEWS_TOP_N = 100
 _loop_task: Optional[asyncio.Task] = None
 _loop_lock = asyncio.Lock()
 _should_stop = asyncio.Event()
+
+# Tracks the currently-running FactorEvolutionRun row id so each
+# generation's progress and the eventual stop / crash can be written
+# back to the same record. Reset to None when no loop is active.
+_active_run_id: int | None = None
 
 
 # ----- Helpers ---------------------------------------------------------------
@@ -850,6 +856,12 @@ async def continuous_evolution_loop() -> None:
                 last_generation_completed_at=datetime.now(timezone.utc),
                 last_error=None,
             )
+            if _active_run_id is not None:
+                await _record_run_progress(
+                    _active_run_id,
+                    generation_best=best,
+                    persisted_inc=int(persisted_count or 0),
+                )
             logger.info("[FactorForge] gen=%d done best=%s", generation, best)
 
             # QuantaAlpha trajectory injection (hybrid / quanta modes).
@@ -956,12 +968,78 @@ async def continuous_evolution_loop() -> None:
 # ----- Public control --------------------------------------------------------
 
 
+async def _create_evolution_run() -> int | None:
+    """Insert a FactorEvolutionRun row in ``running`` state and return its id.
+
+    Failures here are logged but never propagated — the loop must run
+    even if the bookkeeping table is temporarily unwritable.
+    """
+    try:
+        async with AsyncSessionLocal() as session:
+            row = FactorEvolutionRun(
+                started_at=datetime.now(timezone.utc),
+                status="running",
+                total_persisted=0,
+            )
+            session.add(row)
+            await session.commit()
+            await session.refresh(row)
+            return int(row.id)
+    except Exception:
+        logger.warning("failed to create FactorEvolutionRun row", exc_info=True)
+        return None
+
+
+async def _record_run_progress(
+    run_id: int, *, generation_best: float | None, persisted_inc: int
+) -> None:
+    """Bump total_persisted and stage1_best (= max running best) on the row."""
+    if run_id is None:
+        return
+    try:
+        async with AsyncSessionLocal() as session:
+            row = await session.get(FactorEvolutionRun, run_id)
+            if row is None:
+                return
+            row.total_persisted = (row.total_persisted or 0) + int(persisted_inc)
+            row.stage2_best = (
+                float(generation_best) if generation_best is not None else row.stage2_best
+            )
+            if generation_best is not None:
+                prev = row.stage1_best
+                if prev is None or float(generation_best) > prev:
+                    row.stage1_best = float(generation_best)
+            await session.commit()
+    except Exception:
+        logger.debug("failed to update FactorEvolutionRun progress", exc_info=True)
+
+
+async def _finalize_evolution_run(
+    run_id: int | None, *, status: str, error: str | None = None
+) -> None:
+    if run_id is None:
+        return
+    try:
+        async with AsyncSessionLocal() as session:
+            row = await session.get(FactorEvolutionRun, run_id)
+            if row is None:
+                return
+            row.status = status
+            row.completed_at = datetime.now(timezone.utc)
+            if error:
+                row.error = error[:_ERROR_TRUNCATE]
+            await session.commit()
+    except Exception:
+        logger.warning("failed to finalize FactorEvolutionRun row", exc_info=True)
+
+
 async def start_loop() -> str:
-    global _loop_task
+    global _loop_task, _active_run_id
     async with _loop_lock:
         if _loop_task is not None and not _loop_task.done():
             return "already running"
         _should_stop.clear()
+        _active_run_id = await _create_evolution_run()
         _loop_task = asyncio.create_task(
             continuous_evolution_loop(), name="factor_forge_loop"
         )
@@ -969,11 +1047,14 @@ async def start_loop() -> str:
 
 
 async def stop_loop(timeout: float = 5.0) -> str:
-    global _loop_task
+    global _loop_task, _active_run_id
     async with _loop_lock:
         if _loop_task is None or _loop_task.done():
             _loop_task = None
             _shutdown_executor()
+            if _active_run_id is not None:
+                await _finalize_evolution_run(_active_run_id, status="stopped")
+                _active_run_id = None
             return "not running"
         _should_stop.set()
         try:
@@ -987,6 +1068,10 @@ async def stop_loop(timeout: float = 5.0) -> str:
         finally:
             _loop_task = None
             _shutdown_executor()
+            run_id = _active_run_id
+            _active_run_id = None
+        if run_id is not None:
+            await _finalize_evolution_run(run_id, status="stopped")
         return "stopped"
 
 
