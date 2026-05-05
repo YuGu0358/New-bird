@@ -117,6 +117,56 @@ def _resolve_node(formula: str | FactorNode) -> FactorNode:
     raise TypeError(f"Unsupported formula type: {type(formula).__name__}")
 
 
+async def load_sector_map() -> dict[str, str]:
+    """Load symbol → sector mapping from factor_symbol_meta.
+
+    Returns ``{}`` when the table is empty (caller falls back to no
+    sector neutralization). Symbols without a sector show up as
+    ``UNKNOWN``, treated as their own bucket.
+    """
+    from sqlalchemy import select
+
+    from app.db.engine import AsyncSessionLocal
+    from app.db.tables import SymbolMeta
+
+    async with AsyncSessionLocal() as session:
+        rows = (
+            await session.execute(
+                select(SymbolMeta.symbol, SymbolMeta.sector)
+            )
+        ).all()
+    if not rows:
+        return {}
+    return {sym: sec or "UNKNOWN" for sym, sec in rows}
+
+
+def _neutralize_by_sector(
+    values: pd.Series, sector_map: dict[str, str] | None
+) -> pd.Series:
+    """Cross-sectional sector demean: subtract per-(date, sector) mean.
+
+    Strips out sector beta exposure so the IC measures within-sector
+    stock-picking edge rather than sector-rotation timing. Symbols
+    missing from ``sector_map`` are bucketed as ``UNKNOWN`` and
+    demeaned together. Returns the input unchanged when ``sector_map``
+    is empty / None.
+
+    NaN-safe: the per-group mean is computed with skipna=True; missing
+    cells stay missing.
+    """
+    if not sector_map:
+        return values
+    if values.empty:
+        return values
+    df = values.rename("v").reset_index()
+    if "symbol" not in df.columns or "date" not in df.columns:
+        return values
+    df["sector"] = df["symbol"].map(sector_map).fillna("UNKNOWN")
+    df["sector_mean"] = df.groupby(["date", "sector"])["v"].transform("mean")
+    df["v_neutral"] = df["v"] - df["sector_mean"]
+    return df.set_index(["date", "symbol"])["v_neutral"]
+
+
 def _compute_forward_returns(panel: pd.DataFrame, horizon: int) -> pd.Series:
     """Per-symbol forward return over ``horizon`` trading days.
 
@@ -175,6 +225,7 @@ def compute_metrics(
     universe_mask: pd.Series | None = None,
     quantiles: int = DEFAULT_QUANTILES,
     fitness_weights: tuple[float, float, float] = DEFAULT_FITNESS_WEIGHTS,
+    sector_map: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     """Compute all metrics from pre-computed scores and forward returns.
 
@@ -189,6 +240,11 @@ def compute_metrics(
     universe_mask : pd.Series, optional
         Boolean MultiIndex (date, symbol) — True where the (date, symbol)
         cell is in that day's active universe. If omitted, all rows count.
+    sector_map : dict[str, str], optional
+        Symbol → sector mapping. When provided, scores are
+        cross-sectionally demeaned by (date, sector) before IC and
+        long-short basket construction. Strips sector-rotation beta so
+        the IC measures genuine within-sector stock-picking edge.
     """
     if scores.empty or returns_panel.empty:
         return {"failed": True, "n_obs": 0, "n_days": 0}
@@ -198,6 +254,12 @@ def compute_metrics(
     if universe_mask is not None:
         masked_idx = universe_mask.reindex(returns_panel.index).fillna(False).astype(bool)
         scores_aligned = scores_aligned.where(masked_idx)
+
+    # Sector neutralization — strip per-day sector mean so the IC
+    # measures within-sector ranking, not sector beta. Falls back to
+    # raw scores when sector_map is empty.
+    if sector_map:
+        scores_aligned = _neutralize_by_sector(scores_aligned, sector_map)
 
     if not np.isfinite(scores_aligned.to_numpy(dtype=float, na_value=np.nan)).any():
         return {"failed": True, "n_obs": 0, "n_days": 0}
@@ -428,12 +490,21 @@ async def backtest_factor(
                 logger.debug("load_universe_panel failed; using full panel", exc_info=True)
                 universe_mask = None
 
+        # Sector map for cross-sectional sector neutralization. Tolerant
+        # of missing meta — quality just degrades to non-neutralized IC.
+        sector_map: dict[str, str] = {}
+        try:
+            sector_map = await load_sector_map()
+        except Exception:  # noqa: BLE001
+            logger.debug("load_sector_map failed; computing without sector neutralization", exc_info=True)
+
         metrics = compute_metrics(
             scores,
             returns_panel,
             universe_mask=universe_mask,
             quantiles=quantiles,
             fitness_weights=fitness_weights,
+            sector_map=sector_map or None,
         )
     except Exception:  # noqa: BLE001
         logger.exception("Backtest failed for formula %r", formula_str)
@@ -497,5 +568,6 @@ __all__ = [
     "backtest_factor",
     "backtest_factor_sync",
     "compute_metrics",
+    "load_sector_map",
     "load_universe_panel",
 ]
