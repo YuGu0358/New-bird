@@ -214,6 +214,68 @@ async def admin_refresh_data() -> dict[str, str]:
     return {"status": "ok", "message": "daily data refresh complete"}
 
 
+@router.get("/admin/sample-fundamentals")
+async def admin_sample_fundamentals(limit: int = 5) -> dict[str, Any]:
+    """Dump a sample of factor_daily_fundamentals rows + null counts.
+
+    Diagnostic for Phase 3.2 — confirms whether Polygon-derived fields
+    are actually stored or all-None.
+    """
+    from sqlalchemy import func as _func
+
+    from app.db.tables import FactorDailyFundamentals as _FF
+
+    async with AsyncSessionLocal() as session:
+        rows = (
+            await session.execute(
+                select(_FF).order_by(desc(_FF.date)).limit(limit)
+            )
+        ).scalars().all()
+        total = (await session.execute(_func.count(_FF.symbol).select())).scalar() or 0
+        non_null_pb = (
+            await session.execute(
+                _func.count(_FF.pb_ratio).select()
+            )
+        ).scalar() or 0
+        non_null_roe = (
+            await session.execute(
+                _func.count(_FF.roe).select()
+            )
+        ).scalar() or 0
+        non_null_eps = (
+            await session.execute(
+                _func.count(_FF.eps_ttm).select()
+            )
+        ).scalar() or 0
+        non_null_mc = (
+            await session.execute(
+                _func.count(_FF.market_cap).select()
+            )
+        ).scalar() or 0
+    return {
+        "total_rows": int(total),
+        "non_null_market_cap": int(non_null_mc),
+        "non_null_pb_ratio": int(non_null_pb),
+        "non_null_roe": int(non_null_roe),
+        "non_null_eps_ttm": int(non_null_eps),
+        "samples": [
+            {
+                "symbol": r.symbol,
+                "date": r.date.isoformat(),
+                "market_cap": r.market_cap,
+                "pe_ratio": r.pe_ratio,
+                "pb_ratio": r.pb_ratio,
+                "eps_ttm": r.eps_ttm,
+                "revenue_ttm": r.revenue_ttm,
+                "gross_margin": r.gross_margin,
+                "debt_to_equity": r.debt_to_equity,
+                "roe": r.roe,
+            }
+            for r in rows
+        ],
+    }
+
+
 @router.post("/admin/refresh-fundamentals")
 async def admin_refresh_fundamentals(top_n: int = 100) -> dict[str, Any]:
     """Refresh fundamentals from Polygon for the active universe.
