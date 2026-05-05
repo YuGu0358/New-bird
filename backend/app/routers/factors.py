@@ -214,6 +214,39 @@ async def admin_refresh_data() -> dict[str, str]:
     return {"status": "ok", "message": "daily data refresh complete"}
 
 
+@router.post("/admin/refresh-fundamentals")
+async def admin_refresh_fundamentals(top_n: int = 100) -> dict[str, Any]:
+    """Refresh fundamentals from Polygon for the active universe.
+
+    Sequential per-symbol I/O at ~2 RPS to respect rate limits, so
+    100 symbols ≈ 1 minute. Returns the row count written.
+    """
+    from app.services import factor_fundamentals_service
+
+    async with AsyncSessionLocal() as session:
+        rows = (
+            await session.execute(
+                select(DailyActiveUniverse)
+                .where(
+                    DailyActiveUniverse.date == (
+                        await session.execute(
+                            select(DailyActiveUniverse.date)
+                            .order_by(desc(DailyActiveUniverse.date))
+                            .limit(1)
+                        )
+                    ).scalar()
+                )
+                .order_by(DailyActiveUniverse.rank)
+                .limit(top_n)
+            )
+        ).scalars().all()
+    symbols = [r.symbol for r in rows]
+    if not symbols:
+        return {"refreshed": 0, "message": "no active universe"}
+    written = await factor_fundamentals_service.refresh_fundamentals(symbols)
+    return {"refreshed": written, "symbols_attempted": len(symbols)}
+
+
 @router.post("/admin/reset-population")
 async def admin_reset_population() -> dict[str, Any]:
     """Wipe FactorPopulationState and reseed from WorldQuant Alpha 101.

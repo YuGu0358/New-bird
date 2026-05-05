@@ -585,6 +585,43 @@ class SymbolMeta(Base):
     )
 
 
+class FactorDailyFundamentals(Base):
+    """Per-(symbol, date) fundamental snapshot for factor mining.
+
+    Quarterly fundamentals (PE, PB, ROE, etc.) get forward-filled into
+    daily rows: a value reported on filing date Y is treated as known
+    on every trading day ≥ Y until the next filing supersedes it.
+    Daily snapshot fields (market_cap, short_interest_pct) are written
+    once per refresh.
+
+    Composite primary key on (symbol, date) — one row per ticker per
+    trading day.
+    """
+
+    __tablename__ = "factor_daily_fundamentals"
+
+    symbol: Mapped[str] = mapped_column(String(16), primary_key=True)
+    date: Mapped[date] = mapped_column(Date, primary_key=True)
+    market_cap: Mapped[float | None] = mapped_column(Float, nullable=True)
+    pe_ratio: Mapped[float | None] = mapped_column(Float, nullable=True)
+    pb_ratio: Mapped[float | None] = mapped_column(Float, nullable=True)
+    eps_ttm: Mapped[float | None] = mapped_column(Float, nullable=True)
+    revenue_ttm: Mapped[float | None] = mapped_column(Float, nullable=True)
+    gross_margin: Mapped[float | None] = mapped_column(Float, nullable=True)
+    debt_to_equity: Mapped[float | None] = mapped_column(Float, nullable=True)
+    roe: Mapped[float | None] = mapped_column(Float, nullable=True)
+    short_interest_pct: Mapped[float | None] = mapped_column(Float, nullable=True)
+    refreshed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+    )
+
+    __table_args__ = (
+        Index("ix_factor_fund_date", "date"),
+    )
+
+
 class DailyNewsFeatures(Base):
     """Per-(symbol, date) news features used as factor inputs.
 
@@ -856,4 +893,61 @@ class FactorGenerationStat(Base):
         DateTime(timezone=True),
         nullable=False,
         default=lambda: datetime.now(timezone.utc),
+    )
+
+
+class OptionsStructureSnapshot(Base):
+    """One captured structure-read at time T, plus its later outcome.
+
+    Captured snapshot rows start with `outcome_status='pending'` and the
+    evaluator job fills in the realized fields once `horizon_end_date`
+    has arrived and the underlying OHLC for that day is available.
+
+    Composite primary key on (capture_date, ticker, horizon_days) so the
+    same ticker can be tracked at multiple horizons in parallel without
+    overwriting; one snapshot per (ticker, horizon) per UTC day.
+    """
+
+    __tablename__ = "options_structure_snapshots"
+
+    capture_date: Mapped[date] = mapped_column(Date, primary_key=True)
+    ticker: Mapped[str] = mapped_column(String(16), primary_key=True)
+    horizon_days: Mapped[int] = mapped_column(Integer, primary_key=True)
+
+    captured_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+    )
+
+    # Frozen structure-read at capture time
+    pattern: Mapped[str] = mapped_column(String(32), nullable=False)
+    winning_player: Mapped[str] = mapped_column(String(32), nullable=False)
+    confidence: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    signals_fired_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
+
+    # Frozen inputs the outcome evaluator needs
+    spot_at_capture: Mapped[float] = mapped_column(Float, nullable=False)
+    call_wall: Mapped[float | None] = mapped_column(Float, nullable=True)
+    put_wall: Mapped[float | None] = mapped_column(Float, nullable=True)
+    max_pain: Mapped[float | None] = mapped_column(Float, nullable=True)
+    expected_move_pct: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+    horizon_end_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
+
+    # Filled by evaluator
+    outcome_status: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="pending", index=True
+    )  # pending / hit / miss / no_edge / unevaluable
+    realized_close: Mapped[float | None] = mapped_column(Float, nullable=True)
+    realized_high: Mapped[float | None] = mapped_column(Float, nullable=True)
+    realized_low: Mapped[float | None] = mapped_column(Float, nullable=True)
+    realized_move_pct: Mapped[float | None] = mapped_column(Float, nullable=True)
+    outcome_metric_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    evaluated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+    __table_args__ = (
+        Index("ix_options_struct_snap_pattern", "pattern"),
     )
