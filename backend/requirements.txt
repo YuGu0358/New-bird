@@ -1,6 +1,7 @@
 fastapi
 uvicorn
 alpaca-trade-api
+alpaca-py>=0.43.2
 polygon-api-client
 tavily-python
 python-dotenv
