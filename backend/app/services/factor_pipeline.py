@@ -754,6 +754,16 @@ async def _promote_trajectories(generation: int) -> int:
                 fitness=float(r.fitness),
                 ic_5d=float(r.ic_5d) if r.ic_5d is not None else None,
             )
+            # Skip failed backtests (empty universe / NaN metrics) early —
+            # add_factor's gate also catches them, but failing fast here
+            # avoids a wasted OpenAI embedding call.
+            import math
+            if (
+                r.fitness is None
+                or math.isnan(r.fitness)
+                or r.fitness <= 0.0
+            ):
+                continue
             row_id = await factor_vector_store.add_factor(
                 c["formula"],
                 fitness=float(r.fitness),

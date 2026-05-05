@@ -154,13 +154,23 @@ async def add_factor(
     Auto-quarantine (still persist, but flag) handled by factor_audit_service.
     """
     if enforce_gate:
-        if abs(fitness) < 0.04:
+        # NaN-safe rejects: any NaN or None in the metrics means the
+        # backtest failed (empty data, divide-by-zero, etc.) — drop it.
+        # `NaN <op> x` always returns False in Python, so naive `<=` /
+        # `>=` checks on NaN inputs silently pass the gate. Hence the
+        # explicit `math.isnan` guards.
+        import math
+        if fitness is None or math.isnan(fitness) or abs(fitness) < 0.04:
             return None
-        if ic_5d is None or abs(ic_5d) <= 0.025:
+        if ic_5d is None or math.isnan(ic_5d) or abs(ic_5d) <= 0.025:
             return None
-        if sharpe is None or abs(sharpe) >= 8.0:
+        if sharpe is None or math.isnan(sharpe) or abs(sharpe) >= 8.0:
             return None
-        if max_drawdown is None or max_drawdown >= 0.50:
+        if (
+            max_drawdown is None
+            or math.isnan(max_drawdown)
+            or max_drawdown >= 0.50
+        ):
             return None
         if n_obs is not None and n_obs <= 5000:
             return None

@@ -173,6 +173,43 @@ async def stop_evolution() -> EvolutionControlResponse:
     return EvolutionControlResponse(is_running=False, message=msg)
 
 
+@router.post("/admin/refresh-data")
+async def admin_refresh_data() -> dict[str, str]:
+    """One-shot trigger for the daily data-refresh job.
+
+    Useful right after a fresh deploy where the persistent volume is
+    empty — fills factor_daily_bars + active universe + symbol meta +
+    news features so the evolution loop has something to evaluate.
+    Synchronous: returns once the refresh completes (a few minutes).
+    """
+    await factor_pipeline.daily_data_refresh()
+    return {"status": "ok", "message": "daily data refresh complete"}
+
+
+@router.post("/admin/purge-bad-records")
+async def admin_purge_bad_records() -> dict[str, int]:
+    """Delete factor_records rows that slipped past the gate with bad
+    metrics: ``fitness <= 0`` or any NaN core metric.
+
+    Returns ``{"deleted": N}``. Idempotent.
+    """
+    from sqlalchemy import delete, or_
+
+    async with AsyncSessionLocal() as session:
+        result = await session.execute(
+            delete(FactorRecord).where(
+                or_(
+                    FactorRecord.fitness <= 0.0,
+                    FactorRecord.fitness.is_(None),
+                    FactorRecord.ic_5d.is_(None),
+                )
+            )
+        )
+        await session.commit()
+        deleted = int(result.rowcount or 0)
+    return {"deleted": deleted}
+
+
 _HISTORY_MAX_LIMIT = 1000
 _HISTORY_DEFAULT_LIMIT = 100
 
