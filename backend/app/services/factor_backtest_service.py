@@ -181,6 +181,51 @@ def _compute_forward_returns(panel: pd.DataFrame, horizon: int) -> pd.Series:
     return fwd.rename(f"r_{horizon}d")
 
 
+_BETA_WINDOW = 60  # rolling window for per-stock market beta
+
+
+def _market_residualize_returns(
+    forward_returns: pd.Series, panel: pd.DataFrame, horizon: int
+) -> pd.Series:
+    """Residualize forward returns against equal-weighted market over a 60d
+    rolling β.
+
+    For each (date, symbol):
+
+        r_resid[d, s] = r[d, s] - β[d, s] * r_mkt[d]
+
+    where ``β[d, s]`` is the rolling 60-trading-day OLS slope of stock
+    returns on market returns ending at ``d-1`` (lagged by 1 to avoid
+    look-ahead) and ``r_mkt[d]`` is the equal-weighted cross-sectional
+    mean of stock returns at ``d``.
+
+    Vectorized via pandas rolling cov/var on the (date × symbol) wide
+    matrix — single matrix op, not per-symbol Python loop.
+
+    Returns the input unchanged if the panel is too small (less than
+    ``_BETA_WINDOW`` rows per symbol on average).
+    """
+    if forward_returns.empty or panel.empty:
+        return forward_returns
+    # Wide matrix: rows=date, cols=symbol, values=daily return at that horizon.
+    wide = forward_returns.unstack(level="symbol")
+    if wide.shape[0] < _BETA_WINDOW + horizon:
+        return forward_returns
+
+    # Equal-weighted market return per date (skip NaNs).
+    market = wide.mean(axis=1, skipna=True)
+    # Rolling cov(stock, market) and var(market). Lag by 1 day so beta at
+    # date d uses only data through d-1 (no look-ahead into d's own return).
+    cov = wide.rolling(_BETA_WINDOW, min_periods=_BETA_WINDOW // 2).cov(market).shift(1)
+    var = market.rolling(_BETA_WINDOW, min_periods=_BETA_WINDOW // 2).var().shift(1)
+    # Avoid div-by-zero on flat-market windows: NaN out var<=0.
+    var_safe = var.where(var > 0)
+    beta = cov.div(var_safe, axis=0)
+
+    residual = wide.sub(beta.mul(market, axis=0), fill_value=0.0)
+    return residual.stack().rename(forward_returns.name)
+
+
 def _spearman_per_date(group: pd.DataFrame) -> float:
     return spearman_ic(group["score"].to_numpy(), group["ret"].to_numpy())
 
@@ -469,11 +514,23 @@ async def backtest_factor(
         if panel is None or panel.empty:
             return _failed_result(formula_str)
 
-        # Forward returns for each horizon.
-        returns_panel = pd.concat(
-            [_compute_forward_returns(panel, h) for h in HORIZONS],
-            axis=1,
-        )
+        # Forward returns for each horizon, residualized against the
+        # equal-weighted market via rolling 60d beta. The IC then
+        # measures alpha-beyond-market rather than market-timing skill.
+        residualized_columns: list[pd.Series] = []
+        for h in HORIZONS:
+            raw = _compute_forward_returns(panel, h)
+            try:
+                residualized_columns.append(
+                    _market_residualize_returns(raw, panel, h)
+                )
+            except Exception:  # noqa: BLE001 — fall back to raw on any panel oddity
+                logger.debug(
+                    "market residualization failed at h=%d; using raw returns",
+                    h, exc_info=True,
+                )
+                residualized_columns.append(raw)
+        returns_panel = pd.concat(residualized_columns, axis=1)
 
         scores = evaluate(node, panel)
         if scores is None or scores.empty:
