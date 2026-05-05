@@ -1,31 +1,20 @@
-"""Daily fundamentals refresh — Polygon Reference + Financials API.
+"""Daily fundamentals refresh — yfinance ``Ticker.info`` snapshot.
 
-Pulls per-symbol financial statement data and writes a daily snapshot
-to ``factor_daily_fundamentals``. Quarterly statements (income / balance
-sheet / cash flow) are forward-filled into daily rows: a metric reported
-on filing date Y is the assumption for every date ≥ Y until the next
-filing supersedes it. Daily-snapshot fields (market_cap, share count)
-are written from the reference-tickers endpoint.
+Polygon's free tier rate-limits at 5 req/min, which only filled 10/100
+symbols on the first refresh attempt. yfinance has no hard limit and
+returns all the fundamentals we need in a single ``Ticker(sym).info``
+call — marketCap, trailingPE, priceToBook, returnOnEquity, debtToEquity,
+grossMargins, totalRevenue, trailingEps, shortPercentOfFloat.
 
-Two endpoints used (both work on the existing Polygon plan):
+Per-symbol ~1-2 sec wall time, so 100 symbols ≈ 2-3 min. We chunk-write
+in batches of 500 rows to stay under SQLite's bound-variable cap.
 
-- ``GET /v3/reference/tickers/{symbol}`` — current snapshot: market_cap,
-  shares_outstanding.
-- ``GET /vX/reference/financials?ticker=X`` — quarterly financials with
-  filing_date / fiscal_period; nested ``financials`` dict has
-  balance_sheet / income_statement / cash_flow_statement / comprehensive_income.
+Forward-fill of quarterly data into daily rows is handled at panel-load
+time in ``factor_data_service.get_panel`` — this service just snapshots
+"as of today" per symbol per refresh.
 
-Computed metrics:
-  - ``pe_ratio``     = market_cap / net_income_ttm
-  - ``pb_ratio``     = market_cap / book_value
-  - ``eps_ttm``      = net_income_ttm / shares_outstanding
-  - ``gross_margin`` = gross_profit_ttm / revenue_ttm
-  - ``debt_to_equity`` = total_debt / book_value
-  - ``roe``          = net_income_ttm / book_value
-  - ``revenue_ttm``  = sum of last 4 quarterly revenue rows
-
-short_interest_pct is left NULL for now — Polygon's free tier doesn't
-include the short-interest endpoint; will fill in Phase 3.4 via yfinance.
+short_interest_pct comes from the same yfinance call (``shortPercentOfFloat``)
+so we no longer need a separate Phase 3.4 service for it.
 
 Refresh cadence: daily, after market close, alongside the bar refresh.
 """
@@ -33,174 +22,82 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, timezone
 from typing import Any
 
-import httpx
 from sqlalchemy import select
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 
-from app import runtime_settings
 from app.db.engine import AsyncSessionLocal
 from app.db.tables import FactorDailyFundamentals
 
 logger = logging.getLogger(__name__)
 
 
-_POLYGON_BASE = "https://api.polygon.io"
-_HTTP_TIMEOUT = 15.0
-_RPS_DELAY = 0.25  # respect Polygon free-tier rate limit (~5 RPS)
 _BATCH_BAR = 500  # chunk size for INSERT/UPSERT — same SQLite cap as DailyBar
 
 
-def _api_key() -> str:
-    key = runtime_settings.get_setting("POLYGON_API_KEY", "") or ""
-    if not key:
-        raise RuntimeError("POLYGON_API_KEY missing")
-    return key
-
-
-async def _get_json(client: httpx.AsyncClient, path: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
-    p = dict(params or {})
-    p["apiKey"] = _api_key()
-    r = await client.get(f"{_POLYGON_BASE}{path}", params=p, timeout=_HTTP_TIMEOUT)
-    r.raise_for_status()
-    return r.json()
-
-
-def _safe(d: dict[str, Any] | None, *keys: str) -> float | None:
-    """Walk a nested dict, returning the leaf .value (Polygon financials
-    items are wrapped in {"value": float, "unit": str}). Returns None on
-    any miss."""
-    if not d:
-        return None
-    cur: Any = d
-    for k in keys:
-        if not isinstance(cur, dict):
-            return None
-        cur = cur.get(k)
-    if isinstance(cur, dict):
-        cur = cur.get("value")
-    if cur is None:
+def _f(v: Any) -> float | None:
+    """Coerce yfinance.info value to float | None. yfinance returns
+    floats, ints, or sometimes strings/None; some metrics come back as
+    NaN-as-string for missing data."""
+    if v is None:
         return None
     try:
-        return float(cur)
+        out = float(v)
     except (TypeError, ValueError):
         return None
-
-
-def _ttm_sum(quarters: list[dict[str, Any]], *path: str) -> float | None:
-    """Sum a metric across the last 4 quarterly statements."""
-    vals: list[float] = []
-    for q in quarters[:4]:
-        v = _safe(q.get("financials") or {}, *path)
-        if v is not None:
-            vals.append(v)
-    if not vals:
+    if out != out:  # NaN
         return None
-    return float(sum(vals))
+    return out
 
 
-async def _fetch_snapshot_blocking(client: httpx.AsyncClient, symbol: str) -> dict[str, Any]:
-    """One call per symbol — current market cap + shares outstanding."""
+def _fetch_one_blocking(symbol: str) -> dict[str, float | None]:
+    """Pull yfinance.info for one ticker, derive our 9 fundamental fields.
+
+    yfinance.info field map:
+      marketCap            → market_cap
+      trailingPE           → pe_ratio
+      priceToBook          → pb_ratio
+      trailingEps          → eps_ttm
+      totalRevenue         → revenue_ttm
+      grossMargins         → gross_margin (already a fraction in [0,1])
+      debtToEquity         → debt_to_equity (yf reports as percent: 110.5
+                             means 1.105; divide by 100)
+      returnOnEquity       → roe (already a fraction)
+      shortPercentOfFloat  → short_interest_pct (already a fraction)
+    """
     try:
-        data = await _get_json(client, f"/v3/reference/tickers/{symbol}")
-    except Exception as exc:  # noqa: BLE001
-        logger.debug("polygon snapshot failed for %s: %s", symbol, exc)
-        return {}
-    r = data.get("results") or {}
+        import yfinance as yf  # noqa: PLC0415
+
+        info = yf.Ticker(symbol).info or {}
+    except Exception:  # noqa: BLE001 — yfinance throws weirdly; treat as missing
+        logger.debug("yfinance.info failed for %s", symbol, exc_info=True)
+        return {
+            "market_cap": None,
+            "pe_ratio": None,
+            "pb_ratio": None,
+            "eps_ttm": None,
+            "revenue_ttm": None,
+            "gross_margin": None,
+            "debt_to_equity": None,
+            "roe": None,
+            "short_interest_pct": None,
+        }
+
+    de_raw = _f(info.get("debtToEquity"))
     return {
-        "market_cap": r.get("market_cap"),
-        "shares_outstanding": (
-            r.get("share_class_shares_outstanding")
-            or r.get("weighted_shares_outstanding")
-        ),
-    }
-
-
-async def _fetch_financials_blocking(
-    client: httpx.AsyncClient, symbol: str, *, lookback_quarters: int = 5
-) -> list[dict[str, Any]]:
-    """Last ``lookback_quarters`` quarterly statements, newest first."""
-    try:
-        data = await _get_json(
-            client,
-            "/vX/reference/financials",
-            params={
-                "ticker": symbol,
-                "limit": lookback_quarters,
-                "timeframe": "quarterly",
-                "order": "desc",
-                "sort": "filing_date",
-            },
-        )
-    except Exception as exc:  # noqa: BLE001
-        logger.debug("polygon financials failed for %s: %s", symbol, exc)
-        return []
-    return list(data.get("results") or [])
-
-
-def _compute_per_symbol(
-    snapshot: dict[str, Any], quarters: list[dict[str, Any]]
-) -> dict[str, float | None]:
-    """Combine snapshot + last-4Q financials into derived metrics."""
-    market_cap = snapshot.get("market_cap")
-    shares = snapshot.get("shares_outstanding")
-
-    revenue_ttm = _ttm_sum(quarters, "income_statement", "revenues")
-    gross_profit_ttm = _ttm_sum(quarters, "income_statement", "gross_profit")
-    net_income_ttm = _ttm_sum(quarters, "income_statement", "net_income_loss")
-
-    book_value = None
-    total_debt = None
-    if quarters:
-        latest_bs = (quarters[0].get("financials") or {}).get("balance_sheet") or {}
-        book_value = _safe(latest_bs, "equity")
-        total_debt = (
-            _safe(latest_bs, "long_term_debt")
-            or _safe(latest_bs, "noncurrent_liabilities")
-        )
-
-    pe_ratio = (
-        float(market_cap) / float(net_income_ttm)
-        if market_cap and net_income_ttm and net_income_ttm > 0
-        else None
-    )
-    pb_ratio = (
-        float(market_cap) / float(book_value)
-        if market_cap and book_value and book_value > 0
-        else None
-    )
-    eps_ttm = (
-        float(net_income_ttm) / float(shares)
-        if net_income_ttm and shares and shares > 0
-        else None
-    )
-    gross_margin = (
-        float(gross_profit_ttm) / float(revenue_ttm)
-        if gross_profit_ttm and revenue_ttm and revenue_ttm > 0
-        else None
-    )
-    debt_to_equity = (
-        float(total_debt) / float(book_value)
-        if total_debt and book_value and book_value > 0
-        else None
-    )
-    roe = (
-        float(net_income_ttm) / float(book_value)
-        if net_income_ttm and book_value and book_value > 0
-        else None
-    )
-
-    return {
-        "market_cap": float(market_cap) if market_cap else None,
-        "pe_ratio": pe_ratio,
-        "pb_ratio": pb_ratio,
-        "eps_ttm": eps_ttm,
-        "revenue_ttm": revenue_ttm,
-        "gross_margin": gross_margin,
-        "debt_to_equity": debt_to_equity,
-        "roe": roe,
+        "market_cap": _f(info.get("marketCap")),
+        "pe_ratio": _f(info.get("trailingPE")),
+        "pb_ratio": _f(info.get("priceToBook")),
+        "eps_ttm": _f(info.get("trailingEps")),
+        "revenue_ttm": _f(info.get("totalRevenue")),
+        "gross_margin": _f(info.get("grossMargins")),
+        # yfinance returns debtToEquity as a percent figure (e.g. 110.5
+        # for 1.105×). Normalise to a ratio.
+        "debt_to_equity": (de_raw / 100.0) if de_raw is not None else None,
+        "roe": _f(info.get("returnOnEquity")),
+        "short_interest_pct": _f(info.get("shortPercentOfFloat")),
     }
 
 
@@ -210,28 +107,23 @@ async def refresh_fundamentals(
     """Refresh and persist fundamentals for ``symbols`` on ``target_date``
     (defaults to today). Returns the number of rows written.
 
-    Per-symbol I/O is sequential to respect Polygon's rate limit; per
-    fetch latency ≈ 0.5s, so 100 symbols ≈ 1 minute total.
+    Per-symbol fetch is yfinance (~1-2s wall time each), run via
+    ``asyncio.to_thread`` so the event loop stays responsive. 100
+    symbols ≈ 2-3 min total.
     """
     if not symbols:
         return 0
     target = target_date or datetime.now(timezone.utc).date()
     rows: list[dict[str, Any]] = []
-    async with httpx.AsyncClient() as client:
-        for sym in symbols:
-            snap = await _fetch_snapshot_blocking(client, sym)
-            await asyncio.sleep(_RPS_DELAY)
-            quarters = await _fetch_financials_blocking(client, sym)
-            await asyncio.sleep(_RPS_DELAY)
-            metrics = _compute_per_symbol(snap, quarters)
-            row = {
-                "symbol": sym,
-                "date": target,
-                "refreshed_at": datetime.now(timezone.utc),
-                "short_interest_pct": None,
-                **metrics,
-            }
-            rows.append(row)
+    for sym in symbols:
+        metrics = await asyncio.to_thread(_fetch_one_blocking, sym)
+        row = {
+            "symbol": sym,
+            "date": target,
+            "refreshed_at": datetime.now(timezone.utc),
+            **metrics,
+        }
+        rows.append(row)
 
     if not rows:
         return 0
