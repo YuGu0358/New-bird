@@ -57,6 +57,25 @@ SEEDS: List[str] = [
     "rank(neg(power(sub(1,div(open,close)),1)))",
     # Alpha #41 — log-vwap minus geometric-mean of high-low
     "sub(sqrt(mul(high,low)),vwap)",
+    # ---- Phase 3.2: fundamentals seeds (require factor_daily_fundamentals)
+    # Value: cross-sectional rank of -P/B (low P/B → high score)
+    "rank(neg(pb_ratio))",
+    # Value: earnings yield = EPS / Price ≈ EPS / market_cap × shares
+    # Approximated here as EPS_TTM / market_cap (per-share-EPS × shares /
+    # market_cap → equivalent to 1/PE when PE > 0). Robust to PE NaN.
+    "rank(div(eps_ttm,market_cap))",
+    # Quality: ROE rank (profitability)
+    "rank(roe)",
+    # Quality: gross margin rank
+    "rank(gross_margin)",
+    # Leverage: low debt-to-equity preferred
+    "rank(neg(debt_to_equity))",
+    # Size: small-cap effect — rank of -market_cap (smaller → higher score)
+    "rank(neg(market_cap))",
+    # Composite: profitability × value (gross margin × earnings yield)
+    "mul(rank(gross_margin),rank(div(eps_ttm,market_cap)))",
+    # Reversal-on-fundamentals: 5d momentum residualized by ROE rank
+    "sub(rank(neg(delta(close,5))),rank(roe))",
 ]
 
 

@@ -36,6 +36,17 @@ COLUMN_TOKENS = frozenset(
         "mcap",
         "news_sent",
         "news_count",
+        # Phase 3.1 fundamentals — populated when factor_daily_fundamentals
+        # has rows and factor_data_service.get_panel left-joined them.
+        "market_cap",
+        "pe_ratio",
+        "pb_ratio",
+        "eps_ttm",
+        "revenue_ttm",
+        "gross_margin",
+        "debt_to_equity",
+        "roe",
+        "short_interest_pct",
     }
 )
 

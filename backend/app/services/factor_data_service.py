@@ -553,10 +553,28 @@ async def update_active_universe(target_date: date, top_n: int = 100) -> int:
         return len(scored)
 
 
+_FUNDAMENTAL_COLS = (
+    "market_cap", "pe_ratio", "pb_ratio", "eps_ttm", "revenue_ttm",
+    "gross_margin", "debt_to_equity", "roe", "short_interest_pct",
+)
+
+
 async def get_panel(
     start: date, end: date, symbols: Iterable[str] | None = None
 ) -> pd.DataFrame:
-    """Load OHLCV panel as MultiIndex (date, symbol) DataFrame for [start, end]."""
+    """Load (date, symbol)-indexed panel for [start, end].
+
+    OHLCV always present. Fundamentals (market_cap / pe_ratio / pb_ratio
+    / eps_ttm / revenue_ttm / gross_margin / debt_to_equity / roe /
+    short_interest_pct) are left-joined when ``factor_daily_fundamentals``
+    has data; missing dates are forward-filled per symbol so a 4y
+    backtest can use the most-recent known fundamental even if Polygon
+    only refreshed today's snapshot.
+
+    Empty fundamentals table → panel just has OHLCV columns; AST
+    operators that reference unknown columns will fail to evaluate
+    (existing behavior).
+    """
     async with AsyncSessionLocal() as session:
         query = select(DailyBar).where(DailyBar.date >= start, DailyBar.date <= end)
         if symbols is not None:
@@ -583,7 +601,30 @@ async def get_panel(
             for r in rows
         ]
     )
-    return df.set_index(["date", "symbol"]).sort_index()
+    df = df.set_index(["date", "symbol"]).sort_index()
+
+    # Left-join fundamentals — soft-fail to OHLCV-only if loader errors.
+    try:
+        from app.services import factor_fundamentals_service as _ff
+
+        fund = await _ff.get_fundamentals_panel(
+            start, end, list(df.index.get_level_values("symbol").unique())
+        )
+        if not fund.empty:
+            for col in _FUNDAMENTAL_COLS:
+                if col in fund.columns:
+                    df[col] = fund[col]
+            # Forward-fill within each symbol so dates without an
+            # explicit fundamentals row inherit the most-recent value.
+            df[list(_FUNDAMENTAL_COLS)] = (
+                df[list(_FUNDAMENTAL_COLS)]
+                .groupby(level="symbol")
+                .ffill()
+            )
+    except Exception:
+        logger.debug("fundamentals join failed; OHLCV-only panel", exc_info=True)
+
+    return df
 
 
 async def get_active_universe(target_date: date, top_n: int = 100) -> list[str]:
