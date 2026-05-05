@@ -102,7 +102,15 @@ async def get_active_universe(
     query_date: date_cls | None = None,
     top_n: int = 100,
 ) -> ActiveUniverseResponse:
-    """Return today's (or ``query_date``'s) ranked active universe."""
+    """Return today's (or ``query_date``'s) ranked active universe.
+
+    When no rows exist for the requested date (weekends, holidays, or
+    pre-market on a fresh day where Alpaca hasn't delivered EOD bars
+    yet), fall back to the most recent stored universe ≤ target so the
+    UI never shows a stale-but-empty page after a successful refresh.
+    """
+    from sqlalchemy import func as _func
+
     target = query_date or date_cls.today()
     async with AsyncSessionLocal() as session:
         rows = (
@@ -113,6 +121,24 @@ async def get_active_universe(
                 .limit(top_n)
             )
         ).scalars().all()
+        if not rows:
+            most_recent = (
+                await session.execute(
+                    select(_func.max(DailyActiveUniverse.date)).where(
+                        DailyActiveUniverse.date <= target
+                    )
+                )
+            ).scalar()
+            if most_recent is not None:
+                target = most_recent
+                rows = (
+                    await session.execute(
+                        select(DailyActiveUniverse)
+                        .where(DailyActiveUniverse.date == target)
+                        .order_by(DailyActiveUniverse.rank)
+                        .limit(top_n)
+                    )
+                ).scalars().all()
     items = [
         ActiveUniverseItem(
             rank=r.rank,

@@ -188,7 +188,11 @@ def _alpaca_data_client():
 
 
 _ALPACA_INVALID_SYMBOL_RE = re.compile(r"invalid symbol:\s*([A-Z0-9.\-]+)", re.IGNORECASE)
-_ALPACA_MAX_RETRIES = 8  # bounded — give up if we somehow keep getting fresh bad symbols
+
+
+_EMPTY_BARS_DF = pd.DataFrame(
+    columns=["symbol", "date", "open", "high", "low", "close", "volume", "vwap"]
+)
 
 
 def _fetch_bars_sync(symbols: list[str], start: date, end: date) -> pd.DataFrame:
@@ -198,69 +202,65 @@ def _fetch_bars_sync(symbols: list[str], start: date, end: date) -> pd.DataFrame
     symbol, date, open, high, low, close, volume, vwap.
     Empty DataFrame if Alpaca returns no rows.
 
-    Resilience: when Alpaca returns ``400 invalid symbol: X`` the entire
-    batch is rejected. We parse the offending symbol out of the error,
-    drop it from the request, and retry — up to ``_ALPACA_MAX_RETRIES``
-    times — so one bad ticker (e.g. a futures contract that slipped into
-    the Russell list) doesn't void the whole 100-symbol chunk.
+    Resilience: Alpaca rejects the entire batch with ``400 invalid
+    symbol: X`` whenever any one symbol is unknown (futures contracts
+    like FAM6, dead tickers like CBC, etc. routinely slip through the
+    iShares Russell scrape). Strategy:
+
+    1. Try the full batch once.
+    2. On invalid-symbol error, parse the offender out of the message
+       and drop it — single round-trip recovery.
+    3. If parsing fails (or Alpaca's error wording changes), bisect:
+       split the batch in half and recurse on each half. Bisection is
+       O(k log n) round trips for k bad symbols vs O(k) for naive
+       drop-one-retry.
+    4. A 1-symbol batch that still fails simply returns empty.
     """
+    if not symbols:
+        return _EMPTY_BARS_DF.copy()
     from alpaca.data.requests import StockBarsRequest
     from alpaca.data.timeframe import TimeFrame
 
     client = _alpaca_data_client()
-    remaining = list(symbols)
-    dropped: list[str] = []
-
-    for attempt in range(_ALPACA_MAX_RETRIES):
-        if not remaining:
-            return pd.DataFrame(
-                columns=["symbol", "date", "open", "high", "low", "close", "volume", "vwap"]
-            )
-        request = StockBarsRequest(
-            symbol_or_symbols=remaining,
-            timeframe=TimeFrame.Day,
-            start=datetime.combine(start, datetime.min.time(), tzinfo=timezone.utc),
-            end=datetime.combine(end, datetime.min.time(), tzinfo=timezone.utc),
-        )
-        try:
-            bars = client.get_stock_bars(request)
-        except Exception as exc:  # noqa: BLE001 — APIError text-parse below
-            msg = str(exc)
-            match = _ALPACA_INVALID_SYMBOL_RE.search(msg)
-            if not match:
-                raise  # not a recoverable invalid-symbol error
+    request = StockBarsRequest(
+        symbol_or_symbols=list(symbols),
+        timeframe=TimeFrame.Day,
+        start=datetime.combine(start, datetime.min.time(), tzinfo=timezone.utc),
+        end=datetime.combine(end, datetime.min.time(), tzinfo=timezone.utc),
+    )
+    try:
+        bars = client.get_stock_bars(request)
+    except Exception as exc:  # noqa: BLE001 — recovery via parse-or-bisect
+        msg = str(exc)
+        match = _ALPACA_INVALID_SYMBOL_RE.search(msg)
+        if match:
             bad = match.group(1).upper()
-            if bad not in remaining:
-                # Alpaca named a symbol we never sent — bail rather than loop.
-                raise
-            remaining.remove(bad)
-            dropped.append(bad)
-            continue
-
-        if dropped:
-            logger.info(
-                "Alpaca dropped invalid symbols from batch: %s (kept %d)",
-                ",".join(dropped),
-                len(remaining),
+            cleaned = [s for s in symbols if s.upper() != bad]
+            if len(cleaned) == len(symbols):
+                # Couldn't actually drop it — fall through to bisection.
+                pass
+            else:
+                logger.debug("Alpaca dropped invalid symbol %s from batch", bad)
+                return _fetch_bars_sync(cleaned, start, end)
+        if len(symbols) <= 1:
+            logger.debug(
+                "Alpaca rejected single symbol %s, dropping: %s",
+                symbols[0] if symbols else "<empty>", msg[:200],
             )
-        df = bars.df  # MultiIndex (symbol, timestamp)
-        if df is None or df.empty:
-            return pd.DataFrame(
-                columns=["symbol", "date", "open", "high", "low", "close", "volume", "vwap"]
-            )
-        df = df.reset_index()
-        df["date"] = pd.to_datetime(df["timestamp"]).dt.date
-        if "vwap" not in df.columns:
-            df["vwap"] = None
-        return df[["symbol", "date", "open", "high", "low", "close", "volume", "vwap"]]
+            return _EMPTY_BARS_DF.copy()
+        mid = len(symbols) // 2
+        left = _fetch_bars_sync(symbols[:mid], start, end)
+        right = _fetch_bars_sync(symbols[mid:], start, end)
+        return pd.concat([left, right], ignore_index=True) if not (left.empty and right.empty) else _EMPTY_BARS_DF.copy()
 
-    logger.warning(
-        "Alpaca batch hit max retries (%d) — dropped %s, giving up on %d symbols",
-        _ALPACA_MAX_RETRIES, ",".join(dropped), len(remaining),
-    )
-    return pd.DataFrame(
-        columns=["symbol", "date", "open", "high", "low", "close", "volume", "vwap"]
-    )
+    df = bars.df  # MultiIndex (symbol, timestamp)
+    if df is None or df.empty:
+        return _EMPTY_BARS_DF.copy()
+    df = df.reset_index()
+    df["date"] = pd.to_datetime(df["timestamp"]).dt.date
+    if "vwap" not in df.columns:
+        df["vwap"] = None
+    return df[["symbol", "date", "open", "high", "low", "close", "volume", "vwap"]]
 
 
 def compute_activity_score(
