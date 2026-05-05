@@ -265,7 +265,7 @@ async def admin_regenerate_recommendations(top_k: int = 10) -> dict[str, Any]:
 
 
 @router.post("/admin/seed-library")
-async def admin_seed_library() -> dict[str, Any]:
+async def admin_seed_library(force: bool = False) -> dict[str, Any]:
     """Backtest the WorldQuant Alpha 101 seed set and insert passers.
 
     Bypasses the slow GP loop so the library has a baseline of known-
@@ -273,7 +273,22 @@ async def admin_seed_library() -> dict[str, Any]:
     seed runs through ``backtest_factor`` (4y panel) and the same
     ``add_factor`` gate the loop uses — so anything inserted here would
     have passed organically too.
+
+    ``force=true`` first deletes existing alpha101_seed rows so a
+    re-run on improved metrics (e.g. after enabling sector/market
+    neutralization) can replace stale entries that ``is_duplicate``
+    would otherwise shadow.
     """
+    if force:
+        from sqlalchemy import delete as _delete
+        async with AsyncSessionLocal() as session:
+            res = await session.execute(
+                _delete(FactorRecord).where(
+                    FactorRecord.metadata_json.like('%"source": "alpha101_seed"%')
+                )
+            )
+            await session.commit()
+            logger.info("seed-library force purge: deleted %d rows", res.rowcount or 0)
     from datetime import date as _date_cls
 
     import numpy as _np
