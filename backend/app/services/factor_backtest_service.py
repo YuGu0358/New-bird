@@ -332,12 +332,24 @@ def compute_metrics(
 # ---------------------------------------------------------------------------
 
 
+_UNIVERSE_MIN_DATES = 5  # if fewer distinct dates of universe coverage in the
+                          # requested range, treat as empty so the caller falls
+                          # back to the full panel rather than masking out
+                          # everything.
+
+
 async def load_universe_panel(start: date, end: date) -> pd.Series:
     """Return a boolean MultiIndex Series (date, symbol) of universe membership.
 
     One round-trip to ``factor_daily_active_universe`` rather than N. Empty
     if no universe rows exist for the range — caller should treat ``None``
     universe mask as "include all symbols".
+
+    Sparse coverage (fewer than ``_UNIVERSE_MIN_DATES`` distinct dates) is
+    also treated as empty: a 2-year backtest with only a single day of
+    universe data would mask away ~99.9% of observations and force every
+    metric to FAILED_FITNESS. On a fresh deploy where ``update_active_universe``
+    has only run for today, that's exactly what happened.
     """
     from sqlalchemy import select
 
@@ -356,6 +368,8 @@ async def load_universe_panel(start: date, end: date) -> pd.Series:
     if not rows:
         return pd.Series(dtype=bool)
     df = pd.DataFrame(rows, columns=["date", "symbol"])
+    if df["date"].nunique() < _UNIVERSE_MIN_DATES:
+        return pd.Series(dtype=bool)
     df["in_universe"] = True
     return df.set_index(["date", "symbol"])["in_universe"].astype(bool)
 
