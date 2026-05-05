@@ -614,12 +614,22 @@ async def get_panel(
             for col in _FUNDAMENTAL_COLS:
                 if col in fund.columns:
                     df[col] = fund[col]
-            # Forward-fill within each symbol so dates without an
-            # explicit fundamentals row inherit the most-recent value.
+            # Forward- AND backward-fill per symbol. ffill propagates the
+            # last seen fundamental value forward to dates after a filing;
+            # bfill extends today's snapshot BACKWARD across the panel
+            # window for symbols that only have a single recent refresh
+            # (otherwise 4y of historical bars would have NaN fundamentals
+            # and compute_metrics would drop everything). V1 simplification
+            # — accurate as long as fundamentals haven't changed materially
+            # over the panel window. The proper fix (Phase 3.2.1) is to
+            # backfill 4y of quarterly filings via Polygon's filing_date
+            # filter and forward-fill from each filing's date.
             df[list(_FUNDAMENTAL_COLS)] = (
                 df[list(_FUNDAMENTAL_COLS)]
                 .groupby(level="symbol")
                 .ffill()
+                .groupby(level="symbol")
+                .bfill()
             )
     except Exception:
         logger.debug("fundamentals join failed; OHLCV-only panel", exc_info=True)
