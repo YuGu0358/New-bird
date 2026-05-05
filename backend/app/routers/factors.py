@@ -214,6 +214,79 @@ async def admin_refresh_data() -> dict[str, str]:
     return {"status": "ok", "message": "daily data refresh complete"}
 
 
+@router.post("/admin/test-backtest")
+async def admin_test_backtest(formula: str | None = None) -> dict[str, Any]:
+    """Run one backtest in-process and return all metric fields.
+
+    Diagnostic only — bypasses the GP loop and subprocess executor so we
+    can see what the evaluator actually produces. ``formula`` defaults
+    to a known-non-trivial Alpha 101 formula. Returns BacktestResult
+    fields plus n_obs, n_days, panel size for triage.
+    """
+    from datetime import date as _date_cls
+
+    from app.services import factor_backtest_service, factor_data_service
+
+    test_formula = formula or "neg(correlation(rank(open),rank(volume),10))"
+    end = _date_cls.today()
+    start = _date_cls(end.year - 2, end.month, min(end.day, 28))
+
+    panel_rows = 0
+    panel_symbols = 0
+    try:
+        panel = await factor_data_service.get_panel(start, end)
+        panel_rows = int(panel.shape[0])
+        panel_symbols = (
+            int(panel.index.get_level_values("symbol").nunique())
+            if not panel.empty else 0
+        )
+    except Exception as exc:  # noqa: BLE001
+        return {
+            "ok": False,
+            "stage": "get_panel",
+            "error": str(exc)[:200],
+            "formula": test_formula,
+        }
+
+    try:
+        result = await factor_backtest_service.backtest_factor(
+            test_formula, start=start, end=end, universe_size=100,
+        )
+    except Exception as exc:  # noqa: BLE001
+        return {
+            "ok": False,
+            "stage": "backtest_factor",
+            "error": str(exc)[:200],
+            "formula": test_formula,
+            "panel_rows": panel_rows,
+            "panel_symbols": panel_symbols,
+        }
+
+    return {
+        "ok": True,
+        "formula": test_formula,
+        "start": start.isoformat(),
+        "end": end.isoformat(),
+        "panel_rows": panel_rows,
+        "panel_symbols": panel_symbols,
+        "fitness": result.fitness,
+        "ic_1d": result.ic_1d,
+        "ic_5d": result.ic_5d,
+        "ic_20d": result.ic_20d,
+        "icir_5d": result.icir_5d,
+        "rank_ic_5d": result.rank_ic_5d,
+        "sharpe": result.sharpe,
+        "sortino": result.sortino,
+        "calmar": result.calmar,
+        "max_drawdown": result.max_drawdown,
+        "turnover": result.turnover,
+        "win_rate": result.win_rate,
+        "n_days": result.n_days,
+        "n_obs": result.n_obs,
+        "return_curve_len": len(result.return_curve or []),
+    }
+
+
 @router.get("/admin/data-status")
 async def admin_data_status() -> dict[str, Any]:
     """Diagnostic snapshot of the underlying-data pipeline state.
