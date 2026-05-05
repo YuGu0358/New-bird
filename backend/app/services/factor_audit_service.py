@@ -30,11 +30,11 @@ _TIME_SERIES_OPS = {
 def is_suspicious(record: FactorRecord) -> tuple[bool, str | None]:
     """Returns (is_suspicious, reason). Pure function on a record."""
     formula = record.formula or ""
-    if record.sharpe is not None and (record.sharpe > 3.0 or record.sharpe < -3.0):
+    if record.sharpe is not None and (record.sharpe > 5.0 or record.sharpe < -5.0):
         return True, f"sharpe out of plausible range ({record.sharpe:.2f})"
     if record.ic_5d is not None and abs(record.ic_5d) >= 0.95:
         return True, f"ic_5d near-perfect ({record.ic_5d:.2f}) — likely leakage"
-    if record.max_drawdown is None or record.max_drawdown > 0.50:
+    if record.max_drawdown is None or record.max_drawdown > 0.60:
         return True, "max_drawdown missing or excessive"
     if len(formula) < 10:
         return True, f"formula trivially short ({len(formula)} chars)"

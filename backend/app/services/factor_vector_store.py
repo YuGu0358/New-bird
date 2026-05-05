@@ -159,17 +159,24 @@ async def add_factor(
         # `NaN <op> x` always returns False in Python, so naive `<=` /
         # `>=` checks on NaN inputs silently pass the gate. Hence the
         # explicit `math.isnan` guards.
+        #
+        # Thresholds calibrated against actual production results on a
+        # 4y × 998-symbol Alpaca panel: most evolved factors land in
+        # |fitness|=0.001-0.02 range, so 0.04 was rejecting 100%. Drop to
+        # 0.02 fitness / 0.012 ic_5d so the library can grow; ranking by
+        # fitness still surfaces the best ones first. Sharpe<5 / max_dd<0.6
+        # widens just enough to keep noisy-but-tradable factors.
         import math
-        if fitness is None or math.isnan(fitness) or abs(fitness) < 0.04:
+        if fitness is None or math.isnan(fitness) or abs(fitness) < 0.02:
             return None
-        if ic_5d is None or math.isnan(ic_5d) or abs(ic_5d) <= 0.025:
+        if ic_5d is None or math.isnan(ic_5d) or abs(ic_5d) <= 0.012:
             return None
-        if sharpe is None or math.isnan(sharpe) or abs(sharpe) >= 8.0:
+        if sharpe is None or math.isnan(sharpe) or abs(sharpe) >= 5.0:
             return None
         if (
             max_drawdown is None
             or math.isnan(max_drawdown)
-            or max_drawdown >= 0.50
+            or max_drawdown >= 0.60
         ):
             return None
         if n_obs is not None and n_obs <= 5000:

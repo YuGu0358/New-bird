@@ -543,7 +543,7 @@ async def _run_one_generation(
         stays where it belongs.
     """
     end = end or date.today()
-    start = date(end.year - 2, end.month, min(end.day, 28))
+    start = date(end.year - 4, end.month, min(end.day, 28))
 
     # Predictor pre-filter on MAIN process (no GIL contention with
     # subprocess; saves the cost of shipping the LightGBM model across
@@ -739,7 +739,7 @@ async def _promote_trajectories(generation: int) -> int:
         return 0
 
     end = date.today()
-    start = date(end.year - 2, end.month, min(end.day, 28))
+    start = date(end.year - 4, end.month, min(end.day, 28))
 
     candidates = await quanta.list_unscored_trajectories(limit=_PROMOTE_BATCH_SIZE)
     promoted = 0

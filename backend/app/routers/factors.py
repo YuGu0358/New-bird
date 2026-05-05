@@ -229,7 +229,7 @@ async def admin_test_backtest(formula: str | None = None) -> dict[str, Any]:
 
     test_formula = formula or "neg(correlation(rank(open),rank(volume),10))"
     end = _date_cls.today()
-    start = _date_cls(end.year - 2, end.month, min(end.day, 28))
+    start = _date_cls(end.year - 4, end.month, min(end.day, 28))
 
     panel_rows = 0
     panel_symbols = 0
