@@ -154,29 +154,30 @@ async def add_factor(
     Auto-quarantine (still persist, but flag) handled by factor_audit_service.
     """
     if enforce_gate:
-        # NaN-safe rejects: any NaN or None in the metrics means the
-        # backtest failed (empty data, divide-by-zero, etc.) — drop it.
-        # `NaN <op> x` always returns False in Python, so naive `<=` /
-        # `>=` checks on NaN inputs silently pass the gate. Hence the
-        # explicit `math.isnan` guards.
+        # IC-primary gate, calibrated against real Alpaca panel results:
+        # WorldQuant Alpha 101 seeds on 4y × 998-symbol Alpaca produce
+        # |fitness|=0.001-0.008, |ic_5d|=0.0001-0.008. Sharpe and MDD
+        # are noisy — long-short portfolios with thin tails routinely
+        # produce sharpe=None and MDD>1 even on factors with real IC.
         #
-        # Thresholds calibrated against actual production results on a
-        # 4y × 998-symbol Alpaca panel: most evolved factors land in
-        # |fitness|=0.001-0.02 range, so 0.04 was rejecting 100%. Drop to
-        # 0.02 fitness / 0.012 ic_5d so the library can grow; ranking by
-        # fitness still surfaces the best ones first. Sharpe<5 / max_dd<0.6
-        # widens just enough to keep noisy-but-tradable factors.
+        # Strategy:
+        # - Gate STRICTLY on IC magnitude (the academic standard).
+        # - Treat sharpe/mdd as soft filters: reject only when present
+        #   AND clearly broken (sharpe ≥ 5 = leakage; mdd ≥ 1.5 = wild
+        #   PnL, but mdd 0.6-1.0 is just a noisy long-short).
+        # - NaN ic_5d / NaN fitness still hard-rejects (FAILED_FITNESS).
         import math
-        if fitness is None or math.isnan(fitness) or abs(fitness) < 0.02:
+        if fitness is None or math.isnan(fitness) or abs(fitness) < 0.005:
             return None
-        if ic_5d is None or math.isnan(ic_5d) or abs(ic_5d) <= 0.012:
+        if ic_5d is None or math.isnan(ic_5d) or abs(ic_5d) <= 0.005:
             return None
-        if sharpe is None or math.isnan(sharpe) or abs(sharpe) >= 5.0:
+        # Sharpe / MDD: present-and-broken rejects only.
+        if sharpe is not None and not math.isnan(sharpe) and abs(sharpe) >= 5.0:
             return None
         if (
-            max_drawdown is None
-            or math.isnan(max_drawdown)
-            or max_drawdown >= 0.60
+            max_drawdown is not None
+            and not math.isnan(max_drawdown)
+            and max_drawdown >= 1.5
         ):
             return None
         if n_obs is not None and n_obs <= 5000:
