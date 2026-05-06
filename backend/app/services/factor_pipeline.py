@@ -792,6 +792,8 @@ async def _promote_trajectories(generation: int) -> int:
             await quanta.update_trajectory_metrics(
                 c["id"], failure_reason=str(exc)[:200]
             )
+    if promoted:
+        await bump_active_run_persisted(promoted)
     return promoted
 
 
@@ -1012,6 +1014,75 @@ async def _record_run_progress(
             await session.commit()
     except Exception:
         logger.debug("failed to update FactorEvolutionRun progress", exc_info=True)
+
+
+async def resume_loop_if_orphaned() -> str:
+    """Container-restart-safe loop resume.
+
+    The continuous loop runs as an asyncio task, which dies cleanly on
+    container restart but leaves any in-flight FactorEvolutionRun row
+    stuck at status='running' with completed_at=NULL. On boot we:
+
+    1. Close all dangling runs as ``status='interrupted'`` so the UI
+       reflects what really happened.
+    2. Auto-start a fresh loop session unless ``FACTOR_EVOLUTION_AUTOSTART``
+       is explicitly false (the cost-control default is false on Railway,
+       but once the user has explicitly started a session we want the
+       container restart to keep the work going).
+
+    Returns a short status string for the boot log.
+    """
+    import os  # noqa: PLC0415
+
+    from sqlalchemy import update as _update  # noqa: PLC0415
+
+    closed = 0
+    try:
+        async with AsyncSessionLocal() as session:
+            res = await session.execute(
+                _update(FactorEvolutionRun)
+                .where(
+                    FactorEvolutionRun.status == "running",
+                    FactorEvolutionRun.completed_at.is_(None),
+                )
+                .values(
+                    status="interrupted",
+                    completed_at=datetime.now(timezone.utc),
+                    error="container restarted before stop_loop ran",
+                )
+            )
+            await session.commit()
+            closed = int(res.rowcount or 0)
+    except Exception:
+        logger.warning(
+            "could not close orphaned FactorEvolutionRun rows", exc_info=True
+        )
+
+    autostart = os.environ.get("FACTOR_EVOLUTION_AUTOSTART", "").strip().lower()
+    # Resume by default IFF there were orphaned runs (= the loop was
+    # explicitly started before the container died). When the user has
+    # never started the loop, we honour the env default and stay quiet.
+    should_resume = autostart in {"1", "true", "yes"} or closed > 0
+    if should_resume:
+        msg = await start_loop()
+        return f"closed {closed} orphaned run(s); loop {msg}"
+    return f"closed {closed} orphaned run(s); loop NOT auto-started"
+
+
+async def bump_active_run_persisted(n: int) -> None:
+    """Add ``n`` to the active run's total_persisted, no-op if no run.
+
+    Used by admin endpoints (seed-library, refresh-fundamentals) and by
+    the trajectory-promotion path so factors landed outside the GP loop
+    still count toward the active run's persisted total. Best-effort —
+    failures are swallowed so the calling endpoint's main work commits
+    even if this bookkeeping write fails.
+    """
+    if _active_run_id is None or n <= 0:
+        return
+    await _record_run_progress(
+        _active_run_id, generation_best=None, persisted_inc=int(n)
+    )
 
 
 async def _finalize_evolution_run(

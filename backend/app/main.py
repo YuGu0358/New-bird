@@ -93,6 +93,14 @@ async def lifespan(app: FastAPI):
     try:
         from app.services import factor_pipeline as ff_pipeline
         await ff_pipeline.schedule_default_jobs()
+        # Container-restart-safe: close orphaned FactorEvolutionRun rows and
+        # auto-resume the loop if it was previously running. Cost-control
+        # defaults still apply when no orphan exists.
+        msg = await ff_pipeline.resume_loop_if_orphaned()
+        import logging
+        logging.getLogger(__name__).info(
+            "[FactorForge] startup resume: %s", msg
+        )
     except Exception:
         import logging
         logging.getLogger(__name__).exception(

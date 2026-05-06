@@ -475,6 +475,9 @@ async def admin_seed_library(force: bool = False) -> dict[str, Any]:
                 "sharpe": r.sharpe, "max_drawdown": r.max_drawdown,
             })
 
+    if inserted:
+        await factor_pipeline.bump_active_run_persisted(inserted)
+
     return {
         "attempted": attempted,
         "inserted": inserted,
