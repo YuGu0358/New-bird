@@ -302,6 +302,47 @@ async def admin_sample_fundamentals(limit: int = 5) -> dict[str, Any]:
     }
 
 
+@router.post("/admin/refresh-quarterly-history")
+async def admin_refresh_quarterly_history(
+    top_n: int = 100, lookback_years: int = 4
+) -> dict[str, Any]:
+    """One-shot Phase 3.2.1 backfill — pulls 4y of quarterly fundamentals
+    per symbol from yfinance and writes one row per filing date. Replaces
+    the latest-snapshot approximation with proper as-of-join data.
+
+    Slow (~5-10 min for 100 symbols) so call once after deploy, not on
+    every cron tick. After this lands, the daily refresh keeps adding
+    one new row per filing as it appears.
+    """
+    from app.services import factor_fundamentals_service
+
+    async with AsyncSessionLocal() as session:
+        most_recent_universe_date = (
+            await session.execute(
+                select(DailyActiveUniverse.date)
+                .order_by(desc(DailyActiveUniverse.date))
+                .limit(1)
+            )
+        ).scalar()
+        if most_recent_universe_date is None:
+            return {"error": "no active universe"}
+        rows = (
+            await session.execute(
+                select(DailyActiveUniverse)
+                .where(DailyActiveUniverse.date == most_recent_universe_date)
+                .order_by(DailyActiveUniverse.rank)
+                .limit(top_n)
+            )
+        ).scalars().all()
+    symbols = [r.symbol for r in rows]
+    if not symbols:
+        return {"error": "no symbols"}
+    result = await factor_fundamentals_service.refresh_quarterly_history(
+        symbols, lookback_years=lookback_years
+    )
+    return result
+
+
 @router.post("/admin/refresh-fundamentals")
 async def admin_refresh_fundamentals(top_n: int = 100) -> dict[str, Any]:
     """Refresh fundamentals from Polygon for the active universe.

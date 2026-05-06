@@ -603,20 +603,18 @@ async def get_panel(
     )
     df = df.set_index(["date", "symbol"]).sort_index()
 
-    # Left-join fundamentals by SYMBOL ONLY (not by (date, symbol)).
+    # As-of join fundamentals onto the daily panel (Phase 3.2.1).
     #
-    # The fundamentals refresh writes one row per symbol at
-    # ``date = datetime.now(utc).date()``. The panel's max date is the
-    # latest available BAR (≤ today), so a (date, symbol) merge produces
-    # zero matches when the fundamentals snapshot is "newer" than the
-    # bars — leaving the entire fundamentals slice NaN.
+    # factor_daily_fundamentals stores one row per (symbol, filing_date)
+    # — typically 16 rows per symbol over 4y. We want each panel
+    # (date, symbol) cell to inherit the most-recent fundamental row for
+    # that symbol with filing_date <= panel_date. Standard "as-of" join.
     #
-    # V1 simplification: take the most-recent fundamental value per
-    # symbol from any date in the requested window, then broadcast it
-    # across every panel date for that symbol. Accurate as long as the
-    # fundamentals haven't materially shifted over the lookback. Phase
-    # 3.2.1 follow-up will backfill 4y of quarterly filings and
-    # forward-fill per filing date.
+    # Implementation: outer-merge fund into panel by index, then ffill
+    # within each symbol so quarter values propagate forward through
+    # the daily rows that fall between filings. Backward-fill the very
+    # first quarter so panel rows before the earliest filing aren't
+    # NaN (small lookback bias acceptable in V1).
     try:
         from app.services import factor_fundamentals_service as _ff
 
@@ -624,12 +622,21 @@ async def get_panel(
             start, end, list(df.index.get_level_values("symbol").unique())
         )
         if not fund_panel.empty:
-            # Most-recent value per symbol across whatever dates we have.
-            fund_latest = fund_panel.groupby(level="symbol").last()
-            symbol_idx = df.index.get_level_values("symbol")
-            for col in _FUNDAMENTAL_COLS:
-                if col in fund_latest.columns:
-                    df[col] = symbol_idx.map(fund_latest[col].to_dict()).astype(float)
+            cols_present = [c for c in _FUNDAMENTAL_COLS if c in fund_panel.columns]
+            if cols_present:
+                # Reindex fund_panel to df.index — non-matching rows
+                # become NaN, matching ones carry quarterly values.
+                aligned = fund_panel[cols_present].reindex(df.index)
+                # Forward-fill within symbol: each daily row inherits
+                # the most-recent quarter's values until next filing.
+                ffilled = aligned.groupby(level="symbol").ffill()
+                # Backward-fill the leading edge per symbol so panel
+                # dates before the earliest stored quarter still get a
+                # value (use earliest known quarter as proxy — small
+                # backward-bias on 4y panels).
+                ffilled = ffilled.groupby(level="symbol").bfill()
+                for col in cols_present:
+                    df[col] = ffilled[col]
     except Exception:
         logger.debug("fundamentals join failed; OHLCV-only panel", exc_info=True)
 
