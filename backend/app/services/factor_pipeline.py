@@ -1090,6 +1090,16 @@ async def daily_data_refresh() -> None:
         await factor_data_service.update_active_universe(today)
         symbols = await factor_data_service.get_active_universe(today, top_n=_NEWS_TOP_N)
         await factor_meta_service.refresh_symbol_meta(symbols)
+        # Fundamentals snapshot for the active universe — yfinance, ~3min.
+        # Tolerant of failure so the rest of the refresh still runs.
+        try:
+            from app.services import factor_fundamentals_service as _ff
+            await _ff.refresh_fundamentals(symbols)
+            logger.info(
+                "[FactorForge] fundamentals refreshed for %d symbols", len(symbols)
+            )
+        except Exception:
+            logger.warning("fundamentals refresh failed", exc_info=True)
         await factor_news_service.update_news_features(symbols, today)
         await factor_fitness_predictor.train_from_library(
             min_records=_PREDICTOR_MIN_RECORDS

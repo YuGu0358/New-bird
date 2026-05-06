@@ -422,7 +422,17 @@ async def _persist_recommendations(
 async def get_today_recommendations(
     target_date: date_cls | None = None,
 ) -> list[dict[str, Any]]:
-    """Read persisted recommendations for ``target_date`` (default UTC today)."""
+    """Read persisted recommendations for ``target_date`` (default UTC today).
+
+    Falls back to the most-recent stored date ≤ target when the exact
+    date has no rows. The generator persists at ``_resolve_universe``'s
+    fallback date (= most-recent bar), which can be 1-2 days behind
+    UTC today on weekends or pre-market on a fresh day; without this
+    fallback the API would return empty even right after a successful
+    regen.
+    """
+    from sqlalchemy import func as _func
+
     today = target_date or datetime.now(timezone.utc).date()
     async with AsyncSessionLocal() as session:
         rows = (
@@ -434,6 +444,26 @@ async def get_today_recommendations(
                 )
             )
         ).scalars().all()
+        if not rows:
+            most_recent = (
+                await session.execute(
+                    select(_func.max(DailyRecommendation.date)).where(
+                        DailyRecommendation.date <= today
+                    )
+                )
+            ).scalar()
+            if most_recent is not None:
+                today = most_recent
+                rows = (
+                    await session.execute(
+                        select(DailyRecommendation)
+                        .where(DailyRecommendation.date == today)
+                        .order_by(
+                            DailyRecommendation.action.desc(),
+                            DailyRecommendation.rank,
+                        )
+                    )
+                ).scalars().all()
     return [
         {
             "date": r.date.isoformat(),
