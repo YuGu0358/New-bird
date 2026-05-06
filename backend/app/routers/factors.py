@@ -7,6 +7,7 @@ binds directly to the response shapes defined here.
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 from datetime import date as date_cls
 from typing import Any
@@ -426,31 +427,155 @@ async def admin_regenerate_recommendations(top_k: int = 10) -> dict[str, Any]:
     return {"generated": len(rows or []), "top_k": top_k}
 
 
+_seed_library_state: dict[str, Any] = {
+    "running": False,
+    "started_at": None,
+    "completed_at": None,
+    "attempted": 0,
+    "inserted": 0,
+    "rejected": 0,
+    "failed": 0,
+    "details": [],
+    "error": None,
+}
+
+
+async def _run_seed_library(force: bool) -> None:
+    """Background runner — populates _seed_library_state as it goes."""
+    from datetime import date as _date_cls
+    from datetime import datetime as _dt
+    from datetime import timezone as _tz
+
+    import numpy as _np
+
+    from app.services import factor_backtest_service
+    from app.services import factor_pipeline as _ff_pipeline
+    from core.factors.seeds import get_seed_population
+    from core.factors.ast import serialize as _serialize
+
+    state = _seed_library_state
+    state.update(
+        running=True,
+        started_at=_dt.now(_tz.utc).isoformat(),
+        completed_at=None,
+        attempted=0,
+        inserted=0,
+        rejected=0,
+        failed=0,
+        details=[],
+        error=None,
+    )
+
+    try:
+        if force:
+            from sqlalchemy import delete as _delete
+            async with AsyncSessionLocal() as session:
+                res = await session.execute(
+                    _delete(FactorRecord).where(
+                        FactorRecord.metadata_json.like(
+                            '%"source": "alpha101_seed"%'
+                        )
+                    )
+                )
+                await session.commit()
+                logger.info(
+                    "seed-library force purge: deleted %d rows", res.rowcount or 0
+                )
+
+        seeds = list(get_seed_population())
+        end = _date_cls.today()
+        start = _date_cls(end.year - 4, end.month, min(end.day, 28))
+
+        for node in seeds:
+            state["attempted"] += 1
+            formula = _serialize(node)
+            try:
+                r = await factor_backtest_service.backtest_factor(
+                    formula, start=start, end=end, universe_size=100,
+                )
+            except Exception as exc:  # noqa: BLE001
+                state["failed"] += 1
+                state["details"].append(
+                    {"formula": formula[:80], "outcome": f"backtest_error: {str(exc)[:60]}"}
+                )
+                continue
+
+            return_curve = list(r.return_curve or [])
+            return_emb = (
+                factor_vector_store.embed_return_series(
+                    _np.asarray(return_curve, dtype=_np.float32)
+                )
+                if return_curve else None
+            )
+            row_id = await factor_vector_store.add_factor(
+                formula,
+                fitness=float(r.fitness) if r.fitness is not None else 0.0,
+                ic_1d=r.ic_1d, ic_5d=r.ic_5d, ic_20d=r.ic_20d,
+                icir=r.icir_5d, sharpe=r.sharpe,
+                max_drawdown=r.max_drawdown, turnover=r.turnover,
+                n_obs=r.n_obs, return_embedding=return_emb,
+                generation=0,
+                metadata={"source": "alpha101_seed"},
+            )
+            if row_id is None:
+                state["rejected"] += 1
+                state["details"].append({
+                    "formula": formula[:80],
+                    "outcome": "rejected_by_gate",
+                    "fitness": r.fitness, "ic_5d": r.ic_5d,
+                    "sharpe": r.sharpe, "max_drawdown": r.max_drawdown,
+                })
+            else:
+                state["inserted"] += 1
+                state["details"].append({
+                    "formula": formula[:80],
+                    "outcome": "inserted",
+                    "row_id": row_id,
+                    "fitness": r.fitness, "ic_5d": r.ic_5d,
+                    "sharpe": r.sharpe, "max_drawdown": r.max_drawdown,
+                })
+
+        if state["inserted"]:
+            await _ff_pipeline.bump_active_run_persisted(state["inserted"])
+    except Exception as exc:
+        state["error"] = str(exc)[:500]
+        logger.exception("seed-library background runner crashed")
+    finally:
+        state["running"] = False
+        state["completed_at"] = _dt.now(_tz.utc).isoformat()
+
+
 @router.post("/admin/seed-library")
 async def admin_seed_library(force: bool = False) -> dict[str, Any]:
     """Backtest the WorldQuant Alpha 101 seed set and insert passers.
 
-    Bypasses the slow GP loop so the library has a baseline of known-
-    good factors without waiting for evolution to discover them. Each
-    seed runs through ``backtest_factor`` (4y panel) and the same
-    ``add_factor`` gate the loop uses — so anything inserted here would
-    have passed organically too.
+    **Fires asynchronously** — returns immediately with a ``started``
+    status. Poll ``/admin/seed-library/status`` for progress. The
+    backtest loop processes ~28 seeds at ~15s each on the as-of-joined
+    panel, so a full run takes 5-7 min — well past Railway's HTTP
+    proxy idle timeout, hence the background task.
 
     ``force=true`` first deletes existing alpha101_seed rows so a
-    re-run on improved metrics (e.g. after enabling sector/market
-    neutralization) can replace stale entries that ``is_duplicate``
-    would otherwise shadow.
+    re-run on improved metrics replaces stale entries that
+    ``is_duplicate`` would otherwise shadow.
     """
-    if force:
-        from sqlalchemy import delete as _delete
-        async with AsyncSessionLocal() as session:
-            res = await session.execute(
-                _delete(FactorRecord).where(
-                    FactorRecord.metadata_json.like('%"source": "alpha101_seed"%')
-                )
-            )
-            await session.commit()
-            logger.info("seed-library force purge: deleted %d rows", res.rowcount or 0)
+    if _seed_library_state["running"]:
+        return {"status": "already_running", "state": _seed_library_state}
+    asyncio.create_task(_run_seed_library(force))
+    return {"status": "started", "force": force, "poll": "/admin/seed-library/status"}
+
+
+@router.get("/admin/seed-library/status")
+async def admin_seed_library_status() -> dict[str, Any]:
+    """Snapshot of the latest (or in-flight) seed-library run."""
+    return dict(_seed_library_state)
+
+
+@router.post("/admin/seed-library-OLD-SYNC")
+async def _admin_seed_library_sync(force: bool = False) -> dict[str, Any]:
+    """Legacy synchronous entry; left in place for tests / one-shots
+    where the caller has time and Railway-proxy issues aren't a concern.
+    Production callers should use the async POST /admin/seed-library."""
     from datetime import date as _date_cls
 
     import numpy as _np
@@ -458,6 +583,16 @@ async def admin_seed_library(force: bool = False) -> dict[str, Any]:
     from app.services import factor_backtest_service
     from core.factors.seeds import get_seed_population
     from core.factors.ast import serialize as _serialize
+
+    if force:
+        from sqlalchemy import delete as _delete
+        async with AsyncSessionLocal() as session:
+            await session.execute(
+                _delete(FactorRecord).where(
+                    FactorRecord.metadata_json.like('%"source": "alpha101_seed"%')
+                )
+            )
+            await session.commit()
 
     seeds = list(get_seed_population())
     end = _date_cls.today()
