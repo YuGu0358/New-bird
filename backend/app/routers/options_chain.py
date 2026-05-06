@@ -17,9 +17,12 @@ from app.models.options_chain import (
     OIFloatResponse,
     SqueezeScoreResponse,
     StructureReadResponse,
+    StructureSnapshotsResponse,
+    StructureSnapshotView,
+    StructureTrackRecordResponse,
     WallClustersResponse,
 )
-from app.services import options_chain_service
+from app.services import options_chain_service, structure_track_record_service
 
 router = APIRouter(prefix="/api/options-chain", tags=["options-chain"])
 
@@ -191,3 +194,78 @@ async def get_expiry_focus(
             detail=f"No contracts found for {ticker.upper()} expiry {expiry}",
         )
     return ExpiryFocusResponse(**payload)
+
+
+# --- Structure-read thesis tracker ---------------------------------------
+
+
+@router.post(
+    "/{ticker}/structure/capture",
+    response_model=StructureSnapshotView,
+)
+async def capture_structure_snapshot(
+    ticker: str, horizon_days: int = 5
+) -> StructureSnapshotView:
+    """Persist today's structure-read so its thesis can be scored after
+    ``horizon_days`` trading days. Idempotent on (capture_date, ticker,
+    horizon_days) — first call of the day wins.
+    """
+    if horizon_days <= 0 or horizon_days > 30:
+        raise HTTPException(
+            status_code=400, detail="horizon_days must be in (0, 30]"
+        )
+    try:
+        row = await structure_track_record_service.capture_snapshot(
+            ticker, horizon_days=horizon_days
+        )
+    except Exception as exc:
+        raise service_error(exc) from exc
+    if row is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Structure read unavailable for {ticker.upper()}",
+        )
+    return StructureSnapshotView.model_validate(row)
+
+
+@router.post("/track-record/evaluate")
+async def evaluate_pending_snapshots(max_rows: int = 200) -> dict[str, int]:
+    """Score any snapshots whose horizon has passed but were still
+    ``pending``. Safe to call repeatedly — only touches pending rows."""
+    capped = max(1, min(max_rows, 1000))
+    try:
+        return await structure_track_record_service.evaluate_pending(
+            max_rows=capped
+        )
+    except Exception as exc:
+        raise service_error(exc) from exc
+
+
+@router.get(
+    "/track-record",
+    response_model=StructureTrackRecordResponse,
+)
+async def get_track_record(
+    horizon_days: int | None = None,
+) -> StructureTrackRecordResponse:
+    """Aggregated hit-rate per pattern. Pass ``horizon_days`` to filter."""
+    payload = await structure_track_record_service.aggregate_track_record(
+        horizon_days=horizon_days
+    )
+    return StructureTrackRecordResponse(**payload)
+
+
+@router.get(
+    "/track-record/snapshots",
+    response_model=StructureSnapshotsResponse,
+)
+async def list_track_record_snapshots(
+    ticker: str | None = None, limit: int = 100
+) -> StructureSnapshotsResponse:
+    """Recent snapshots — most recent first. Filter by ticker if given."""
+    items = await structure_track_record_service.list_recent_snapshots(
+        ticker=ticker, limit=limit
+    )
+    return StructureSnapshotsResponse(
+        items=[StructureSnapshotView.model_validate(it) for it in items]
+    )

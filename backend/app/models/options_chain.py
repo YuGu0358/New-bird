@@ -207,3 +207,53 @@ class IVSurfaceResponse(BaseModel):
     strikes: list[float]
     as_of: date
     generated_at: datetime
+
+
+# --- Structure-read thesis tracker ---------------------------------------
+
+
+class StructureSnapshotView(BaseModel):
+    capture_date: str
+    ticker: str
+    horizon_days: int
+    captured_at: Optional[str] = None
+    pattern: str
+    winning_player: str
+    confidence: int
+    signals_fired: list[str]
+    spot_at_capture: float
+    call_wall: Optional[float] = None
+    put_wall: Optional[float] = None
+    max_pain: Optional[float] = None
+    expected_move_pct: Optional[float] = None
+    horizon_end_date: str
+    outcome_status: str
+    realized_close: Optional[float] = None
+    realized_high: Optional[float] = None
+    realized_low: Optional[float] = None
+    realized_move_pct: Optional[float] = None
+    outcome_metric: Optional[dict[str, Any]] = None
+    evaluated_at: Optional[str] = None
+
+
+class StructureSnapshotsResponse(BaseModel):
+    items: list[StructureSnapshotView]
+
+
+class StructureTrackRecordItem(BaseModel):
+    pattern: str
+    total_snapshots: int
+    evaluated: int
+    hits: int
+    misses: int
+    pending: int
+    no_edge: int
+    unevaluable: int
+    hit_rate: Optional[float] = None
+    confidence_weighted_hit_rate: Optional[float] = None
+
+
+class StructureTrackRecordResponse(BaseModel):
+    horizon_days: Optional[int] = None
+    items: list[StructureTrackRecordItem]
+    generated_at: str

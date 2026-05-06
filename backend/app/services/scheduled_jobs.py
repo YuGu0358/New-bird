@@ -30,6 +30,7 @@ from app.services import (
     sector_rotation_service,
     social_polling_service,
     social_signal_service,
+    structure_track_record_service,
 )
 
 logger = logging.getLogger(__name__)
@@ -111,6 +112,19 @@ async def _options_chain_sync() -> None:
             )
 
 
+async def _structure_track_record_evaluate() -> None:
+    """Score any options-structure snapshots whose horizon has passed."""
+    try:
+        result = await structure_track_record_service.evaluate_pending(
+            max_rows=200
+        )
+        logger.info(
+            "structure_track_record_evaluate: %s", result
+        )
+    except Exception:
+        logger.exception("structure_track_record_evaluate failed")
+
+
 async def _position_sync() -> None:
     """5-min IBKR position snapshot pass.
 
@@ -173,4 +187,11 @@ def register_default_jobs() -> None:
         "position_sync",
         _position_sync,
         IntervalTrigger(seconds=POSITION_SYNC_INTERVAL_SECONDS),
+    )
+    app_scheduler.register_job(
+        "structure_track_record_evaluate",
+        _structure_track_record_evaluate,
+        # Daily at 22:30 UTC (~ after-hours US close); evaluates any
+        # snapshots whose horizon_end_date has arrived.
+        CronTrigger(hour=22, minute=30),
     )
