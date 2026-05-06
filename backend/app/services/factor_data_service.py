@@ -603,34 +603,33 @@ async def get_panel(
     )
     df = df.set_index(["date", "symbol"]).sort_index()
 
-    # Left-join fundamentals — soft-fail to OHLCV-only if loader errors.
+    # Left-join fundamentals by SYMBOL ONLY (not by (date, symbol)).
+    #
+    # The fundamentals refresh writes one row per symbol at
+    # ``date = datetime.now(utc).date()``. The panel's max date is the
+    # latest available BAR (≤ today), so a (date, symbol) merge produces
+    # zero matches when the fundamentals snapshot is "newer" than the
+    # bars — leaving the entire fundamentals slice NaN.
+    #
+    # V1 simplification: take the most-recent fundamental value per
+    # symbol from any date in the requested window, then broadcast it
+    # across every panel date for that symbol. Accurate as long as the
+    # fundamentals haven't materially shifted over the lookback. Phase
+    # 3.2.1 follow-up will backfill 4y of quarterly filings and
+    # forward-fill per filing date.
     try:
         from app.services import factor_fundamentals_service as _ff
 
-        fund = await _ff.get_fundamentals_panel(
+        fund_panel = await _ff.get_fundamentals_panel(
             start, end, list(df.index.get_level_values("symbol").unique())
         )
-        if not fund.empty:
+        if not fund_panel.empty:
+            # Most-recent value per symbol across whatever dates we have.
+            fund_latest = fund_panel.groupby(level="symbol").last()
+            symbol_idx = df.index.get_level_values("symbol")
             for col in _FUNDAMENTAL_COLS:
-                if col in fund.columns:
-                    df[col] = fund[col]
-            # Forward- AND backward-fill per symbol. ffill propagates the
-            # last seen fundamental value forward to dates after a filing;
-            # bfill extends today's snapshot BACKWARD across the panel
-            # window for symbols that only have a single recent refresh
-            # (otherwise 4y of historical bars would have NaN fundamentals
-            # and compute_metrics would drop everything). V1 simplification
-            # — accurate as long as fundamentals haven't changed materially
-            # over the panel window. The proper fix (Phase 3.2.1) is to
-            # backfill 4y of quarterly filings via Polygon's filing_date
-            # filter and forward-fill from each filing's date.
-            df[list(_FUNDAMENTAL_COLS)] = (
-                df[list(_FUNDAMENTAL_COLS)]
-                .groupby(level="symbol")
-                .ffill()
-                .groupby(level="symbol")
-                .bfill()
-            )
+                if col in fund_latest.columns:
+                    df[col] = symbol_idx.map(fund_latest[col].to_dict()).astype(float)
     except Exception:
         logger.debug("fundamentals join failed; OHLCV-only panel", exc_info=True)
 
