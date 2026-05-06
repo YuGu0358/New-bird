@@ -214,6 +214,32 @@ async def admin_refresh_data() -> dict[str, str]:
     return {"status": "ok", "message": "daily data refresh complete"}
 
 
+@router.get("/admin/panel-columns")
+async def admin_panel_columns() -> dict[str, Any]:
+    """Diagnostic — what columns does get_panel actually expose, and how
+    many non-null cells per fundamentals column?
+
+    For pb_ratio/roe returning n_obs=0 vs eps_ttm/market_cap working.
+    """
+    from datetime import date as _date_cls
+
+    from app.services import factor_data_service
+
+    end = _date_cls.today()
+    start = _date_cls(end.year - 4, end.month, min(end.day, 28))
+    panel = await factor_data_service.get_panel(start, end)
+    if panel.empty:
+        return {"empty": True}
+    cols_info = {}
+    for col in panel.columns:
+        cells = int(panel[col].notna().sum())
+        cols_info[col] = {"non_null": cells, "total": int(panel.shape[0])}
+    return {
+        "shape": list(panel.shape),
+        "columns": cols_info,
+    }
+
+
 @router.get("/admin/sample-fundamentals")
 async def admin_sample_fundamentals(limit: int = 5) -> dict[str, Any]:
     """Dump a sample of factor_daily_fundamentals rows + null counts.
