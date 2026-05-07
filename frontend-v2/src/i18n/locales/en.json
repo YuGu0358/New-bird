@@ -804,5 +804,69 @@
     "title": "Factor Forge",
     "universe": "Active universe",
     "runs": "Runs"
+  },
+  "research": {
+    "title": "Research",
+    "subtitle": "Sector analysis, peer comps, earnings reviews, and SEC filings",
+    "tabs": {
+      "market": "Market",
+      "earnings": "Earnings",
+      "comps": "Comps",
+      "dcf": "DCF",
+      "filings": "Filings",
+      "history": "History"
+    },
+    "market": {
+      "sectorPlaceholder": "Sector (e.g. semiconductors)",
+      "themePlaceholder": "Optional theme (e.g. AI accelerators)",
+      "peerCountLabel": "Peer count",
+      "submit": "Run market research",
+      "industryOverview": "Industry overview",
+      "keyDrivers": "Key drivers",
+      "competitiveLandscape": "Competitive landscape",
+      "peerComps": "Peer comps",
+      "ideasShortlist": "Ideas shortlist",
+      "keyRisks": "Key risks",
+      "sectorThesis": "Sector thesis"
+    },
+    "earnings": {
+      "symbolPlaceholder": "Symbol (e.g. AAPL)",
+      "submit": "Run earnings review",
+      "period": "Period",
+      "variance": "Variance vs. consensus / prior",
+      "guidance": "Guidance changes",
+      "filings": "Filing highlights",
+      "note": "Note draft",
+      "takeaways": "Key takeaways",
+      "followUps": "Follow-ups"
+    },
+    "comps": {
+      "submit": "Build comps",
+      "median": "Median"
+    },
+    "dcf": {
+      "submit": "Run DCF"
+    },
+    "filings": {
+      "limitLabel": "Limit",
+      "formTypesLabel": "Form types",
+      "submit": "Load filings",
+      "configureUserAgent": "Set SEC_EDGAR_USER_AGENT in Settings to enable EDGAR fetches."
+    },
+    "loading": "Loading...",
+    "noData": "No data yet. Submit the form to fetch research.",
+    "history": {
+      "filterKind": "Kind",
+      "filterKindAll": "All",
+      "filterSubject": "Subject",
+      "filterLimit": "Limit",
+      "refresh": "Refresh",
+      "view": "View",
+      "viewClose": "Close",
+      "empty": "No saved research yet — run a research from another tab and it'll appear here.",
+      "tokensIn": "in",
+      "tokensOut": "out",
+      "modelId": "Model"
+    }
   }
 }
