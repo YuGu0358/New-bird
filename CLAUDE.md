@@ -108,3 +108,28 @@ User-uploaded strategies are sandboxed via `core/code_loader` and re-registered 
 ## Required runtime keys
 
 For a fully functional dashboard: `ALPACA_API_KEY`, `ALPACA_SECRET_KEY`, `POLYGON_API_KEY`, `TAVILY_API_KEY`. Optional: `OPENAI_API_KEY` (AI candidate selection + Chinese digest), `X_BEARER_TOKEN` (social search), `SETTINGS_ADMIN_TOKEN` (gate the runtime settings UI on shared deploys).
+
+For the SEC EDGAR research integration: `SEC_EDGAR_USER_AGENT` (required by the SEC; format `"<name> <email>"`) — set via the in-app runtime settings UI. `SEC_EDGAR_ENABLED` defaults to true.
+
+## Plugins (dev-time, Claude Code)
+
+The `feat/financial-services-integration` branch installs four Claude Code plugins from `anthropics/financial-services` (marketplace alias `claude-for-financial-services`):
+
+- `financial-analysis@claude-for-financial-services` — foundational skills (`comps-analysis`, `dcf-model`, `3-statement-model`, `xlsx-author`, `pptx-author`, `clean-data-xls`, etc.) and `/comps`, `/dcf`, `/3-statement-model`, `/lbo`, `/competitive-analysis` slash commands.
+- `equity-research@claude-for-financial-services` — `/earnings`, `/earnings-preview`, `/initiate`, `/model-update`, `/morning-note`, `/catalysts`, `/sector`, `/thesis`, `/screen` and the matching skill bundles.
+- `market-researcher@claude-for-financial-services` — sector/theme research agent (industry overview → peer comps → ideas shortlist).
+- `earnings-reviewer@claude-for-financial-services` — post-earnings update agent (filings + transcripts → variance + note draft).
+
+These plugins are **dev-time only** — they augment Claude Code while editing this repo, they do **not** run as part of the platform. Many upstream skills assume paid enterprise MCP data feeds (FactSet, Daloopa, CapIQ, Aiera, Morningstar, S&P Global, Moody's). Without those subscriptions the data-bound steps in skills like `comps-analysis` / `model-update` fall back to whatever public sources the LLM can reach; the document-authoring skills (`xlsx-author`, `pptx-author`) work standalone.
+
+Runtime parity with the upstream agents is provided by the platform's own `/api/research/*` endpoints (see `backend/app/routers/research.py`) which consume free sources (SEC EDGAR + the existing polygon/yfinance/tavily stack).
+
+To uninstall:
+
+```bash
+claude plugin uninstall financial-analysis@claude-for-financial-services
+claude plugin uninstall equity-research@claude-for-financial-services
+claude plugin uninstall market-researcher@claude-for-financial-services
+claude plugin uninstall earnings-reviewer@claude-for-financial-services
+claude plugin marketplace remove claude-for-financial-services
+```

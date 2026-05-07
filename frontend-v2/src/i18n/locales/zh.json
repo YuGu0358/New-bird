@@ -804,5 +804,69 @@
     "title": "因子工厂",
     "universe": "活跃股",
     "runs": "运行记录"
+  },
+  "research": {
+    "title": "研究",
+    "subtitle": "行业分析、可比公司、财报回顾与 SEC 文件",
+    "tabs": {
+      "market": "行业",
+      "earnings": "财报",
+      "comps": "可比公司",
+      "dcf": "DCF",
+      "filings": "申报文件",
+      "history": "历史记录"
+    },
+    "market": {
+      "sectorPlaceholder": "行业（例如：半导体）",
+      "themePlaceholder": "可选主题（例如：AI 加速器）",
+      "peerCountLabel": "同业数量",
+      "submit": "运行行业研究",
+      "industryOverview": "行业概览",
+      "keyDrivers": "核心驱动因素",
+      "competitiveLandscape": "竞争格局",
+      "peerComps": "同业可比",
+      "ideasShortlist": "投资标的清单",
+      "keyRisks": "主要风险",
+      "sectorThesis": "行业观点"
+    },
+    "earnings": {
+      "symbolPlaceholder": "股票代码（例如：AAPL）",
+      "submit": "运行财报回顾",
+      "period": "报告期",
+      "variance": "对比一致预期 / 上期",
+      "guidance": "指引变化",
+      "filings": "申报文件要点",
+      "note": "笔记草稿",
+      "takeaways": "核心要点",
+      "followUps": "后续跟进"
+    },
+    "comps": {
+      "submit": "生成可比公司",
+      "median": "中位数"
+    },
+    "dcf": {
+      "submit": "运行 DCF"
+    },
+    "filings": {
+      "limitLabel": "数量限制",
+      "formTypesLabel": "文件类型",
+      "submit": "加载文件",
+      "configureUserAgent": "请在「设置」中配置 SEC_EDGAR_USER_AGENT 以启用 EDGAR 抓取。"
+    },
+    "loading": "加载中…",
+    "noData": "暂无数据。请填写表单后提交以获取研究结果。",
+    "history": {
+      "filterKind": "类型",
+      "filterKindAll": "全部",
+      "filterSubject": "主题",
+      "filterLimit": "数量",
+      "refresh": "刷新",
+      "view": "查看",
+      "viewClose": "关闭",
+      "empty": "尚无已保存的研究——请在其他标签中运行一次研究，结果会显示在这里。",
+      "tokensIn": "输入",
+      "tokensOut": "输出",
+      "modelId": "模型"
+    }
   }
 }

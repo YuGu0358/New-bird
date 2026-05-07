@@ -408,6 +408,27 @@ SETTING_DEFINITIONS: tuple[SettingDefinition, ...] = (
         description="Telegram 通道：发送目标的 chat_id（与 bot token 同时填写才生效）。",
     ),
     SettingDefinition(
+        key="SEC_EDGAR_ENABLED",
+        label="Enable SEC EDGAR Filings",
+        category="research",
+        required=False,
+        sensitive=False,
+        default="true",
+        description="true 时启用 SEC EDGAR 公司报告/XBRL 财务数据接入；默认开启。",
+    ),
+    SettingDefinition(
+        key="SEC_EDGAR_USER_AGENT",
+        label="SEC EDGAR User-Agent",
+        category="research",
+        required=False,
+        sensitive=False,
+        default="",
+        description=(
+            "SEC EDGAR 强制要求带联系邮箱的 User-Agent 才允许访问，"
+            "格式示例：'Your Name your.email@example.com'。留空时调用会立即报错。"
+        ),
+    ),
+    SettingDefinition(
         key="POLYMARKET_ENABLED",
         label="Enable Polymarket integration",
         category="market_data",

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Awaitable, Callable, Sequence
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 import httpx
@@ -118,6 +118,66 @@ async def get_last_trade(symbol: str) -> float:
         return await _sdk_last_trade(symbol)
     except Exception:
         return await _rest_last_trade(symbol)
+
+
+# ---------------------------------------------------------------------------
+# Financials — quarterly/annual statement data via /vX/reference/financials.
+# Free tier supports this. Cached aggressively (6h) because filings change
+# infrequently; stale-cache fallback on transient HTTP failures.
+# ---------------------------------------------------------------------------
+
+_FINANCIALS_TTL = timedelta(hours=6)
+_financials_cache: dict[tuple[str, str, int], tuple[datetime, dict[str, Any]]] = {}
+
+
+async def get_financials(
+    ticker: str,
+    *,
+    limit: int = 4,
+    period_of_report_type: str = "Q",
+    force: bool = False,
+) -> dict[str, Any]:
+    """Fetch quarterly/annual financials for a ticker.
+
+    Returns the raw Polygon response payload. Each item in ``results`` carries
+    a ``financials.income_statement.{revenues,
+    basic_earnings_per_share, diluted_earnings_per_share, operating_income_loss}``
+    block where each leaf has shape ``{"value": float, "unit": str, "label": str}``.
+    Polygon free tier sometimes omits subfields, so callers must be defensive.
+    """
+    sym = (ticker or "").strip().upper()
+    if not sym:
+        raise ValueError("ticker must be a non-empty string")
+    bounded_limit = max(1, min(int(limit), 100))
+    cache_key = (sym, period_of_report_type, bounded_limit)
+
+    if not force:
+        cached = _financials_cache.get(cache_key)
+        if cached is not None:
+            stamped_at, payload = cached
+            if datetime.now(timezone.utc) - stamped_at < _FINANCIALS_TTL:
+                return payload
+
+    url = f"{POLYGON_REST_URL}/vX/reference/financials"
+    params = {
+        "ticker": sym,
+        "limit": str(bounded_limit),
+        "period_of_report_type": period_of_report_type,
+        "apiKey": _api_key(),
+    }
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.get(url, params=params)
+            response.raise_for_status()
+            payload = response.json()
+    except Exception:
+        cached = _financials_cache.get(cache_key)
+        if cached is not None:
+            return cached[1]
+        raise
+
+    _financials_cache[cache_key] = (datetime.now(timezone.utc), payload)
+    return payload
 
 
 async def _run_sdk_stream(symbols: Sequence[str], on_tick: TickHandler) -> None:

@@ -275,6 +275,35 @@ class AgentAnalysis(Base):
     )
 
 
+class ResearchOutput(Base):
+    """One persisted research artefact per (kind, subject, timestamp).
+
+    Parallel to ``AgentAnalysis`` but with a different schema (research
+    reports don't fit the buy/hold/sell shape). ``kind`` is one of
+    ``"market_research"`` or ``"earnings_review"``; ``subject`` is the
+    sector name (market research) or ticker (earnings review). The full
+    parsed report is JSON-serialised into ``payload_json`` so consumers
+    can rehydrate the dataclass without an extra query path per kind.
+    """
+
+    __tablename__ = "research_outputs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True, index=True)
+    kind: Mapped[str] = mapped_column(String(32), index=True, nullable=False)
+    subject: Mapped[str] = mapped_column(String(64), index=True, nullable=False)
+    theme: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    payload_json: Mapped[str] = mapped_column(Text, nullable=False, default="{}")
+    model_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    cost_tokens_in: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    cost_tokens_out: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+        index=True,
+    )
+
+
 class UserStrategy(Base):
     """User-uploaded Python strategy code, persisted + reloaded on boot."""
 

@@ -20,6 +20,7 @@ import OptionsChainPage from './pages/OptionsChainPage.jsx';
 import AccountDetailPage from './pages/AccountDetailPage.jsx';
 import WorkflowsPage from './pages/WorkflowsPage.jsx';
 import EquityResearchPage from './pages/EquityResearchPage.jsx';
+import ResearchPage from './pages/ResearchPage.jsx';
 import FactorsPage from './pages/FactorsPage.jsx';
 import NotFoundPage from './pages/NotFoundPage.jsx';
 
@@ -46,6 +47,7 @@ export default function App() {
         <Route path="/code" element={<CodePage />} />
         <Route path="/workflows" element={<WorkflowsPage />} />
         <Route path="/factors" element={<FactorsPage />} />
+        <Route path="/research" element={<ResearchPage />} />
         <Route path="/research/:symbol" element={<EquityResearchPage />} />
         <Route path="/settings" element={<SettingsPage />} />
         <Route path="*" element={<NotFoundPage />} />
