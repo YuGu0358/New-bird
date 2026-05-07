@@ -16,7 +16,7 @@ const NAV_ITEMS = [
   { to: '/options',      slug: 'options' },
   { to: '/intelligence', slug: 'intelligence' },
   { to: '/arena',        slug: 'arena' },
-  { to: '/research/SPY', slug: 'research' },
+  { to: '/research',     slug: 'research' },
   { to: '/factors',      slug: 'factors' },
   { to: '/backtest',     slug: 'backtest' },
   { to: '/algo',         slug: 'algorithms' },

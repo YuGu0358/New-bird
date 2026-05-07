@@ -804,5 +804,55 @@
     "title": "Forge de facteurs",
     "universe": "Univers actif",
     "runs": "Exécutions"
+  },
+  "research": {
+    "title": "Recherche",
+    "subtitle": "Analyse sectorielle, comparables, revues de résultats et dépôts SEC",
+    "tabs": {
+      "market": "Marché",
+      "earnings": "Résultats",
+      "comps": "Comparables",
+      "dcf": "DCF",
+      "filings": "Dépôts"
+    },
+    "market": {
+      "sectorPlaceholder": "Secteur (ex. semi-conducteurs)",
+      "themePlaceholder": "Thème optionnel (ex. accélérateurs IA)",
+      "peerCountLabel": "Nombre de pairs",
+      "submit": "Lancer la recherche marché",
+      "industryOverview": "Aperçu du secteur",
+      "keyDrivers": "Moteurs clés",
+      "competitiveLandscape": "Paysage concurrentiel",
+      "peerComps": "Comparables",
+      "ideasShortlist": "Liste d'idées",
+      "keyRisks": "Risques clés",
+      "sectorThesis": "Thèse sectorielle"
+    },
+    "earnings": {
+      "symbolPlaceholder": "Symbole (ex. AAPL)",
+      "submit": "Lancer la revue des résultats",
+      "period": "Période",
+      "variance": "Écart vs. consensus / précédent",
+      "guidance": "Évolution des prévisions",
+      "filings": "Points clés des dépôts",
+      "note": "Brouillon de note",
+      "takeaways": "Points clés",
+      "followUps": "À suivre"
+    },
+    "comps": {
+      "submit": "Construire les comparables",
+      "median": "Médiane"
+    },
+    "dcf": {
+      "submit": "Exécuter le DCF"
+    },
+    "filings": {
+      "limitLabel": "Limite",
+      "formTypesLabel": "Types de formulaire",
+      "submit": "Charger les dépôts",
+      "configureUserAgent": "Définissez SEC_EDGAR_USER_AGENT dans les Paramètres pour activer les requêtes EDGAR."
+    },
+    "loading": "Chargement…",
+    "noData": "Aucune donnée pour le moment. Soumettez le formulaire pour lancer la recherche."
   }
 }

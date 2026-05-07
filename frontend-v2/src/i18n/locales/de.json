@@ -804,5 +804,55 @@
     "title": "Faktor-Schmiede",
     "universe": "Aktives Universum",
     "runs": "Läufe"
+  },
+  "research": {
+    "title": "Recherche",
+    "subtitle": "Sektoranalyse, Peer-Vergleich, Earnings-Reviews und SEC-Einreichungen",
+    "tabs": {
+      "market": "Markt",
+      "earnings": "Earnings",
+      "comps": "Peers",
+      "dcf": "DCF",
+      "filings": "Einreichungen"
+    },
+    "market": {
+      "sectorPlaceholder": "Sektor (z. B. Halbleiter)",
+      "themePlaceholder": "Optionales Thema (z. B. KI-Beschleuniger)",
+      "peerCountLabel": "Anzahl Peers",
+      "submit": "Marktforschung starten",
+      "industryOverview": "Branchenüberblick",
+      "keyDrivers": "Schlüsseltreiber",
+      "competitiveLandscape": "Wettbewerbsumfeld",
+      "peerComps": "Peer-Vergleich",
+      "ideasShortlist": "Ideen-Shortlist",
+      "keyRisks": "Hauptrisiken",
+      "sectorThesis": "Sektor-These"
+    },
+    "earnings": {
+      "symbolPlaceholder": "Symbol (z. B. AAPL)",
+      "submit": "Earnings-Review starten",
+      "period": "Periode",
+      "variance": "Abweichung vs. Konsens / Vorperiode",
+      "guidance": "Guidance-Änderungen",
+      "filings": "Einreichungs-Highlights",
+      "note": "Notizentwurf",
+      "takeaways": "Kernergebnisse",
+      "followUps": "Follow-ups"
+    },
+    "comps": {
+      "submit": "Peers berechnen",
+      "median": "Median"
+    },
+    "dcf": {
+      "submit": "DCF ausführen"
+    },
+    "filings": {
+      "limitLabel": "Limit",
+      "formTypesLabel": "Formulartypen",
+      "submit": "Einreichungen laden",
+      "configureUserAgent": "Setzen Sie SEC_EDGAR_USER_AGENT in den Einstellungen, um EDGAR-Abrufe zu aktivieren."
+    },
+    "loading": "Lädt…",
+    "noData": "Noch keine Daten. Formular absenden, um Recherche abzurufen."
   }
 }

@@ -520,6 +520,53 @@ export const getTrajectories = (limit = 200) =>
 export const askFactorQA = (question) =>
   request('/api/factors/qa', { method: 'POST', body: { question } });
 
+// ----------------------------------------------------------- research (financial-services integration)
+// Backend: backend/app/routers/research.py
+//
+// `/api/research/{symbol}` (legacy, used by getResearch above) is a separate
+// endpoint that returns an AI research brief; the new endpoints below provide
+// the market-researcher / earnings-reviewer / comps / dcf / SEC EDGAR
+// surfaces consumed by ResearchPage.jsx.
+
+/**
+ * @param {{ sector: string, theme?: string|null, peer_count?: number }} body
+ * @returns {Promise<object>} MarketResearchReportResponse
+ */
+export const getMarketResearch = (body) =>
+  request('/api/research/market', { method: 'POST', body });
+
+/**
+ * @param {string} symbol
+ * @returns {Promise<object>} EarningsReviewResponse
+ */
+export const getEarningsReview = (symbol) =>
+  request(`/api/research/earnings/${encodeURIComponent(symbol)}`, { method: 'POST', body: {} });
+
+/**
+ * @param {string} symbol
+ * @param {number} [n=10]
+ * @returns {Promise<object>} CompsTableResponse
+ */
+export const getComps = (symbol, n = 10) =>
+  request(`/api/research/comps/${encodeURIComponent(symbol)}?n=${encodeURIComponent(n)}`);
+
+/**
+ * @param {string} symbol
+ * @returns {Promise<object>} DcfResponse — variable shape; render as key/value
+ */
+export const getDcf = (symbol) =>
+  request(`/api/research/dcf/${encodeURIComponent(symbol)}`);
+
+/**
+ * @param {string} symbol
+ * @param {{ limit?: number, formTypes?: string }} [opts]
+ * @returns {Promise<object>} SecEdgarFilingsResponse
+ */
+export const getSecEdgarFilings = (symbol, { limit = 20, formTypes = '10-K,10-Q,8-K' } = {}) =>
+  request(
+    `/api/research/sec-edgar/${encodeURIComponent(symbol)}/filings?limit=${encodeURIComponent(limit)}&form_types=${encodeURIComponent(formTypes)}`,
+  );
+
 // ----------------------------------------------------------- agents (P7)
 export const listPersonas = () => request('/api/agents/personas');
 export const analyzeWithPersona = (body) => request('/api/agents/analyze', { method: 'POST', body });
