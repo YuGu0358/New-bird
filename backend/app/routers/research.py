@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from sqlalchemy import desc, select
 
 from app.database import NewsCache
@@ -19,6 +19,8 @@ from app.models import (
     NewsClustersResponse,
     PeerRowResponse,
     RawHeadlinesResponse,
+    ResearchHistoryItemResponse,
+    ResearchHistoryResponse,
     SecEdgarFilingsResponse,
     StockResearchReport,
     SymbolChartResponse,
@@ -149,6 +151,49 @@ async def get_news_clusters(
     except Exception as exc:
         raise service_error(exc) from exc
     return NewsClustersResponse(**payload)
+
+
+@router.get("/research/history", response_model=ResearchHistoryResponse)
+async def list_research_history(
+    kind: str | None = Query(default=None),
+    subject: str | None = Query(default=None),
+    limit: int = Query(default=20, ge=1, le=100),
+) -> ResearchHistoryResponse:
+    """Return the most recent persisted research artefacts.
+
+    ``kind`` filters by ``"market_research"`` or ``"earnings_review"``;
+    ``subject`` is an exact match on the sector/symbol; ``limit`` is bounded
+    1..100. Results are sorted most-recent-first.
+
+    Registered before ``/research/{symbol}`` so that the catch-all symbol
+    route does not swallow the literal ``/history`` segment.
+    """
+    try:
+        items = await research_service.list_research_history(
+            kind=kind, subject=subject, limit=limit
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise _research_error(exc) from exc
+
+    return ResearchHistoryResponse(
+        items=[
+            ResearchHistoryItemResponse(
+                id=it.id,
+                kind=it.kind,
+                subject=it.subject,
+                theme=it.theme,
+                model_id=it.model_id,
+                cost_tokens_in=it.cost_tokens_in,
+                cost_tokens_out=it.cost_tokens_out,
+                created_at=it.created_at,
+                payload=it.payload,
+            )
+            for it in items
+        ],
+        total=len(items),
+    )
 
 
 @router.get("/research/{symbol}", response_model=StockResearchReport)
@@ -476,3 +521,5 @@ async def get_research_dcf(symbol: str) -> DcfResponse:
         generated_at=payload["generated_at"],
         source="internal valuation engine",
     )
+
+

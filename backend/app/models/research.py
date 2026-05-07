@@ -253,3 +253,24 @@ class DcfResponse(BaseModel):
     grid: list[dict[str, Any]]
     generated_at: datetime
     source: str = "internal valuation engine"
+
+
+class ResearchHistoryItemResponse(BaseModel):
+    """One persisted research artefact, surfaced via the history endpoint."""
+
+    id: int
+    kind: str
+    subject: str
+    theme: Optional[str] = None
+    model_id: Optional[str] = None
+    cost_tokens_in: Optional[int] = None
+    cost_tokens_out: Optional[int] = None
+    created_at: datetime
+    payload: dict[str, Any]
+
+
+class ResearchHistoryResponse(BaseModel):
+    """Most-recent-first list of saved research outputs."""
+
+    items: list[ResearchHistoryItemResponse]
+    total: int

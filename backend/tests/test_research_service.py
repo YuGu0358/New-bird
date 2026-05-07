@@ -38,6 +38,11 @@ async def _isolate_db(monkeypatch, tmp_path):
     monkeypatch.setattr(engine_module, "AsyncSessionLocal", new_session_factory)
     from app import database as legacy
     monkeypatch.setattr(legacy, "AsyncSessionLocal", new_session_factory)
+    # research_service binds `AsyncSessionLocal` at import time — patch it
+    # directly so no-session paths (history list / persistence without
+    # caller-provided session) hit the per-test tmp DB.
+    from app.services import research_service as _research_service
+    monkeypatch.setattr(_research_service, "AsyncSessionLocal", new_session_factory)
     AsyncSessionLocal.configure(bind=new_engine)
 
     async with new_engine.begin() as conn:
@@ -165,11 +170,43 @@ def _patch_market_research_upstreams(monkeypatch) -> None:
     assert research_service is not None
 
 
+def _stub_polygon_financials(symbol: str) -> dict[str, Any]:
+    return {
+        "results": [
+            {
+                "fiscal_year": "2026",
+                "fiscal_period": "Q1",
+                "filing_date": "2026-04-30",
+                "financials": {
+                    "income_statement": {
+                        "revenues": {"value": 100_000_000.0, "unit": "USD"},
+                        "basic_earnings_per_share": {"value": 1.45, "unit": "USD"},
+                        "diluted_earnings_per_share": {"value": 1.40, "unit": "USD"},
+                        "operating_income_loss": {"value": 30_000_000.0, "unit": "USD"},
+                    }
+                },
+            },
+            {
+                "fiscal_year": "2025",
+                "fiscal_period": "Q4",
+                "filing_date": "2026-01-30",
+                "financials": {
+                    "income_statement": {
+                        "revenues": {"value": 90_000_000.0, "unit": "USD"},
+                        "basic_earnings_per_share": {"value": 1.20, "unit": "USD"},
+                    }
+                },
+            },
+        ]
+    }
+
+
 def _patch_earnings_upstreams(
     monkeypatch, *, filing_text: str = "Filing body excerpt."
 ) -> None:
     from app.services import (
         company_profile_service,
+        polygon_service,
         research_service,
         sec_edgar_service,
         tavily_service,
@@ -196,10 +233,20 @@ def _patch_earnings_upstreams(
         # Honour the caller's max_chars by trimming server-side.
         return _stub_filing_text(text=filing_text[:max_chars])
 
+    async def fake_financials(
+        ticker: str,
+        *,
+        limit: int = 4,
+        period_of_report_type: str = "Q",
+        force: bool = False,
+    ) -> dict[str, Any]:
+        return _stub_polygon_financials(ticker)
+
     monkeypatch.setattr(company_profile_service, "get_company_profile", fake_profile)
     monkeypatch.setattr(tavily_service, "fetch_news_summary", fake_news)
     monkeypatch.setattr(sec_edgar_service, "get_recent_filings", fake_filings)
     monkeypatch.setattr(sec_edgar_service, "get_filing_text", fake_text)
+    monkeypatch.setattr(polygon_service, "get_financials", fake_financials)
     assert research_service is not None
 
 
@@ -410,7 +457,18 @@ async def test_build_earnings_review_context_happy_path(monkeypatch) -> None:
     assert len(ctx.recent_filings) >= 1
     assert ctx.period is not None and "as of" in ctx.period
     assert ctx.consensus_estimates is None  # paid-feed territory
-    assert ctx.prior_actuals == ()
+    # prior_actuals now populated from the polygon stub (2 quarters).
+    assert len(ctx.prior_actuals) == 2
+    most_recent = ctx.prior_actuals[0]
+    assert most_recent["period"] == "2026 Q1"
+    assert most_recent["revenue"] == 100_000_000.0
+    assert most_recent["eps_basic"] == 1.45
+    assert most_recent["eps_diluted"] == 1.40
+    assert most_recent["operating_income"] == 30_000_000.0
+    # The 2nd entry has missing eps_diluted/operating_income → must be None.
+    older = ctx.prior_actuals[1]
+    assert older["eps_diluted"] is None
+    assert older["operating_income"] is None
     assert ctx.generated_at.tzinfo is not None
 
 
@@ -608,3 +666,169 @@ async def test_run_earnings_review_truncates_long_filing_text(monkeypatch) -> No
     # The filing excerpt inside it must be trimmed to the cap.
     assert "X" * (cap + 1) not in router.last_user
     assert "X" * cap in router.last_user
+
+
+# ---------------------------------------------------------------------------
+# Smart peer universe — sector-filter falls back gracefully
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_resolve_peer_universe_filters_by_sector(monkeypatch) -> None:
+    from app.services import company_profile_service, research_service
+
+    # Stub: every fallback name is "Semiconductors" except AAPL/MSFT/GOOGL.
+    _SECTOR_BY = {
+        "AAPL": "Information Technology",
+        "MSFT": "Information Technology",
+        "GOOGL": "Communication Services",
+        "AMZN": "Consumer Discretionary",
+        "META": "Communication Services",
+        "NVDA": "Semiconductors",
+        "AVGO": "Semiconductors",
+        "AMD": "Semiconductors",
+        "TSLA": "Consumer Discretionary",
+        "JPM": "Financials",
+    }
+
+    async def fake_profile(symbol: str, *, lang: str = "en") -> dict[str, Any]:
+        return {"sector": _SECTOR_BY.get(symbol, "Other"), "industry": "x"}
+
+    monkeypatch.setattr(company_profile_service, "get_company_profile", fake_profile)
+
+    # Avoid touching factor_data_service in this test.
+    async def empty_russell() -> list[str]:
+        return []
+
+    monkeypatch.setattr(
+        research_service, "_safe_get_russell_universe", empty_russell
+    )
+
+    peers = await research_service._resolve_peer_universe("Semiconductors", 6)
+    # 3 fallback semis match → smart path returns just those 3.
+    assert set(peers) == {"NVDA", "AVGO", "AMD"}
+
+
+@pytest.mark.asyncio
+async def test_resolve_peer_universe_falls_back_when_no_match(monkeypatch) -> None:
+    from app.services import company_profile_service, research_service
+
+    async def no_profile(symbol: str, *, lang: str = "en") -> dict[str, Any]:
+        return {"sector": "Utilities", "industry": "Power"}
+
+    async def empty_russell() -> list[str]:
+        return []
+
+    monkeypatch.setattr(company_profile_service, "get_company_profile", no_profile)
+    monkeypatch.setattr(
+        research_service, "_safe_get_russell_universe", empty_russell
+    )
+
+    # No fallback sym matches "Semiconductors" → falls back to unfiltered _FALLBACK_PEERS.
+    peers = await research_service._resolve_peer_universe("Semiconductors", 4)
+    assert len(peers) == 4
+    assert peers == list(research_service._FALLBACK_PEERS[:4])
+
+
+# ---------------------------------------------------------------------------
+# list_research_history — read-side query
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_list_research_history_returns_most_recent_first(monkeypatch) -> None:
+    from app.db.tables import ResearchOutput
+    from app.services import research_service
+
+    _patch_market_research_upstreams(monkeypatch)
+
+    # Persist two market_research rows + one earnings_review row.
+    router_a = _StubRouter(_market_research_json())
+    await research_service.run_market_research(
+        sector="Semiconductors", peer_count=2, persist=True, router=router_a
+    )
+    router_b = _StubRouter(_market_research_json())
+    await research_service.run_market_research(
+        sector="Healthcare", peer_count=2, persist=True, router=router_b
+    )
+    _patch_earnings_upstreams(monkeypatch)
+    router_c = _StubRouter(_earnings_review_json())
+    await research_service.run_earnings_review("AAPL", persist=True, router=router_c)
+
+    items = await research_service.list_research_history(limit=10)
+    assert len(items) == 3
+    # Most-recent-first: AAPL earnings_review came last.
+    assert items[0].kind == "earnings_review"
+    assert items[0].subject == "AAPL"
+    assert isinstance(items[0].payload, dict)
+    assert items[0].payload.get("symbol") == "NVDA"  # from the stub JSON
+    assert items[0].model_id == "stub-model"
+    assert items[0].cost_tokens_in == 42
+
+
+@pytest.mark.asyncio
+async def test_list_research_history_filters_by_kind(monkeypatch) -> None:
+    from app.services import research_service
+
+    _patch_market_research_upstreams(monkeypatch)
+    await research_service.run_market_research(
+        sector="Semiconductors",
+        peer_count=2,
+        persist=True,
+        router=_StubRouter(_market_research_json()),
+    )
+    _patch_earnings_upstreams(monkeypatch)
+    await research_service.run_earnings_review(
+        "AAPL", persist=True, router=_StubRouter(_earnings_review_json())
+    )
+
+    market_only = await research_service.list_research_history(kind="market_research")
+    earnings_only = await research_service.list_research_history(kind="earnings_review")
+
+    assert len(market_only) == 1
+    assert market_only[0].kind == "market_research"
+    assert len(earnings_only) == 1
+    assert earnings_only[0].kind == "earnings_review"
+
+
+@pytest.mark.asyncio
+async def test_list_research_history_filters_by_subject(monkeypatch) -> None:
+    from app.services import research_service
+
+    _patch_earnings_upstreams(monkeypatch)
+    await research_service.run_earnings_review(
+        "AAPL", persist=True, router=_StubRouter(_earnings_review_json())
+    )
+    await research_service.run_earnings_review(
+        "NVDA", persist=True, router=_StubRouter(_earnings_review_json())
+    )
+
+    apple = await research_service.list_research_history(subject="AAPL")
+    assert len(apple) == 1
+    assert apple[0].subject == "AAPL"
+
+
+@pytest.mark.asyncio
+async def test_list_research_history_rejects_invalid_kind() -> None:
+    from app.services import research_service
+
+    with pytest.raises(ValueError):
+        await research_service.list_research_history(kind="foo")
+
+
+@pytest.mark.asyncio
+async def test_list_research_history_clamps_limit(monkeypatch) -> None:
+    from app.services import research_service
+
+    _patch_market_research_upstreams(monkeypatch)
+    # Persist 3 rows; ask for limit=1.
+    for sector in ("Semis", "Health", "Energy"):
+        await research_service.run_market_research(
+            sector=sector,
+            peer_count=2,
+            persist=True,
+            router=_StubRouter(_market_research_json()),
+        )
+
+    items = await research_service.list_research_history(limit=1)
+    assert len(items) == 1

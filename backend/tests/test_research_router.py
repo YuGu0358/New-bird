@@ -270,5 +270,80 @@ class DcfRouterTests(unittest.TestCase):
         self.assertEqual(len(body["grid"]), 1)
 
 
+class HistoryRouterTests(unittest.TestCase):
+    def _sample_history_item(self):
+        from app.services.research_service import ResearchHistoryItem
+
+        return ResearchHistoryItem(
+            id=1,
+            kind="market_research",
+            subject="Semiconductors",
+            theme="AI accelerators",
+            model_id="stub-model",
+            cost_tokens_in=42,
+            cost_tokens_out=17,
+            created_at=datetime.now(timezone.utc),
+            payload={"sector": "Semiconductors", "industry_overview": "x"},
+        )
+
+    def test_get_history_happy_path(self) -> None:
+        item = self._sample_history_item()
+        with patch.object(
+            research_service,
+            "list_research_history",
+            new=AsyncMock(return_value=(item,)),
+        ):
+            with TestClient(app) as client:
+                resp = client.get("/api/research/history")
+
+        self.assertEqual(resp.status_code, 200)
+        body = resp.json()
+        self.assertEqual(body["total"], 1)
+        self.assertEqual(len(body["items"]), 1)
+        self.assertEqual(body["items"][0]["kind"], "market_research")
+        self.assertEqual(body["items"][0]["subject"], "Semiconductors")
+        self.assertEqual(body["items"][0]["payload"]["sector"], "Semiconductors")
+
+    def test_get_history_passes_filters(self) -> None:
+        mock_list = AsyncMock(return_value=())
+        with patch.object(research_service, "list_research_history", new=mock_list):
+            with TestClient(app) as client:
+                resp = client.get(
+                    "/api/research/history?kind=earnings_review&subject=AAPL&limit=5"
+                )
+
+        self.assertEqual(resp.status_code, 200)
+        # Verify the service was called with the parsed query params.
+        mock_list.assert_awaited_once_with(
+            kind="earnings_review", subject="AAPL", limit=5
+        )
+
+    def test_get_history_rejects_invalid_kind(self) -> None:
+        from app.services.research_service import list_research_history as _orig
+
+        # Force the service into the ValueError branch by passing an
+        # invalid kind through to the real function.
+        with patch.object(
+            research_service, "list_research_history", new=_orig
+        ):
+            with TestClient(app) as client:
+                resp = client.get("/api/research/history?kind=foo")
+
+        self.assertEqual(resp.status_code, 400)
+
+    def test_get_history_validates_limit_upper_bound(self) -> None:
+        with TestClient(app) as client:
+            resp = client.get("/api/research/history?limit=500")
+
+        # Pydantic Query validation → 422.
+        self.assertEqual(resp.status_code, 422)
+
+    def test_get_history_validates_limit_lower_bound(self) -> None:
+        with TestClient(app) as client:
+            resp = client.get("/api/research/history?limit=0")
+
+        self.assertEqual(resp.status_code, 422)
+
+
 if __name__ == "__main__":  # pragma: no cover
     unittest.main()

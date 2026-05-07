@@ -21,10 +21,13 @@ from typing import Any, Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from sqlalchemy import desc, select
+
 from app.db.engine import AsyncSessionLocal
 from app.db.tables import ResearchOutput
 from app.services import (
     company_profile_service,
+    polygon_service,
     sec_edgar_service,
     sector_rotation_service,
     tavily_service,
@@ -97,6 +100,26 @@ class EarningsReviewContext:
     generated_at: datetime
 
 
+@dataclass(frozen=True)
+class ResearchHistoryItem:
+    """Read-side record from the ``research_outputs`` table.
+
+    ``payload`` is the rehydrated parsed report (dict). The full
+    persisted JSON is decoded once at read time so consumers don't have
+    to re-parse.
+    """
+
+    id: int
+    kind: str
+    subject: str
+    theme: Optional[str]
+    model_id: Optional[str]
+    cost_tokens_in: Optional[int]
+    cost_tokens_out: Optional[int]
+    created_at: datetime
+    payload: dict[str, Any]
+
+
 # ---------------------------------------------------------------------------
 # Market-research context builder
 # ---------------------------------------------------------------------------
@@ -137,16 +160,79 @@ async def build_market_research_context(
     )
 
 
-async def _resolve_peer_universe(sector: str, peer_count: int) -> list[str]:
-    """Pick a peer ticker list for the sector.
+_RUSSELL_EXPANSION_BUDGET = 30
 
-    We don't have a `factor_fundamentals_service` peer-rank endpoint here.
-    Strategy: use the static ``_FALLBACK_PEERS`` list as a safe baseline and
-    let the LLM pick the actually-relevant ones inside the report. The
-    deterministic comps endpoint (Phase 4) builds a tighter list from
-    ``multi_factor_score_service`` peer rank + ``company_profile_service``.
+
+async def _resolve_peer_universe(sector: str, peer_count: int) -> list[str]:
+    """Pick a sector-relevant peer ticker list.
+
+    Strategy: filter ``_FALLBACK_PEERS`` by sector match first (cheap — 10
+    profile lookups, all cached). If we have at least 3 names, return up to
+    ``peer_count``. Otherwise expand into the Russell 1000 universe (capped
+    at ``_RUSSELL_EXPANSION_BUDGET`` lookups), breaking early once we hit
+    ``peer_count``. If everything fails, fall back to the unfiltered
+    ``_FALLBACK_PEERS`` so the LLM at least has *something* to chew on.
     """
+    sector_norm = (sector or "").strip().lower()
+
+    fallback_filtered = await _filter_symbols_by_sector(_FALLBACK_PEERS, sector_norm)
+    if len(fallback_filtered) >= 3:
+        return fallback_filtered[:peer_count]
+
+    # Expand into Russell — bounded so we don't burn through 1000 profiles.
+    russell = await _safe_get_russell_universe()
+    seen = set(fallback_filtered)
+    candidates: list[str] = []
+    for symbol in russell:
+        if symbol in seen:
+            continue
+        candidates.append(symbol)
+        if len(candidates) >= _RUSSELL_EXPANSION_BUDGET:
+            break
+
+    expansion = await _filter_symbols_by_sector(candidates, sector_norm)
+    combined = list(dict.fromkeys(fallback_filtered + expansion))
+    if len(combined) >= 3:
+        return combined[:peer_count]
+
+    # Absolute fallback — at least let the LLM see something.
     return list(_FALLBACK_PEERS[:peer_count])
+
+
+async def _filter_symbols_by_sector(
+    symbols: list[str] | tuple[str, ...], sector_norm: str
+) -> list[str]:
+    """Return the subset whose company_profile sector matches ``sector_norm``.
+
+    Empty ``sector_norm`` short-circuits to the input unchanged. Profile
+    lookup failures degrade silently (the symbol is dropped).
+    """
+    if not sector_norm:
+        return list(symbols)
+    out: list[str] = []
+    for symbol in symbols:
+        try:
+            profile = await company_profile_service.get_company_profile(symbol)
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("profile lookup failed for %s: %s", symbol, exc)
+            continue
+        if not profile:
+            continue
+        s = str(profile.get("sector") or "").strip().lower()
+        i = str(profile.get("industry") or "").strip().lower()
+        if sector_norm in s or sector_norm in i or s in sector_norm:
+            out.append(symbol)
+    return out
+
+
+async def _safe_get_russell_universe() -> list[str]:
+    """Best-effort Russell 1000 ticker list. Empty on any failure."""
+    try:
+        from app.services import factor_data_service
+        return await factor_data_service.get_russell_universe()
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("russell universe unavailable: %s", exc)
+        return []
 
 
 async def _fetch_sector_returns(sector: str) -> dict[str, float]:
@@ -284,19 +370,84 @@ async def build_earnings_review_context(symbol: str) -> EarningsReviewContext:
     recent_filings = await _fetch_symbol_filings(sym)
     latest_filing = await _fetch_latest_filing_excerpt(recent_filings)
     period = _infer_period(latest_filing, recent_filings)
+    prior_actuals = await _fetch_prior_actuals(sym)
 
     return EarningsReviewContext(
         symbol=sym,
         period=period,
         latest_filing=latest_filing,
-        prior_actuals=(),  # No earnings-actuals source wired in this phase.
-        consensus_estimates=None,  # Same — paid-feed territory.
+        prior_actuals=prior_actuals,
+        # consensus_estimates: Polygon free tier does not surface analyst
+        # consensus. Left as None so the persona prompt's None-handling kicks in.
+        consensus_estimates=None,
         fundamentals_now=fundamentals_now,
         fundamentals_prior=None,  # Out of scope without a snapshot table.
         recent_news=tuple(recent_news),
         recent_filings=tuple(recent_filings),
         generated_at=datetime.now(timezone.utc),
     )
+
+
+async def _fetch_prior_actuals(symbol: str) -> tuple[dict[str, Any], ...]:
+    """Pull last 4 quarterly financials from Polygon. Empty tuple on failure."""
+    try:
+        payload = await polygon_service.get_financials(symbol, limit=4)
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("polygon financials failed for %s: %s", symbol, exc)
+        return ()
+    if not isinstance(payload, dict):
+        return ()
+    results = payload.get("results") or []
+    if not isinstance(results, list):
+        return ()
+    out: list[dict[str, Any]] = []
+    for entry in results:
+        if not isinstance(entry, dict):
+            continue
+        out.append(_extract_polygon_actuals(entry))
+    return tuple(out)
+
+
+def _extract_polygon_actuals(entry: dict[str, Any]) -> dict[str, Any]:
+    """Map one Polygon financials result into our compact prior_actuals shape.
+
+    Polygon nests every metric as ``{"value": float, "unit": str, "label": str}``
+    under ``financials.income_statement.<key>``. We pull a minimal subset and
+    fall back to ``None`` on any missing leaf.
+    """
+    income = (
+        entry.get("financials", {}).get("income_statement", {})
+        if isinstance(entry.get("financials"), dict)
+        else {}
+    )
+    fiscal_year = entry.get("fiscal_year")
+    fiscal_period = entry.get("fiscal_period")
+    period = (
+        f"{fiscal_year} {fiscal_period}".strip()
+        if fiscal_year or fiscal_period
+        else None
+    )
+    return {
+        "period": period,
+        "filing_date": entry.get("filing_date"),
+        "revenue": _polygon_value(income.get("revenues")),
+        "eps_basic": _polygon_value(income.get("basic_earnings_per_share")),
+        "eps_diluted": _polygon_value(income.get("diluted_earnings_per_share")),
+        "operating_income": _polygon_value(income.get("operating_income_loss")),
+    }
+
+
+def _polygon_value(node: Any) -> Optional[float]:
+    """Safely pull the numeric ``value`` from a Polygon metric node."""
+    if not isinstance(node, dict):
+        return None
+    value = node.get("value")
+    if value is None:
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
 
 
 async def _fetch_single_profile(symbol: str) -> Optional[dict[str, Any]]:
@@ -318,8 +469,9 @@ async def _fetch_single_profile(symbol: str) -> Optional[dict[str, Any]]:
 
 
 async def _fetch_symbol_news(symbol: str) -> list[dict[str, Any]]:
+    """Pull recent headlines for a single symbol via tavily."""
     try:
-        payload = await market_research_service.get_news(symbol)
+        payload = await tavily_service.fetch_news_summary(symbol)
     except Exception as exc:  # noqa: BLE001
         logger.debug("news failed for %s: %s", symbol, exc)
         return []
@@ -328,6 +480,15 @@ async def _fetch_symbol_news(symbol: str) -> list[dict[str, Any]]:
     if hasattr(payload, "model_dump"):
         payload = payload.model_dump()
     items = payload.get("items") if isinstance(payload, dict) else None
+    if not items and isinstance(payload, dict) and payload.get("summary"):
+        items = [
+            {
+                "title": payload.get("title") or symbol,
+                "summary": payload.get("summary"),
+                "source": payload.get("source") or "Tavily",
+                "at": payload.get("timestamp"),
+            }
+        ]
     out: list[dict[str, Any]] = []
     for item in (items or [])[:5]:
         if not isinstance(item, dict):
@@ -550,3 +711,66 @@ def _serialise_report(report: Any) -> dict[str, Any]:
     if isinstance(report, dict):
         return report
     raise TypeError(f"unsupported report type: {type(report).__name__}")
+
+
+# ---------------------------------------------------------------------------
+# History — read-side query for past research outputs
+# ---------------------------------------------------------------------------
+
+
+_VALID_HISTORY_KINDS = ("market_research", "earnings_review")
+
+
+async def list_research_history(
+    *,
+    kind: Optional[str] = None,
+    subject: Optional[str] = None,
+    limit: int = 20,
+    db_session: Optional[AsyncSession] = None,
+) -> tuple[ResearchHistoryItem, ...]:
+    """Return persisted research outputs, most-recent-first.
+
+    ``kind`` filters by exactly one of ``"market_research"`` /
+    ``"earnings_review"`` (raises ``ValueError`` on any other value).
+    ``subject`` is a case-insensitive exact match on the subject column.
+    ``limit`` is clamped to 1..100.
+    """
+    if kind is not None and kind not in _VALID_HISTORY_KINDS:
+        raise ValueError(
+            f"kind must be one of {_VALID_HISTORY_KINDS} or None; got {kind!r}"
+        )
+    bounded = max(1, min(int(limit), 100))
+
+    stmt = select(ResearchOutput).order_by(desc(ResearchOutput.created_at))
+    if kind is not None:
+        stmt = stmt.where(ResearchOutput.kind == kind)
+    if subject is not None and subject.strip():
+        stmt = stmt.where(ResearchOutput.subject == subject.strip())
+    stmt = stmt.limit(bounded)
+
+    if db_session is not None:
+        rows = (await db_session.execute(stmt)).scalars().all()
+    else:
+        async with AsyncSessionLocal() as owned_session:
+            rows = (await owned_session.execute(stmt)).scalars().all()
+
+    out: list[ResearchHistoryItem] = []
+    for row in rows:
+        try:
+            payload = json.loads(row.payload_json or "{}")
+        except json.JSONDecodeError:
+            payload = {}
+        out.append(
+            ResearchHistoryItem(
+                id=row.id,
+                kind=row.kind,
+                subject=row.subject,
+                theme=row.theme,
+                model_id=row.model_id,
+                cost_tokens_in=row.cost_tokens_in,
+                cost_tokens_out=row.cost_tokens_out,
+                created_at=row.created_at,
+                payload=payload if isinstance(payload, dict) else {},
+            )
+        )
+    return tuple(out)
