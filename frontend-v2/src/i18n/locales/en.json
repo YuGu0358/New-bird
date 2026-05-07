@@ -813,7 +813,8 @@
       "earnings": "Earnings",
       "comps": "Comps",
       "dcf": "DCF",
-      "filings": "Filings"
+      "filings": "Filings",
+      "history": "History"
     },
     "market": {
       "sectorPlaceholder": "Sector (e.g. semiconductors)",
@@ -853,6 +854,19 @@
       "configureUserAgent": "Set SEC_EDGAR_USER_AGENT in Settings to enable EDGAR fetches."
     },
     "loading": "Loading...",
-    "noData": "No data yet. Submit the form to fetch research."
+    "noData": "No data yet. Submit the form to fetch research.",
+    "history": {
+      "filterKind": "Kind",
+      "filterKindAll": "All",
+      "filterSubject": "Subject",
+      "filterLimit": "Limit",
+      "refresh": "Refresh",
+      "view": "View",
+      "viewClose": "Close",
+      "empty": "No saved research yet — run a research from another tab and it'll appear here.",
+      "tokensIn": "in",
+      "tokensOut": "out",
+      "modelId": "Model"
+    }
   }
 }

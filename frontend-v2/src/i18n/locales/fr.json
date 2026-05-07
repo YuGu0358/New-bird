@@ -813,7 +813,8 @@
       "earnings": "Résultats",
       "comps": "Comparables",
       "dcf": "DCF",
-      "filings": "Dépôts"
+      "filings": "Dépôts",
+      "history": "Historique"
     },
     "market": {
       "sectorPlaceholder": "Secteur (ex. semi-conducteurs)",
@@ -853,6 +854,19 @@
       "configureUserAgent": "Définissez SEC_EDGAR_USER_AGENT dans les Paramètres pour activer les requêtes EDGAR."
     },
     "loading": "Chargement…",
-    "noData": "Aucune donnée pour le moment. Soumettez le formulaire pour lancer la recherche."
+    "noData": "Aucune donnée pour le moment. Soumettez le formulaire pour lancer la recherche.",
+    "history": {
+      "filterKind": "Type",
+      "filterKindAll": "Tous",
+      "filterSubject": "Sujet",
+      "filterLimit": "Limite",
+      "refresh": "Actualiser",
+      "view": "Voir",
+      "viewClose": "Fermer",
+      "empty": "Aucune recherche enregistrée — lancez une recherche depuis un autre onglet et elle apparaîtra ici.",
+      "tokensIn": "in",
+      "tokensOut": "out",
+      "modelId": "Modèle"
+    }
   }
 }

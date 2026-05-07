@@ -25,8 +25,9 @@ import {
   getMarketResearch,
   getSecEdgarFilings,
 } from '../lib/api.js';
+import HistoryTab from './research/HistoryTab.jsx';
 
-const TABS = ['market', 'earnings', 'comps', 'dcf', 'filings'];
+const TABS = ['market', 'earnings', 'comps', 'dcf', 'filings', 'history'];
 const ALL_FORM_TYPES = ['10-K', '10-Q', '8-K', 'S-1'];
 const DEFAULT_FORM_TYPES = ['10-K', '10-Q', '8-K'];
 const MIN_PEER_COUNT = 1;
@@ -56,6 +57,7 @@ export default function ResearchPage() {
         {tab === 'comps' && <CompsTab t={t} />}
         {tab === 'dcf' && <DcfTab t={t} />}
         {tab === 'filings' && <FilingsTab t={t} />}
+        {tab === 'history' && <HistoryTab t={t} />}
       </div>
     </div>
   );
@@ -161,7 +163,7 @@ function MarketTab({ t }) {
   );
 }
 
-function MarketReport({ data, t }) {
+export function MarketReport({ data, t }) {
   return (
     <div className="space-y-6">
       <ProseBlock
@@ -236,7 +238,7 @@ function EarningsTab({ t }) {
   );
 }
 
-function EarningsReport({ data, t }) {
+export function EarningsReport({ data, t }) {
   return (
     <div className="space-y-6">
       <SectionHeader

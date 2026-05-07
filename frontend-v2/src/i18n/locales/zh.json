@@ -813,7 +813,8 @@
       "earnings": "财报",
       "comps": "可比公司",
       "dcf": "DCF",
-      "filings": "申报文件"
+      "filings": "申报文件",
+      "history": "历史记录"
     },
     "market": {
       "sectorPlaceholder": "行业（例如：半导体）",
@@ -853,6 +854,19 @@
       "configureUserAgent": "请在「设置」中配置 SEC_EDGAR_USER_AGENT 以启用 EDGAR 抓取。"
     },
     "loading": "加载中…",
-    "noData": "暂无数据。请填写表单后提交以获取研究结果。"
+    "noData": "暂无数据。请填写表单后提交以获取研究结果。",
+    "history": {
+      "filterKind": "类型",
+      "filterKindAll": "全部",
+      "filterSubject": "主题",
+      "filterLimit": "数量",
+      "refresh": "刷新",
+      "view": "查看",
+      "viewClose": "关闭",
+      "empty": "尚无已保存的研究——请在其他标签中运行一次研究，结果会显示在这里。",
+      "tokensIn": "输入",
+      "tokensOut": "输出",
+      "modelId": "模型"
+    }
   }
 }

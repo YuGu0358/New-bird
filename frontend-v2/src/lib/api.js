@@ -567,6 +567,19 @@ export const getSecEdgarFilings = (symbol, { limit = 20, formTypes = '10-K,10-Q,
     `/api/research/sec-edgar/${encodeURIComponent(symbol)}/filings?limit=${encodeURIComponent(limit)}&form_types=${encodeURIComponent(formTypes)}`,
   );
 
+/**
+ * Saved research history (persisted MarketResearchReport / EarningsReview rows).
+ * @param {{ kind?: 'market_research'|'earnings_review', subject?: string, limit?: number }} [opts]
+ * @returns {Promise<{ items: Array<{ id: number, kind: string, subject: string, theme: string|null, model_id: string|null, cost_tokens_in: number|null, cost_tokens_out: number|null, created_at: string, payload: object }>, total: number }>}
+ */
+export const getResearchHistory = ({ kind, subject, limit = 20 } = {}) => {
+  const qs = new URLSearchParams();
+  if (kind) qs.set('kind', kind);
+  if (subject) qs.set('subject', subject);
+  qs.set('limit', String(limit));
+  return request(`/api/research/history?${qs.toString()}`);
+};
+
 // ----------------------------------------------------------- agents (P7)
 export const listPersonas = () => request('/api/agents/personas');
 export const analyzeWithPersona = (body) => request('/api/agents/analyze', { method: 'POST', body });
