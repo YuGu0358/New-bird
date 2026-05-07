@@ -33,6 +33,11 @@ WORKDIR /app
 COPY backend/requirements.txt /app/backend/requirements.txt
 RUN pip install --no-cache-dir -r /app/backend/requirements.txt
 
+# Cache-busting marker — bumped to force Railway/BuildKit to rebuild the
+# `COPY backend` layer when local file changes don't change BuildKit's
+# content-hash for some reason (e.g. layer cross-build reuse).
+ARG CACHE_BUST=2026-05-08-research-integration
+RUN echo "cache-bust ${CACHE_BUST}" > /tmp/.cache-bust
 COPY backend /app/backend
 COPY agent-harness /app/agent-harness
 COPY --from=frontend-build /app/frontend-v2/dist /app/frontend-v2/dist
